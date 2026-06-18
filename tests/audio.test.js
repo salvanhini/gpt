@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { isNativeSpeechRecognitionBrowserSupported } from "../js/audio.js";
+import {
+  hasNativeSpeechRecognition,
+  isSpeechRecognitionSupportedInContext,
+} from "../js/audio.js";
 
 function buildEnv({
   hasCtor = true,
@@ -38,8 +41,13 @@ function buildEnv({
   return env;
 }
 
-test("accepts Chrome desktop in secure context", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
+test("detects native speech recognition by constructor presence", () => {
+  assert.equal(hasNativeSpeechRecognition(buildEnv()), true);
+  assert.equal(hasNativeSpeechRecognition(buildEnv({ hasCtor: false })), false);
+});
+
+test("allows native speech recognition attempts in secure contexts", () => {
+  const supported = isSpeechRecognitionSupportedInContext(
     buildEnv({
       userAgent:
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
@@ -49,11 +57,25 @@ test("accepts Chrome desktop in secure context", () => {
   assert.equal(supported, true);
 });
 
-test("accepts Edge desktop in secure context", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
+test("does not reject Brave-like brand sets before trying native speech", () => {
+  const supported = isSpeechRecognitionSupportedInContext(
+    buildEnv({
+      brands: [
+        { brand: "Chromium", version: "136" },
+        { brand: "Brave", version: "136" },
+      ],
+      platform: "Linux",
+    }),
+  );
+
+  assert.equal(supported, true);
+});
+
+test("does not reject mobile Chromium before trying native speech", () => {
+  const supported = isSpeechRecognitionSupportedInContext(
     buildEnv({
       userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0",
+        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
     }),
   );
 
@@ -61,7 +83,7 @@ test("accepts Edge desktop in secure context", () => {
 });
 
 test("rejects insecure contexts even when the API exists", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
+  const supported = isSpeechRecognitionSupportedInContext(
     buildEnv({
       isSecureContext: false,
       userAgent:
@@ -72,33 +94,8 @@ test("rejects insecure contexts even when the API exists", () => {
   assert.equal(supported, false);
 });
 
-test("rejects Brave-like brand sets that usually fail the service path", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
-    buildEnv({
-      brands: [
-        { brand: "Chromium", version: "136" },
-        { brand: "Brave", version: "136" },
-      ],
-      platform: "Linux",
-    }),
-  );
-
-  assert.equal(supported, false);
-});
-
-test("rejects mobile Chromium where native dictation is unreliable", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
-    buildEnv({
-      userAgent:
-        "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36",
-    }),
-  );
-
-  assert.equal(supported, false);
-});
-
 test("rejects browsers without the recognition constructor", () => {
-  const supported = isNativeSpeechRecognitionBrowserSupported(
+  const supported = isSpeechRecognitionSupportedInContext(
     buildEnv({
       hasCtor: false,
       userAgent:

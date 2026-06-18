@@ -83,7 +83,7 @@ export function createVoiceController({
 
   function showUnsupportedVoiceInputMessage() {
     showToast(
-      "Ditado nativo funciona melhor em Chrome ou Edge no computador. Nos demais navegadores, configure Audio (OpenAI) para usar o microfone.",
+      "Ditado nativo indisponivel neste navegador. Configure Audio (OpenAI) para usar o microfone por fallback.",
       "error",
     );
   }
@@ -157,7 +157,7 @@ export function createVoiceController({
     }
   }
 
-  async function handleRecordedVoiceInput() {
+  async function startRecordedFallbackInput() {
     if (!isMediaRecorderSupported()) {
       showToast("Microfone indisponivel neste navegador.", "error");
       return;
@@ -221,35 +221,7 @@ export function createVoiceController({
     }
   }
 
-  async function toggleInput() {
-    state.speechRecognitionSupported = isSpeechRecognitionSupported();
-    state.mediaRecorderSupported = isMediaRecorderSupported();
-
-    if (state.isListening) {
-      if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
-        state.mediaRecorder.stop();
-      } else {
-        stopInput();
-      }
-      render();
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      showToast("O ditado por voz exige HTTPS ou localhost.", "error");
-      return;
-    }
-
-    if (canUseRecordedVoiceFallback()) {
-      await handleRecordedVoiceInput();
-      return;
-    }
-
-    if (!state.speechRecognitionSupported) {
-      showUnsupportedVoiceInputMessage();
-      return;
-    }
-
+  async function startNativeSpeechInput() {
     const recognition = createSpeechRecognition();
     recognition.onresult = (event) => {
       const text = Array.from(event.results)
@@ -269,16 +241,13 @@ export function createVoiceController({
         network: "Servico de voz do navegador sem conexao.",
         "service-not-allowed": "Servico de voz nao disponivel.",
       };
-      if (event.error === "service-not-allowed") {
-        state.speechRecognitionSupported = false;
-      }
       state.isListening = false;
       state.recognition = null;
       render();
 
-      if (canUseRecordedVoiceFallback() && !["not-allowed", "audio-capture"].includes(event.error)) {
+      if (canUseRecordedVoiceFallback() && !["not-allowed", "audio-capture", "no-speech"].includes(event.error)) {
         showToast("Voz nativa falhou. Vou usar a transcricao por OpenAI.", "info");
-        await handleRecordedVoiceInput();
+        await startRecordedFallbackInput();
         return;
       }
 
@@ -308,12 +277,44 @@ export function createVoiceController({
 
       if (canUseRecordedVoiceFallback()) {
         showToast("Voz nativa indisponivel. Vou usar a transcricao por OpenAI.", "info");
-        await handleRecordedVoiceInput();
+        await startRecordedFallbackInput();
         return;
       }
 
       showToast(buildUserErrorMessage(error, "Nao foi possivel iniciar o ditado por voz neste navegador."), "error");
     }
+  }
+
+  async function toggleInput() {
+    state.speechRecognitionSupported = isSpeechRecognitionSupported();
+    state.mediaRecorderSupported = isMediaRecorderSupported();
+
+    if (state.isListening) {
+      if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+        state.mediaRecorder.stop();
+      } else {
+        stopInput();
+      }
+      render();
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      showToast("O ditado por voz exige HTTPS ou localhost.", "error");
+      return;
+    }
+
+    if (state.speechRecognitionSupported) {
+      await startNativeSpeechInput();
+      return;
+    }
+
+    if (canUseRecordedVoiceFallback()) {
+      await startRecordedFallbackInput();
+      return;
+    }
+
+    showUnsupportedVoiceInputMessage();
   }
 
   return {
