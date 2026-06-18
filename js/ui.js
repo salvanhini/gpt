@@ -210,12 +210,12 @@ function renderChatCard(chat, state) {
   }
 
   return `
-    <div class="chat-card ${isActive ? "active" : ""} w-full rounded-xl border border-slate-200/80 bg-white/88 px-2.5 py-2 shadow-sm">
-      <div class="flex items-center gap-2">
-        <div class="shrink-0">
+    <div class="chat-card ${isActive ? "active" : ""} chat-card-compact relative overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-2 shadow-sm">
+      <div class="flex items-start gap-2">
+        <div class="mt-0.5 shrink-0">
           ${chat.category
-            ? `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
-            : `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[8px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
+            ? `<span class="category-selector inline-flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
+            : `<span class="category-selector inline-flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[8px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
           }
         </div>
         <div class="min-w-0 flex-1">
@@ -226,32 +226,34 @@ function renderChatCard(chat, state) {
               data-action="select-chat"
               data-chat-id="${chat.id}"
             >
-              <div class="truncate text-xs font-semibold text-slate-800">${escapeHtml(chat.title)}</div>
-              <div class="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+              <div class="truncate text-[11.5px] font-semibold leading-4 text-slate-800">${escapeHtml(chat.title)}</div>
+              <div class="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500">
                 <span>${formatRelativeDay(chat.updatedAt)}</span>
               </div>
             </button>
-            <div class="flex shrink-0 items-center gap-1">
+            <div class="chat-card-tools flex shrink-0 flex-col items-end gap-1 pl-1">
+              <div class="chat-time-compact text-[10px] text-slate-400">${formatTime(chat.updatedAt)}</div>
+              <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="chat-rename-btn inline-flex shrink-0 items-center justify-center rounded px-1 text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                class="chat-rename-btn inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
                 title="Renomear conversa"
               >✎</button>
-              <div class="text-xs text-slate-400">${formatTime(chat.updatedAt)}</div>
+              <button
+                type="button"
+                class="danger-mini inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                data-action="delete-chat"
+                data-chat-id="${chat.id}"
+                title="Excluir conversa"
+              >
+                ✕
+              </button>
+              </div>
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          class="danger-mini shrink-0 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-          data-action="delete-chat"
-          data-chat-id="${chat.id}"
-          title="Excluir conversa"
-        >
-          ✕
-        </button>
       </div>
       ${renderCategoryPicker(chat, state)}
     </div>

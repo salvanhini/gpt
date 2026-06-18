@@ -202,6 +202,19 @@ button {
   transition: all 0.15s ease;
 }
 
+.sidebar-section-chats .category-filter {
+  gap: 0.35rem;
+  padding-inline: 0;
+  padding-top: 0.15rem;
+  padding-bottom: 0.55rem;
+}
+
+.sidebar-section-chats .category-filter-chip {
+  padding: 0.28rem 0.5rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.05em;
+}
+
 .category-selector {
   transition: all 0.15s ease;
 }
@@ -315,6 +328,60 @@ button {
 
 .sidebar-chats-scroll {
   flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  align-content: start;
+  grid-auto-flow: row dense;
+}
+
+.chat-card-compact {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  min-height: 4.55rem;
+  padding: 0.7rem 0.7rem 0.65rem;
+  border-radius: 1rem;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.chat-card-compact .chat-rename-btn {
+  opacity: 0.72;
+}
+
+.chat-card-compact .danger-mini {
+  opacity: 0.62;
+}
+
+.chat-card-compact:hover .danger-mini,
+.chat-card-compact:hover .chat-rename-btn {
+  opacity: 1;
+}
+
+.chat-card-compact .category-picker {
+  grid-column: 1 / -1;
+}
+
+.chat-card-compact .chat-card-tools {
+  min-width: 0;
+}
+
+.chat-card-compact .chat-time-compact {
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.sidebar-chats-scroll > .chat-card {
+  width: auto;
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .sidebar-chats-scroll {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .message-bubble {
