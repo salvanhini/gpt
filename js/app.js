@@ -14,8 +14,6 @@ import {
   saveChats,
   updateChatCategory,
   updateChatTitle,
-  CHAT_CATEGORIES,
-  getCategoryById,
 } from "./chat.js";
 import {
   DEEPSEEK_MODELS,
@@ -56,6 +54,8 @@ const state = {
   activeAgentId: null,
   activeChatId: null,
   activeCategory: "",
+  viewMode: "chat",
+  boardSearchQuery: "",
   pendingChatCategoryPicker: null,
   pendingAttachmentContext: null,
   imageMode: false,
@@ -110,6 +110,7 @@ function saveViewState() {
     imageMode: state.imageMode,
     sidebarCollapsed: state.sidebarCollapsed,
     activeCategory: state.activeCategory,
+    viewMode: state.viewMode,
   });
 }
 
@@ -129,6 +130,7 @@ function hydratePersistentState() {
   state.imageMode = reconciled.view.imageMode;
   state.sidebarCollapsed = reconciled.view.sidebarCollapsed;
   state.activeCategory = reconciled.view.activeCategory || "";
+  state.viewMode = reconciled.view.viewMode === "board" ? "board" : "chat";
 
   saveAgents(state.agents);
   saveChats(state.chats);
@@ -140,6 +142,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   voiceController.stopInput();
   state.pendingAttachmentContext = null;
   state.pendingChatCategoryPicker = null;
+  state.boardSearchQuery = "";
   state.isLoading = false;
   state.isVoiceProcessing = false;
   state.modalPayload = {};
@@ -208,9 +211,27 @@ function setModal(name, open, payload = {}) {
 }
 
 function render() {
-  refreshFromStorage();
-  state.activeAgent = getActiveAgent();
-  renderApp(state);
+  try {
+    refreshFromStorage();
+    state.activeAgent = getActiveAgent();
+    renderApp(state);
+  } catch (error) {
+    console.error("[FEMIC GPT] Erro ao renderizar:", error);
+    const app = document.getElementById("app");
+    if (app) {
+      app.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center;font-family:sans-serif;">
+        <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+        <h1 style="font-size:1.5rem;font-weight:600;color:#1A365D;margin:0 0 0.5rem;">FEMIC GPT</h1>
+        <p style="color:#5B7088;max-width:400px;">Ocorreu um erro ao carregar a interface.</p>
+        <pre style="background:#f1f5f9;padding:1rem;border-radius:0.75rem;font-size:0.8rem;color:#991b1b;max-width:90%;overflow:auto;margin-top:1rem;">${escapeHtml(error?.message || "Erro desconhecido")}</pre>
+        <button onclick="location.reload()" style="margin-top:1.5rem;padding:0.75rem 2rem;border-radius:999px;border:none;background:#1A365D;color:white;font-weight:600;cursor:pointer;">Recarregar</button>
+      </div>`;
+    }
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function persistAndRender() {
@@ -358,6 +379,7 @@ function handleSelectChat(chatId) {
 
   state.activeAgentId = chat.agentId;
   state.activeChatId = chatId;
+  state.viewMode = "chat";
   state.mobileSidebarOpen = false;
   state.pendingChatCategoryPicker = null;
   persistAndRender();
@@ -458,6 +480,17 @@ function handleToggleCategoryPicker(chatId) {
 function handleFilterByCategory(category) {
   state.activeCategory = state.activeCategory === category ? "" : category;
   persistAndRender();
+}
+
+function handleToggleBoardView() {
+  state.viewMode = state.viewMode === "board" ? "chat" : "board";
+  state.boardSearchQuery = "";
+  persistAndRender();
+}
+
+function handleSearchChats(query) {
+  state.boardSearchQuery = query;
+  render();
 }
 
 function handleSaveSettings(formValues) {
@@ -599,9 +632,13 @@ const voiceController = createVoiceController({
 });
 
 function initialize() {
-  ensureSeedData();
-  syncActivePointers();
-  voiceController.syncSpeechVoice();
+  try {
+    ensureSeedData();
+    syncActivePointers();
+    voiceController.syncSpeechVoice();
+  } catch (error) {
+    console.error("[FEMIC GPT] Erro na inicializacao:", error);
+  }
   bindUIHandlers({
     onSelectAgent: handleSelectAgent,
     onDeleteAgent: handleDeleteAgent,
@@ -626,6 +663,8 @@ function initialize() {
     onRenameChat: handleRenameChat,
     onToggleCategoryPicker: handleToggleCategoryPicker,
     onFilterByCategory: handleFilterByCategory,
+    onToggleBoardView: handleToggleBoardView,
+    onSearchChats: handleSearchChats,
     onClearAttachments: () => {
       resetAttachments();
       persistAndRender();

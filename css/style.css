@@ -761,6 +761,42 @@ button {
   display: none;
 }
 
+.board-grid {
+  gap: 1rem;
+}
+
+.board-card {
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+
+.board-card:hover {
+  box-shadow:
+    0 12px 30px rgba(15, 23, 42, 0.08),
+    0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.board-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.board-search-input {
+  transition: all 0.15s ease;
+}
+
+.board-search-input:focus {
+  box-shadow: 0 0 0 3px rgba(63, 183, 214, 0.15);
+}
+
 @media (max-width: 980px) {
   .femic-shell {
     display: block;

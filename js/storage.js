@@ -114,6 +114,8 @@ export function reconcileAppData({
       activeChatId,
       imageMode: Boolean(nextView.imageMode),
       sidebarCollapsed: Boolean(nextView.sidebarCollapsed),
+      activeCategory: typeof nextView.activeCategory === "string" ? nextView.activeCategory : "",
+      viewMode: nextView.viewMode === "board" ? "board" : "chat",
     },
   };
 }

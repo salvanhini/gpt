@@ -447,6 +447,115 @@ function renderImageSizeSelector(state) {
   `;
 }
 
+function getChatPreview(chat) {
+  const msgs = chat.messages || [];
+  if (!msgs.length) return "";
+  const last = msgs[msgs.length - 1];
+  return last.content.replace(/\s+/g, " ").trim().slice(0, 120) || "";
+}
+
+function getBoardCards(state) {
+  let chats = [...state.chats].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  if (state.activeCategory) {
+    chats = chats.filter((c) => c.category === state.activeCategory);
+  }
+  if (state.boardSearchQuery) {
+    const q = state.boardSearchQuery.toLowerCase();
+    chats = chats.filter((c) => c.title.toLowerCase().includes(q) || getChatPreview(c).toLowerCase().includes(q));
+  }
+  return chats;
+}
+
+function renderBoardCard(chat, state) {
+  const cat = getCategoryById(chat.category);
+  const agent = state.agents.find((a) => a.id === chat.agentId);
+  const preview = getChatPreview(chat);
+  return `
+    <div
+      class="board-card cursor-pointer rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-150 hover:shadow-soft hover:-translate-y-0.5"
+      style="border-top:4px solid ${cat.color}"
+      data-action="select-chat"
+      data-chat-id="${chat.id}"
+      title="${escapeHtml(chat.title)}"
+    >
+      <div class="p-3.5">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-semibold text-slate-800">${escapeHtml(chat.title)}</div>
+            <div class="mt-0.5 text-xs text-slate-400">${formatRelativeDay(chat.updatedAt)} · ${formatTime(chat.updatedAt)}</div>
+          </div>
+          ${chat.category ? `<span class="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
+        </div>
+        ${preview ? `<div class="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">${escapeHtml(preview)}</div>` : ""}
+        <div class="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400">
+          <span>${escapeHtml(agent?.emoji || "🤖")}</span>
+          <span class="truncate">${escapeHtml(agent?.name || "FEMIC GPT")}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderBoardView(state) {
+  const cards = getBoardCards(state);
+  return `
+    <div class="flex h-screen flex-col">
+      <div class="board-header shrink-0 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
+        <div class="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-5">
+          <div class="flex items-center gap-3">
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-600 shadow-sm hover:bg-slate-50"
+              data-action="toggle-board-view"
+              title="Voltar ao chat"
+            >←</button>
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">📋 Board de Conversas</h2>
+              <p class="text-xs text-slate-500">${state.chats.length} conversas no total</p>
+            </div>
+          </div>
+          <div class="relative max-w-xs flex-1">
+            <input
+              type="search"
+              class="board-search-input w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 pl-8 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100"
+              placeholder="Buscar conversas..."
+              data-action="search-chats"
+              value="${escapeHtml(state.boardSearchQuery || "")}"
+            />
+            <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+          </div>
+        </div>
+        <div class="mx-auto max-w-[1440px] px-4 pb-2 sm:px-5">
+          <div class="flex flex-wrap gap-1.5">
+            ${CHAT_CATEGORIES.map((cat) => {
+              const isActive = (cat.id === "" && !state.activeCategory) || state.activeCategory === cat.id;
+              return `
+                <button
+                  type="button"
+                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all duration-150 ${isActive ? "text-white" : "text-slate-500 hover:text-slate-700"}"
+                  style="${isActive ? `background:${cat.color};` : `background:${cat.color}15; color:${cat.color};`}"
+                  data-action="filter-by-category"
+                  data-category="${cat.id}"
+                >
+                  ${cat.id ? cat.label : "Todas"}
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <div class="mx-auto max-w-[1440px] px-4 py-4 sm:px-5">
+          ${cards.length
+            ? `<div class="board-grid grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${cards.map((chat) => renderBoardCard(chat, state)).join("")}</div>`
+            : `<div class="flex flex-col items-center justify-center py-16 text-center"><div class="text-4xl mb-3">📭</div><p class="text-lg font-medium text-slate-600">Nenhuma conversa encontrada</p><p class="mt-1 text-sm text-slate-400">${state.boardSearchQuery ? "Tente outro termo de busca." : "Nenhuma conversa nesta categoria."}</p></div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSettingsModal(state) {
   if (!state.modals.settings) {
     return "";
@@ -702,12 +811,15 @@ export function renderApp(state) {
 
         <div class="mt-3 shrink-0 space-y-2">
           <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.12);" data-action="create-chat" title="Nova conversa"><span>＋</span><span class="sidebar-expanded-only">Nova conversa</span></button>
+          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.10);" data-action="toggle-board-view" title="Board de conversas"><span>📋</span><span class="sidebar-expanded-only">Board</span></button>
           <button type="button" class="sidebar-action-btn w-full rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.95;" data-action="open-settings" title="Configurações"><span>⚙</span><span class="sidebar-expanded-only">Configurações</span></button>
         </div>
       </aside>
 
       <main class="relative min-w-0">
-        <button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
+        ${state.viewMode === "board"
+          ? renderBoardView(state)
+          : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="mx-auto flex h-screen max-w-[1440px] flex-col px-4 py-2.5 sm:px-5 lg:px-5">
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
@@ -760,7 +872,7 @@ export function renderApp(state) {
               </form>
             </div>
           </footer>
-        </div>
+        </div>`}
       </main>
     </div>
     ${renderSettingsModal(state)}
@@ -813,6 +925,8 @@ export function bindUIHandlers(handlers) {
     if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
     if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);
     if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
+    if (action === "toggle-board-view") handlers.onToggleBoardView();
+    if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
@@ -855,6 +969,11 @@ export function bindUIHandlers(handlers) {
       input.value = "";
     }
 
+    if (input.dataset.action === "search-chats") {
+      handlers.onSearchChats(input.value);
+      return;
+    }
+
     if (input instanceof HTMLInputElement && input.id === "import-input" && input.files?.length) {
       handlers.onImportData(input.files[0]);
       input.value = "";
@@ -865,6 +984,9 @@ export function bindUIHandlers(handlers) {
     const target = event.target;
     if (target instanceof HTMLTextAreaElement && target.id === "composer-input") {
       handlers.onDraftChange(target.value);
+    }
+    if (target.dataset.action === "search-chats") {
+      handlers.onSearchChats(target.value);
     }
   });
 
