@@ -166,7 +166,7 @@ function addAssistantErrorMessage(chatId, error) {
       provider: "local",
       failed: true,
     },
-  );
+  });
 }
 
 function ensureSeedData() {
