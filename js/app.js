@@ -1,8 +1,10 @@
 import {
+  BRASIL_AGENT_ID,
   createAgent,
   deleteAgent,
   getDefaultAgents,
   loadAgents,
+  SCIENCE_AGENT_ID,
   saveAgents,
   updateAgent,
 } from "./agents.js";
@@ -43,6 +45,13 @@ import {
 } from "./audio.js";
 import { processFiles } from "./fileProcessor.js";
 import {
+  formatCepSummary,
+  formatCnpjSummary,
+  inferBrasilLookupType,
+  lookupCep,
+  lookupCnpj,
+} from "./brasilApi.js";
+import {
   buildCreativeBrief,
   buildInstagramCopyFallback,
   buildInstagramCopyPrompt,
@@ -52,6 +61,10 @@ import {
   INSTAGRAM_FORMATS,
   isInstagramAgent,
 } from "./instagramCreator.js";
+import {
+  buildPubMedContext,
+  lookupPubMedArticles,
+} from "./pubmed.js";
 import {
   applyParsedBackup,
   buildBackupPayload,
@@ -81,6 +94,8 @@ const state = {
   imageMode: false,
   selectedBrandId: "",
   selectedTemplateId: "",
+  pubmedMode: false,
+  pubmedResultLimit: 5,
   instagramFormat: "story_9_16",
   creativeFormDraft: {
     objective: "",
@@ -146,6 +161,8 @@ function saveViewState() {
     viewMode: state.viewMode,
     selectedBrandId: state.selectedBrandId,
     selectedTemplateId: state.selectedTemplateId,
+    pubmedMode: state.pubmedMode,
+    pubmedResultLimit: state.pubmedResultLimit,
     instagramFormat: state.instagramFormat,
     creativeFormDraft: state.creativeFormDraft,
   });
@@ -174,6 +191,8 @@ function hydratePersistentState() {
   const selectedBrand = state.brands.find((brand) => brand.id === state.selectedBrandId) || null;
   const hasSelectedTemplate = selectedBrand?.templates?.some((template) => template.id === reconciled.view.selectedTemplateId);
   state.selectedTemplateId = hasSelectedTemplate ? reconciled.view.selectedTemplateId : selectedBrand?.defaultTemplateId || "";
+  state.pubmedMode = Boolean(reconciled.view.pubmedMode);
+  state.pubmedResultLimit = Number(reconciled.view.pubmedResultLimit) > 0 ? Number(reconciled.view.pubmedResultLimit) : 5;
   state.instagramFormat = reconciled.view.instagramFormat || "story_9_16";
   state.creativeFormDraft = {
     objective: reconciled.view.creativeFormDraft?.objective || "",
@@ -343,6 +362,20 @@ function buildTextPayload(userMessage) {
   return payload;
 }
 
+function buildTextPayloadWithReference(userMessage, referenceContext) {
+  const payload = buildTextPayload(userMessage);
+  if (!referenceContext?.trim()) {
+    return payload;
+  }
+
+  payload.splice(payload.length - 1, 0, {
+    role: "user",
+    content: `Use a referencia abaixo para responder com base nas fontes consultadas:\n\n${referenceContext}`,
+  });
+
+  return payload;
+}
+
 function buildInstagramPayload() {
   const brand = getSelectedBrand();
   if (!brand) {
@@ -380,6 +413,8 @@ function resetAttachments() {
 
 async function handleSendMessage(rawMessage) {
   const isInstagramMode = isInstagramAgent(state.activeAgentId);
+  const isPubMedMode = state.activeAgentId === SCIENCE_AGENT_ID && state.pubmedMode;
+  const isBrasilAgent = state.activeAgentId === BRASIL_AGENT_ID;
   let message = String(rawMessage || "").trim();
   if (!message || state.isLoading) {
     if (!isInstagramMode || state.isLoading) {
@@ -404,7 +439,9 @@ async function handleSendMessage(rawMessage) {
     message = instagramPayload.creativeBrief;
   }
 
-  const textPayload = state.imageMode || isInstagramMode ? null : buildTextPayload(message);
+  const textPayload = state.imageMode || isInstagramMode || isPubMedMode || isBrasilAgent
+    ? null
+    : buildTextPayload(message);
   state.isLoading = true;
   addMessage(activeChat.id, {
     role: "user",
@@ -421,6 +458,83 @@ async function handleSendMessage(rawMessage) {
   persistAndRender();
 
   try {
+    if (isBrasilAgent) {
+      const inferred = inferBrasilLookupType(message);
+      if (inferred.type === "cep") {
+        const result = await lookupCep(inferred.value);
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: formatCepSummary(result),
+          meta: {
+            kind: "text",
+            provider: "Brasil API",
+            sourceType: "cep",
+            brasilData: result,
+          },
+        });
+      } else if (inferred.type === "cnpj") {
+        const result = await lookupCnpj(inferred.value);
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: formatCnpjSummary(result),
+          meta: {
+            kind: "text",
+            provider: "Brasil API",
+            sourceType: "cnpj",
+            brasilData: result,
+          },
+        });
+      } else {
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: "Envie um CEP com 8 dígitos ou um CNPJ com 14 dígitos para eu consultar os dados nacionais.",
+          meta: {
+            kind: "text",
+            provider: "Brasil API",
+            sourceType: "invalid",
+            failed: true,
+          },
+        });
+      }
+    } else if (isPubMedMode) {
+      const articles = await lookupPubMedArticles(message, {
+        retmax: state.pubmedResultLimit,
+      });
+
+      if (!articles.length) {
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: "Nao encontrei artigos relevantes na PubMed para essa busca. Tente reformular a pergunta com termos mais especificos.",
+          meta: {
+            kind: "text",
+            provider: "PubMed",
+            sourceType: "pubmed",
+            articles: [],
+            failed: true,
+          },
+        });
+      } else {
+        const reply = await sendTextMessage({
+          messages: buildTextPayloadWithReference(message, buildPubMedContext(articles)),
+          settings: state.settings,
+        });
+
+        const sources = articles
+          .map((article) => `- ${article.title} (${article.year || "s.d."})\n  ${article.pubmedUrl}`)
+          .join("\n");
+
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: `${reply.content}\n\nFontes PubMed:\n${sources}`,
+          meta: {
+            kind: "text",
+            provider: "PubMed",
+            sourceType: "pubmed",
+            articles,
+          },
+        });
+      }
+    } else
     if (state.imageMode || isInstagramMode) {
       if (isInstagramMode && instagramPayload) {
         let copyContent;
@@ -581,6 +695,8 @@ function handleSelectAgent(agentId) {
     state.selectedBrandId = state.selectedBrandId || state.brands[0]?.id || "";
     const brand = state.brands.find((item) => item.id === state.selectedBrandId);
     state.selectedTemplateId = brand?.defaultTemplateId || "";
+  } else if (agentId === BRASIL_AGENT_ID) {
+    state.imageMode = false;
   }
   persistAndRender();
 }
@@ -598,6 +714,8 @@ function handleSelectChat(chatId) {
   state.pendingChatCategoryPicker = null;
   if (isInstagramAgent(chat.agentId)) {
     state.imageMode = true;
+  } else if (chat.agentId === BRASIL_AGENT_ID) {
+    state.imageMode = false;
   }
   persistAndRender();
 }
@@ -726,6 +844,17 @@ function handleFilterByCategory(category) {
 function handleToggleBoardView() {
   state.viewMode = state.viewMode === "board" ? "chat" : "board";
   state.boardSearchQuery = "";
+  persistAndRender();
+}
+
+function handleTogglePubMedMode() {
+  state.pubmedMode = !state.pubmedMode;
+  persistAndRender();
+}
+
+function handleChangePubMedResultLimit(value) {
+  const parsed = Number(value);
+  state.pubmedResultLimit = parsed > 0 ? parsed : 5;
   persistAndRender();
 }
 
@@ -1110,6 +1239,8 @@ function initialize() {
     onFilterByCategory: handleFilterByCategory,
     onToggleBoardView: handleToggleBoardView,
     onSearchChats: handleSearchChats,
+    onTogglePubMedMode: handleTogglePubMedMode,
+    onChangePubMedResultLimit: handleChangePubMedResultLimit,
     onClearAttachments: () => {
       resetAttachments();
       persistAndRender();

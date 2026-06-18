@@ -119,6 +119,8 @@ export function reconcileAppData({
       viewMode: nextView.viewMode === "board" ? "board" : "chat",
       selectedBrandId: typeof nextView.selectedBrandId === "string" ? nextView.selectedBrandId : "",
       selectedTemplateId: typeof nextView.selectedTemplateId === "string" ? nextView.selectedTemplateId : "",
+      pubmedMode: Boolean(nextView.pubmedMode),
+      pubmedResultLimit: Number(nextView.pubmedResultLimit) > 0 ? Number(nextView.pubmedResultLimit) : 5,
       instagramFormat: typeof nextView.instagramFormat === "string" ? nextView.instagramFormat : "story_9_16",
       creativeFormDraft:
         nextView.creativeFormDraft && typeof nextView.creativeFormDraft === "object"

@@ -74,6 +74,14 @@ function getQuickModelValue(state) {
   return `openrouter::${state.settings.textModel}`;
 }
 
+function isScienceAgent(state) {
+  return state.activeAgent?.id === "agent-science";
+}
+
+function isBrasilAgent(state) {
+  return state.activeAgent?.id === "agent-brasil-consultor";
+}
+
 function getInstagramFormatById(state, formatId) {
   return (state.instagramFormats || []).find((item) => item.id === formatId) || state.instagramFormats?.[0] || null;
 }
@@ -290,6 +298,32 @@ function renderAttachmentChips(state) {
       >
         Limpar anexos
       </button>
+    </div>
+  `;
+}
+
+function renderPubMedControls(state) {
+  if (!isScienceAgent(state)) {
+    return "";
+  }
+
+  return `
+    <div class="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2.5">
+      <button
+        type="button"
+        class="control-btn inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm ${state.pubmedMode ? "border-cyan-300 bg-white text-femic-navy" : "border-slate-200 bg-white/75 text-slate-600"}"
+        data-action="toggle-pubmed-mode"
+      >
+        <span>🧬</span>
+        <span>${state.pubmedMode ? "PubMed ativa" : "Ativar PubMed"}</span>
+      </button>
+      <label class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-1 text-[11px] font-medium text-slate-600">
+        <span>Artigos</span>
+        <select class="bg-transparent outline-none" data-action="change-pubmed-result-limit">
+          ${[3, 5, 8].map((value) => `<option value="${value}" ${Number(state.pubmedResultLimit) === value ? "selected" : ""}>${value}</option>`).join("")}
+        </select>
+      </label>
+      <div class="text-[11px] text-slate-500">Busca metadados e abstracts da PubMed antes de resumir.</div>
     </div>
   `;
 }
@@ -544,6 +578,12 @@ function renderMessage(message, state) {
       </div>
     `
     : `<div class="markdown-body">${renderMarkdown(message.content)}</div>`;
+  const providerBadge = message.meta?.provider
+    ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
+    : "";
+  const sourceBadge = message.meta?.sourceType && message.meta?.provider !== "fal.ai"
+    ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType)}</span>`
+    : "";
 
   return `
     <article class="message-enter flex ${alignment} gap-2">
@@ -551,7 +591,11 @@ function renderMessage(message, state) {
       <div class="message-bubble rounded-2xl border ${bubbleBase} px-2.5 py-1.5" style="${isUser ? "" : "background:rgba(255,255,255,0.92);"}">
         <div class="mb-1 flex items-center justify-between gap-3">
           <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">${label}</div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">${label}</div>
+              ${providerBadge}
+              ${sourceBadge}
+            </div>
             <div class="text-xs text-slate-400">${formatTime(message.createdAt)}</div>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-1.5">
@@ -1106,6 +1150,8 @@ export function renderApp(state) {
   const collapsedClass = state.sidebarCollapsed ? "sidebar-collapsed" : "";
   const activeAgent = state.activeAgent;
   const instagramMode = activeAgent?.id === "agent-instagram-producer";
+  const scienceMode = isScienceAgent(state);
+  const brasilMode = isBrasilAgent(state);
   const chats = getVisibleChats(state);
   const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openAIKey);
   const voiceTitle = state.isVoiceProcessing
@@ -1199,7 +1245,7 @@ export function renderApp(state) {
 
           <footer class="composer-dock shrink-0 pt-2">
             <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
-              ${instagramMode ? renderInstagramCreativePanel(state) : renderAttachmentChips(state)}
+              ${instagramMode ? renderInstagramCreativePanel(state) : `${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
                   ${instagramMode
@@ -1208,7 +1254,7 @@ export function renderApp(state) {
                         id="composer-input"
                         name="message"
                         class="min-h-[48px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2.5 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
-                        placeholder="Digite sua mensagem para ${escapeHtml(activeAgent?.name || "o FEMIC GPT")}..."
+                        placeholder="${escapeHtml(brasilMode ? "Digite um CEP ou CNPJ para consultar..." : scienceMode && state.pubmedMode ? "Digite sua pergunta científica para buscar na PubMed..." : `Digite sua mensagem para ${activeAgent?.name || "o FEMIC GPT"}...`)}"
                       >${escapeHtml(state.draftMessage || "")}</textarea>`
                   }
                   <div class="flex flex-wrap items-center justify-between gap-1">
@@ -1302,6 +1348,7 @@ export function bindUIHandlers(handlers) {
     if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);
     if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
     if (action === "toggle-board-view") handlers.onToggleBoardView();
+    if (action === "toggle-pubmed-mode") handlers.onTogglePubMedMode();
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
@@ -1379,6 +1426,11 @@ export function bindUIHandlers(handlers) {
 
     if (input.dataset.action === "select-brand-template") {
       handlers.onSelectBrandTemplate(input.value);
+      return;
+    }
+
+    if (input.dataset.action === "change-pubmed-result-limit") {
+      handlers.onChangePubMedResultLimit(input.value);
       return;
     }
 

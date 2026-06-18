@@ -1,11 +1,15 @@
 import { INSTAGRAM_AGENT_ID } from "./instagramCreator.js";
 
 const AGENTS_KEY = "femicgpt:agents";
+export const GENERAL_AGENT_ID = "agent-general";
+export const MARKETING_AGENT_ID = "agent-marketing";
+export const SCIENCE_AGENT_ID = "agent-science";
+export const BRASIL_AGENT_ID = "agent-brasil-consultor";
 
 export function getDefaultAgents() {
   return [
     {
-      id: "agent-general",
+      id: GENERAL_AGENT_ID,
       name: "Assistente Geral",
       emoji: "🧠",
       description: "IA versátil para tarefas gerais, estratégia, escrita e apoio no dia a dia.",
@@ -15,7 +19,7 @@ export function getDefaultAgents() {
       createdAt: new Date().toISOString(),
     },
     {
-      id: "agent-marketing",
+      id: MARKETING_AGENT_ID,
       name: "Mestre em Marketing & Reels",
       emoji: "🎯",
       description:
@@ -26,13 +30,24 @@ export function getDefaultAgents() {
       createdAt: new Date().toISOString(),
     },
     {
-      id: "agent-science",
+      id: SCIENCE_AGENT_ID,
       name: "Cientista & Pesquisador",
       emoji: "🔬",
       description:
         "Focado em análise rigorosa de dados, leitura crítica de artigos e linguagem técnica em saúde.",
       systemPrompt:
         "Você é um cientista e pesquisador rigoroso. Priorize precisão, método, evidência, limitações, linguagem técnica quando necessário e distinção entre fatos, hipóteses e inferências.",
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: BRASIL_AGENT_ID,
+      name: "Consultor Brasil",
+      emoji: "🇧🇷",
+      description:
+        "Consulta CEP e CNPJ com dados nacionais organizados em linguagem clara e objetiva.",
+      systemPrompt:
+        "Você é o Consultor Brasil do FEMIC GPT. Sua função é interpretar dados brasileiros consultados em APIs públicas e responder em português do Brasil com organização, clareza e objetividade. Ao apresentar resultados, destaque os campos principais e avise quando algo estiver ausente ou incerto.",
       isDefault: true,
       createdAt: new Date().toISOString(),
     },

@@ -121,6 +121,8 @@ test("reconcileAppData repairs dangling active pointers and orphan chats", () =>
       activeChatId: "ghost",
       imageMode: true,
       sidebarCollapsed: true,
+      pubmedMode: true,
+      pubmedResultLimit: 8,
     },
     defaultAgents: createDefaultAgents,
     createChat: (agentId) => createChat(agentId, "fallback"),
@@ -134,6 +136,8 @@ test("reconcileAppData repairs dangling active pointers and orphan chats", () =>
   assert.equal(reconciled.activeChatId, "chat-a1");
   assert.equal(reconciled.view.imageMode, true);
   assert.equal(reconciled.view.sidebarCollapsed, true);
+  assert.equal(reconciled.view.pubmedMode, true);
+  assert.equal(reconciled.view.pubmedResultLimit, 8);
 });
 
 test("applyParsedBackup only replaces valid sections and preserves healthy ones", () => {
