@@ -1148,6 +1148,18 @@ export function renderApp(state) {
           </button>
         </div>
 
+        <div class="sidebar-top-actions sidebar-expanded-only mb-3">
+          <button type="button" class="sidebar-icon-action" data-action="create-chat" title="Nova conversa">
+            <span>＋</span>
+          </button>
+          <button type="button" class="sidebar-icon-action" data-action="toggle-board-view" title="Board de conversas">
+            <span>📋</span>
+          </button>
+          <button type="button" class="sidebar-icon-action" data-action="open-settings" title="Configurações">
+            <span>⚙</span>
+          </button>
+        </div>
+
         <div class="sidebar-main">
         <section class="sidebar-section sidebar-section-agents rounded-xl border border-white/10 bg-white/5 p-2.5">
           <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
@@ -1171,11 +1183,6 @@ export function renderApp(state) {
         </section>
         </div>
 
-        <div class="sidebar-footer-actions mt-3 shrink-0 space-y-2">
-          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:linear-gradient(135deg,rgba(63,183,214,0.28),rgba(255,255,255,0.14));" data-action="create-chat" title="Nova conversa"><span>＋</span><span class="sidebar-expanded-only">Nova conversa</span></button>
-          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.12);" data-action="toggle-board-view" title="Board de conversas"><span>📋</span><span class="sidebar-expanded-only">Board</span></button>
-          <button type="button" class="sidebar-action-btn w-full rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.96;" data-action="open-settings" title="Configurações"><span>⚙</span><span class="sidebar-expanded-only">Configurações</span></button>
-        </div>
       </aside>
 
       <main class="app-main relative min-w-0">
