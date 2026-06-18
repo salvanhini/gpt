@@ -302,7 +302,7 @@ function renderInstagramCreativePanel(state) {
   const templates = activeBrand?.templates || [];
 
   return `
-    <section class="mb-3 rounded-[1.35rem] border border-sky-100 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(232,244,255,0.95))] p-4 shadow-sm">
+    <section class="instagram-creative-panel mb-3 rounded-[1.35rem] border border-sky-100 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(232,244,255,0.95))] p-4 shadow-sm">
       <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/85 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-femic-navy">
@@ -1171,7 +1171,7 @@ export function renderApp(state) {
         </section>
         </div>
 
-        <div class="mt-3 shrink-0 space-y-2">
+        <div class="sidebar-footer-actions mt-3 shrink-0 space-y-2">
           <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:linear-gradient(135deg,rgba(63,183,214,0.28),rgba(255,255,255,0.14));" data-action="create-chat" title="Nova conversa"><span>＋</span><span class="sidebar-expanded-only">Nova conversa</span></button>
           <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.12);" data-action="toggle-board-view" title="Board de conversas"><span>📋</span><span class="sidebar-expanded-only">Board</span></button>
           <button type="button" class="sidebar-action-btn w-full rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.96;" data-action="open-settings" title="Configurações"><span>⚙</span><span class="sidebar-expanded-only">Configurações</span></button>
@@ -1182,7 +1182,7 @@ export function renderApp(state) {
         ${state.viewMode === "board"
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
-        <div class="chat-workspace mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
+        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
