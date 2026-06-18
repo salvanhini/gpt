@@ -71,9 +71,26 @@ function slugifyName(name) {
     .slice(0, 40);
 }
 
+export function createAgentId(name, agents = [], randomId = () => crypto.randomUUID()) {
+  const slug = slugifyName(name);
+  const baseId = `agent-${slug || randomId()}`;
+  const existingIds = new Set((agents || []).map((agent) => agent?.id).filter(Boolean));
+  if (!existingIds.has(baseId)) {
+    return baseId;
+  }
+
+  let suffix = 2;
+  while (existingIds.has(`${baseId}-${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${baseId}-${suffix}`;
+}
+
 export function createAgent(data) {
+  const agents = loadAgents();
   const agent = {
-    id: `agent-${slugifyName(data.name) || crypto.randomUUID()}`,
+    id: createAgentId(data.name, agents),
     name: data.name.trim(),
     emoji: data.emoji?.trim() || "✨",
     description: data.description.trim(),
@@ -82,7 +99,6 @@ export function createAgent(data) {
     createdAt: new Date().toISOString(),
   };
 
-  const agents = loadAgents();
   agents.unshift(agent);
   saveAgents(agents);
   return agent;

@@ -1,8 +1,9 @@
 import { getPdfJs } from "./pdf.js";
 
-const MAX_CONTEXT_CHARS = 12000;
+export const MAX_CONTEXT_CHARS = 12000;
+const MAX_FILE_CONTEXT_CHARS = 8000;
 
-function truncate(text, max = MAX_CONTEXT_CHARS) {
+function truncate(text, max = MAX_FILE_CONTEXT_CHARS) {
   if (text.length <= max) {
     return text;
   }
@@ -101,6 +102,20 @@ function getExtension(name) {
   return name.split(".").pop()?.toLowerCase() || "";
 }
 
+export function buildCombinedContext(files, max = MAX_CONTEXT_CHARS) {
+  const combined = (files || [])
+    .map((item) => item?.contextBlock)
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+
+  if (combined.length <= max) {
+    return combined;
+  }
+
+  const notice = "\n\n[contexto combinado truncado para caber no contexto]";
+  return `${combined.slice(0, Math.max(0, max - notice.length))}${notice}`;
+}
+
 export async function processFile(file) {
   try {
     const extension = getExtension(file.name);
@@ -164,6 +179,6 @@ export async function processFiles(fileList) {
 
   return {
     files: processed,
-    combinedContext: processed.map((item) => item.contextBlock).join("\n\n---\n\n"),
+    combinedContext: buildCombinedContext(processed),
   };
 }

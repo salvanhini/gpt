@@ -287,6 +287,15 @@ function renderTyping() {
   `;
 }
 
+export function shouldAutoScroll({
+  scrollTop = 0,
+  clientHeight = 0,
+  scrollHeight = 0,
+  threshold = 48,
+} = {}) {
+  return scrollTop + clientHeight >= scrollHeight - threshold;
+}
+
 function renderMessages(state) {
   const chat = state.chats.find((item) => item.id === state.activeChatId);
   const messages = chat?.messages || [];
@@ -492,6 +501,14 @@ function renderAgentModal(state) {
 
 export function renderApp(state) {
   const app = document.getElementById("app");
+  const previousMessagesPanel = document.getElementById("messages-panel");
+  const keepAtBottom = previousMessagesPanel
+    ? shouldAutoScroll({
+        scrollTop: previousMessagesPanel.scrollTop,
+        clientHeight: previousMessagesPanel.clientHeight,
+        scrollHeight: previousMessagesPanel.scrollHeight,
+      })
+    : true;
   const sidebarOpenClass = state.mobileSidebarOpen ? "open" : "";
   const collapsedClass = state.sidebarCollapsed ? "sidebar-collapsed" : "";
   const activeAgent = state.activeAgent;
@@ -500,7 +517,7 @@ export function renderApp(state) {
   const voiceTitle = state.isVoiceProcessing
     ? "Transcrevendo audio"
     : state.speechRecognitionSupported === false && !canRecordFallback
-      ? "Configure a chave OpenAI para usar o microfone neste navegador"
+      ? "Use Chrome/Edge no computador ou configure Audio (OpenAI) para usar o microfone"
       : state.isListening
       ? "Parar ditado"
       : "Ditado por voz";
@@ -628,7 +645,7 @@ export function renderApp(state) {
 
   document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm);
   const messagesPanel = document.getElementById("messages-panel");
-  if (messagesPanel) {
+  if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
   }
 }

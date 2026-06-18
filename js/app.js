@@ -24,18 +24,26 @@ import {
   transcribeAudio,
 } from "./api.js";
 import {
+  getSpeechSynthesis,
   createSpeechRecognition,
   getMicrophoneStream,
-  getSpeechSynthesis,
   isMediaRecorderSupported,
   isSpeechRecognitionSupported,
   pickPortugueseVoice,
 } from "./audio.js";
 import { processFiles } from "./fileProcessor.js";
+import {
+  applyParsedBackup,
+  buildBackupPayload,
+  parseBackupPayload,
+  readStorageJson,
+  reconcileAppData,
+  STORAGE_KEYS,
+  writeStorageJson,
+  normalizeSettings,
+} from "./storage.js";
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
-
-const SETTINGS_KEY = "femicgpt:settings";
-const STATE_KEY = "femicgpt:view";
+import { createVoiceController } from "./voiceController.js";
 
 const state = {
   settings: loadSettings(),
@@ -72,92 +80,101 @@ const state = {
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
 };
 
-function safeParse(value, fallback) {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 function loadSettings() {
-  const settings = {
-    ...getDefaultSettings(),
-    ...safeParse(localStorage.getItem(SETTINGS_KEY), {}),
-  };
-
-  if (!OPENROUTER_MODELS.some((model) => model.value === settings.textModel)) {
-    settings.textModel = getDefaultSettings().textModel;
-  }
-
-  if (!DEEPSEEK_MODELS.some((model) => model.value === settings.deepSeekModel)) {
-    settings.deepSeekModel = getDefaultSettings().deepSeekModel;
-  }
-
-  if (!["openrouter", "deepseek"].includes(settings.textProvider)) {
-    settings.textProvider = getDefaultSettings().textProvider;
-  }
-
-  return settings;
+  return normalizeSettings(
+    readStorageJson(localStorage, STORAGE_KEYS.settings, {}),
+    getDefaultSettings(),
+    OPENROUTER_MODELS,
+    DEEPSEEK_MODELS,
+  );
 }
 
 function saveSettings(settings) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  writeStorageJson(localStorage, STORAGE_KEYS.settings, settings);
 }
 
 function loadViewState() {
-  return safeParse(localStorage.getItem(STATE_KEY), {});
+  return readStorageJson(localStorage, STORAGE_KEYS.view, {});
 }
 
 function saveViewState() {
-  localStorage.setItem(
-    STATE_KEY,
-    JSON.stringify({
-      activeAgentId: state.activeAgentId,
-      activeChatId: state.activeChatId,
-      imageMode: state.imageMode,
-      sidebarCollapsed: state.sidebarCollapsed,
-    }),
+  writeStorageJson(localStorage, STORAGE_KEYS.view, {
+    activeAgentId: state.activeAgentId,
+    activeChatId: state.activeChatId,
+    imageMode: state.imageMode,
+    sidebarCollapsed: state.sidebarCollapsed,
+  });
+}
+
+function hydratePersistentState() {
+  const reconciled = reconcileAppData({
+    agents: loadAgents(),
+    chats: loadChats(),
+    view: loadViewState(),
+    defaultAgents: getDefaultAgents,
+    createChat,
+  });
+
+  state.agents = reconciled.agents;
+  state.chats = reconciled.chats;
+  state.activeAgentId = reconciled.activeAgentId;
+  state.activeChatId = reconciled.activeChatId;
+  state.imageMode = reconciled.view.imageMode;
+  state.sidebarCollapsed = reconciled.view.sidebarCollapsed;
+
+  saveAgents(state.agents);
+  saveChats(state.chats);
+  writeStorageJson(localStorage, STORAGE_KEYS.view, reconciled.view);
+}
+
+function resetTransientState({ keepDraft = false } = {}) {
+  voiceController.stopSpeaking();
+  voiceController.stopInput();
+  state.pendingAttachmentContext = null;
+  state.isLoading = false;
+  state.isVoiceProcessing = false;
+  state.modalPayload = {};
+  state.modals.settings = false;
+  state.modals.agentForm = false;
+  state.mobileSidebarOpen = false;
+  state.recordedAudioChunks = [];
+  if (!keepDraft) {
+    state.draftMessage = "";
+  }
+}
+
+function loadImportedSettings(rawSettings) {
+  return normalizeSettings(
+    rawSettings,
+    getDefaultSettings(),
+    OPENROUTER_MODELS,
+    DEEPSEEK_MODELS,
+  );
+}
+
+function buildUserErrorMessage(error, fallback) {
+  const message = error?.message || fallback;
+  return message?.trim() ? message : fallback;
+}
+
+function addAssistantErrorMessage(chatId, error) {
+  addMessage(chatId, {
+    role: "assistant",
+    content: `Nao foi possivel concluir sua solicitacao.\n\nMotivo: ${buildUserErrorMessage(error, "Erro desconhecido.")}`,
+    meta: {
+      kind: "error",
+      provider: "local",
+      failed: true,
+    },
   );
 }
 
 function ensureSeedData() {
-  if (!state.agents.length) {
-    state.agents = getDefaultAgents();
-    saveAgents(state.agents);
-  }
-
-  if (!state.chats.length) {
-    const initialAgent = state.agents[0];
-    const chat = createChat(initialAgent.id);
-    state.chats = [chat];
-    saveChats(state.chats);
-  }
+  hydratePersistentState();
 }
 
 function syncActivePointers() {
-  const view = loadViewState();
-  const fallbackAgentId = state.agents[0]?.id || null;
-  state.activeAgentId = state.agents.some((agent) => agent.id === view.activeAgentId)
-    ? view.activeAgentId
-    : fallbackAgentId;
-
-  const chatsForAgent = getChatsByAgent(state.activeAgentId);
-  let activeChat = chatsForAgent.find((chat) => chat.id === view.activeChatId);
-  if (!activeChat) {
-    activeChat = chatsForAgent[0];
-  }
-
-  if (!activeChat) {
-    const chat = createChat(state.activeAgentId);
-    state.chats.push(chat);
-    saveChats(state.chats);
-    activeChat = chat;
-  }
-
-  state.activeChatId = activeChat.id;
-  state.imageMode = Boolean(view.imageMode);
-  state.sidebarCollapsed = Boolean(view.sidebarCollapsed);
+  hydratePersistentState();
   saveViewState();
 }
 
@@ -172,6 +189,7 @@ function getActiveChat() {
 function refreshFromStorage() {
   state.agents = loadAgents();
   state.chats = loadChats();
+  hydratePersistentState();
 }
 
 function setModal(name, open, payload = {}) {
@@ -227,31 +245,6 @@ function buildTextPayload(userMessage) {
 
 function resetAttachments() {
   state.pendingAttachmentContext = null;
-}
-
-function syncSpeechVoice() {
-  const synth = getSpeechSynthesis();
-  state.speechRecognitionSupported = isSpeechRecognitionSupported();
-  state.speechSynthesisSupported = Boolean(synth);
-  state.mediaRecorderSupported = isMediaRecorderSupported();
-
-  if (!synth) {
-    state.availableVoice = null;
-    return;
-  }
-
-  const applyVoices = () => {
-    state.availableVoice = pickPortugueseVoice(synth.getVoices());
-  };
-
-  applyVoices();
-
-  if (!state.availableVoice) {
-    synth.onvoiceschanged = () => {
-      applyVoices();
-      render();
-    };
-  }
 }
 
 async function handleSendMessage(rawMessage) {
@@ -314,7 +307,8 @@ async function handleSendMessage(rawMessage) {
 
     resetAttachments();
   } catch (error) {
-    showToast(error.message || "Erro ao enviar mensagem.", "error");
+    addAssistantErrorMessage(activeChat.id, error);
+    showToast(buildUserErrorMessage(error, "Erro ao enviar mensagem."), "error");
   } finally {
     state.isLoading = false;
     refreshFromStorage();
@@ -500,6 +494,7 @@ function handleDeleteAgent(agentId) {
     state.agents = loadAgents();
     state.activeAgentId = state.agents[0]?.id || null;
     state.activeChatId = state.chats.find((chat) => chat.agentId === state.activeAgentId)?.id || state.chats[0]?.id || null;
+    syncActivePointers();
     showToast("Agente removido.", "success");
     persistAndRender();
   } catch (error) {
@@ -526,253 +521,6 @@ async function handleAttachFiles(fileList) {
   }
 }
 
-function stopSpeaking() {
-  const synth = getSpeechSynthesis();
-  if (synth) {
-    synth.cancel();
-  }
-  if (state.currentAudio) {
-    state.currentAudio.pause();
-    state.currentAudio.currentTime = 0;
-  }
-  if (state.currentAudioUrl) {
-    URL.revokeObjectURL(state.currentAudioUrl);
-  }
-  state.currentAudio = null;
-  state.currentAudioUrl = null;
-  state.speakingMessageId = null;
-}
-
-async function handleSpeakMessage(messageId) {
-  syncSpeechVoice();
-  const synth = getSpeechSynthesis();
-  if (state.speakingMessageId === messageId) {
-    stopSpeaking();
-    render();
-    return;
-  }
-
-  const chat = getActiveChat();
-  const message = chat?.messages.find((item) => item.id === messageId);
-  if (!message) {
-    return;
-  }
-
-  if (synth) {
-    stopSpeaking();
-    const utterance = new SpeechSynthesisUtterance(message.content);
-    utterance.lang = state.availableVoice?.lang || "pt-BR";
-    utterance.rate = 1;
-    if (state.availableVoice) {
-      utterance.voice = state.availableVoice;
-    }
-
-    utterance.onend = () => {
-      state.speakingMessageId = null;
-      render();
-    };
-    utterance.onerror = () => {
-      state.speakingMessageId = null;
-      showToast("Nao foi possivel reproduzir a resposta em voz alta.", "error");
-      render();
-    };
-    state.speakingMessageId = messageId;
-    synth.speak(utterance);
-    render();
-    return;
-  }
-
-  try {
-    stopSpeaking();
-    state.speakingMessageId = messageId;
-    render();
-    const audioBlob = await generateSpeechAudio({
-      text: message.content,
-      settings: state.settings,
-    });
-    const url = URL.createObjectURL(audioBlob);
-    const audio = new Audio(url);
-    state.currentAudioUrl = url;
-    state.currentAudio = audio;
-    audio.onended = () => {
-      stopSpeaking();
-      render();
-    };
-    audio.onerror = () => {
-      stopSpeaking();
-      showToast("Nao foi possivel tocar o audio gerado.", "error");
-      render();
-    };
-    await audio.play();
-    render();
-  } catch (error) {
-    stopSpeaking();
-    showToast(error.message || "Nao foi possivel gerar a fala da resposta.", "error");
-    render();
-  }
-}
-
-function stopListening() {
-  if (state.recognition) {
-    state.recognition.stop();
-  }
-  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
-    state.mediaRecorder.stop();
-  }
-  if (state.mediaStream) {
-    state.mediaStream.getTracks().forEach((track) => track.stop());
-  }
-  state.isListening = false;
-  state.recognition = null;
-  state.mediaRecorder = null;
-  state.mediaStream = null;
-}
-
-function canUseRecordedVoiceFallback() {
-  state.mediaRecorderSupported = isMediaRecorderSupported();
-  return Boolean(state.settings.openAIKey && state.mediaRecorderSupported);
-}
-
-async function handleToggleVoice() {
-  state.speechRecognitionSupported = isSpeechRecognitionSupported();
-  state.mediaRecorderSupported = isMediaRecorderSupported();
-
-  if (state.isListening) {
-    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
-      state.mediaRecorder.stop();
-    } else {
-      stopListening();
-    }
-    render();
-    return;
-  }
-
-  if (!window.isSecureContext) {
-    showToast("O ditado por voz exige HTTPS ou localhost.", "error");
-    return;
-  }
-
-  if (canUseRecordedVoiceFallback()) {
-    await handleRecordedVoiceInput();
-    return;
-  }
-
-  if (!isSpeechRecognitionSupported()) {
-    await handleRecordedVoiceInput();
-    return;
-  }
-
-  const recognition = createSpeechRecognition();
-  recognition.onresult = (event) => {
-    const text = Array.from(event.results)
-      .map((result) => result[0]?.transcript || "")
-      .join(" ")
-      .trim();
-
-    state.draftMessage = text;
-    render();
-  };
-  recognition.onerror = async (event) => {
-    const errors = {
-      "not-allowed": "Permissao do microfone negada.",
-      "no-speech": "Nenhuma fala detectada. Tente novamente.",
-      "audio-capture": "Nenhum microfone disponivel.",
-      aborted: "Captura de voz interrompida.",
-      network: "Servico de voz do navegador sem conexao.",
-      "service-not-allowed": "Servico de voz nao disponivel.",
-    };
-    state.isListening = false;
-    state.recognition = null;
-    render();
-
-    if (canUseRecordedVoiceFallback() && !["not-allowed", "audio-capture"].includes(event.error)) {
-      showToast("Voz nativa falhou. Vou usar a transcricao por OpenAI.", "info");
-      await handleRecordedVoiceInput();
-      return;
-    }
-
-    showToast(
-      errors[event.error] ||
-        `Nao foi possivel usar o microfone pelo navegador (${event.error || "erro desconhecido"}). Configure Audio (OpenAI) para usar o fallback.`,
-      "error",
-    );
-  };
-  recognition.onend = () => {
-    state.isListening = false;
-    state.recognition = null;
-    render();
-  };
-
-  state.recognition = recognition;
-  state.isListening = true;
-  recognition.start();
-  render();
-}
-
-async function handleRecordedVoiceInput() {
-  if (!isMediaRecorderSupported()) {
-    showToast("Microfone indisponivel neste navegador.", "error");
-    return;
-  }
-
-  if (!state.settings.openAIKey) {
-    showToast("Adicione a chave da OpenAI em Configurações > Audio para usar o microfone neste navegador.", "error");
-    return;
-  }
-
-  try {
-    const stream = await getMicrophoneStream();
-    const recorder = new MediaRecorder(stream);
-    state.recordedAudioChunks = [];
-    state.mediaStream = stream;
-    state.mediaRecorder = recorder;
-
-    recorder.ondataavailable = (event) => {
-      if (event.data?.size) {
-        state.recordedAudioChunks.push(event.data);
-      }
-    };
-
-    recorder.onstop = async () => {
-      const chunks = state.recordedAudioChunks;
-      state.isListening = false;
-      state.isVoiceProcessing = true;
-      state.mediaRecorder = null;
-      if (state.mediaStream) {
-        state.mediaStream.getTracks().forEach((track) => track.stop());
-      }
-      state.mediaStream = null;
-      render();
-
-      try {
-        const audioBlob = new Blob(chunks, { type: chunks[0]?.type || "audio/webm" });
-        const text = await transcribeAudio({ audioBlob, settings: state.settings });
-        state.draftMessage = state.draftMessage
-          ? `${state.draftMessage.trim()} ${text}`.trim()
-          : text;
-        showToast("Audio transcrito.", "success");
-      } catch (error) {
-        showToast(error.message || "Falha ao transcrever audio.", "error");
-      } finally {
-        state.isVoiceProcessing = false;
-        state.recordedAudioChunks = [];
-        render();
-      }
-    };
-
-    recorder.start();
-    state.isListening = true;
-    showToast("Gravando. Clique no microfone novamente para finalizar.", "info");
-    render();
-  } catch (error) {
-    state.isListening = false;
-    state.mediaRecorder = null;
-    state.mediaStream = null;
-    showToast(error.message || "Nao foi possivel acessar o microfone.", "error");
-    render();
-  }
-}
-
 function handleCopyMessage(messageId) {
   const chat = getActiveChat();
   const message = chat?.messages.find((item) => item.id === messageId);
@@ -788,10 +536,26 @@ function handleCopyMessage(messageId) {
   });
 }
 
+const voiceController = createVoiceController({
+  state,
+  render,
+  getActiveChat,
+  showToast,
+  generateSpeechAudio,
+  transcribeAudio,
+  getSpeechSynthesis,
+  createSpeechRecognition,
+  pickPortugueseVoice,
+  isSpeechRecognitionSupported,
+  isMediaRecorderSupported,
+  getMicrophoneStream,
+  getSettings: () => state.settings,
+});
+
 function initialize() {
   ensureSeedData();
   syncActivePointers();
-  syncSpeechVoice();
+  voiceController.syncSpeechVoice();
   bindUIHandlers({
     onSelectAgent: handleSelectAgent,
     onDeleteAgent: handleDeleteAgent,
@@ -808,8 +572,8 @@ function initialize() {
       state.imageMode = !state.imageMode;
       persistAndRender();
     },
-    onToggleVoice: handleToggleVoice,
-    onSpeakMessage: handleSpeakMessage,
+    onToggleVoice: () => voiceController.toggleInput(),
+    onSpeakMessage: (messageId) => voiceController.speakMessage(messageId),
     onCopyMessage: handleCopyMessage,
     onAttachFiles: handleAttachFiles,
     onClearAttachments: () => {
@@ -833,13 +597,7 @@ function initialize() {
       persistAndRender();
     },
     onExportData: () => {
-      const backup = {
-        femicgpt_chats: localStorage.getItem("femicgpt:chats"),
-        femicgpt_agents: localStorage.getItem("femicgpt:agents"),
-        femicgpt_settings: localStorage.getItem("femicgpt:settings"),
-        femicgpt_view: localStorage.getItem("femicgpt:view"),
-        exportedAt: new Date().toISOString(),
-      };
+      const backup = buildBackupPayload(localStorage);
 
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -857,37 +615,26 @@ function initialize() {
         }
 
         const text = await file.text();
-        const backup = JSON.parse(text);
+        const backup = parseBackupPayload(text);
 
-        if (backup.femicgpt_chats) {
-          localStorage.setItem("femicgpt:chats", backup.femicgpt_chats);
-        }
-        if (backup.femicgpt_agents) {
-          localStorage.setItem("femicgpt:agents", backup.femicgpt_agents);
-        }
-        if (backup.femicgpt_settings) {
-          localStorage.setItem("femicgpt:settings", backup.femicgpt_settings);
-        }
-        if (backup.femicgpt_view) {
-          localStorage.setItem("femicgpt:view", backup.femicgpt_view);
-        }
+        applyParsedBackup(localStorage, backup);
 
-        state.settings = loadSettings();
-        state.agents = loadAgents();
-        state.chats = loadChats();
-        ensureSeedData();
-        syncActivePointers();
+        resetTransientState();
+        hydratePersistentState();
+        state.settings = loadImportedSettings(
+          readStorageJson(localStorage, STORAGE_KEYS.settings, {}),
+        );
         showToast("Dados importados com sucesso.", "success");
         persistAndRender();
-      } catch {
-        showToast("Falha ao importar: arquivo inválido.", "error");
+      } catch (error) {
+        showToast(buildUserErrorMessage(error, "Falha ao importar: arquivo inválido."), "error");
       }
     },
   });
 
   window.addEventListener("beforeunload", () => {
-    stopSpeaking();
-    stopListening();
+    voiceController.stopSpeaking();
+    voiceController.stopInput();
   });
 
   render();
