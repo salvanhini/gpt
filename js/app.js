@@ -13,6 +13,7 @@ import {
   loadChats,
   saveChats,
   updateChatCategory,
+  updateMessageCategory,
   updateChatTitle,
 } from "./chat.js";
 import {
@@ -57,6 +58,7 @@ const state = {
   viewMode: "chat",
   boardSearchQuery: "",
   pendingChatCategoryPicker: null,
+  pendingMessageCategoryPicker: null,
   pendingAttachmentContext: null,
   imageMode: false,
   isLoading: false,
@@ -142,6 +144,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   voiceController.stopInput();
   state.pendingAttachmentContext = null;
   state.pendingChatCategoryPicker = null;
+  state.pendingMessageCategoryPicker = null;
   state.boardSearchQuery = "";
   state.isLoading = false;
   state.isVoiceProcessing = false;
@@ -476,9 +479,33 @@ function handleRenameChat(chatId) {
   }
 }
 
+function handleSetMessageCategory(messageId, category) {
+  const chat = getActiveChat();
+  if (!chat) {
+    return;
+  }
+
+  try {
+    updateMessageCategory(chat.id, messageId, category);
+    state.chats = loadChats();
+    state.pendingMessageCategoryPicker = null;
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao definir categoria da mensagem.", "error");
+  }
+}
+
 function handleToggleCategoryPicker(chatId) {
   state.pendingChatCategoryPicker =
     state.pendingChatCategoryPicker === chatId ? null : chatId;
+  state.pendingMessageCategoryPicker = null;
+  render();
+}
+
+function handleToggleMessageCategoryPicker(messageId) {
+  state.pendingMessageCategoryPicker =
+    state.pendingMessageCategoryPicker === messageId ? null : messageId;
+  state.pendingChatCategoryPicker = null;
   render();
 }
 
@@ -665,8 +692,10 @@ function initialize() {
     onCopyMessage: handleCopyMessage,
     onAttachFiles: handleAttachFiles,
     onSetChatCategory: handleSetChatCategory,
+    onSetMessageCategory: handleSetMessageCategory,
     onRenameChat: handleRenameChat,
     onToggleCategoryPicker: handleToggleCategoryPicker,
+    onToggleMessageCategoryPicker: handleToggleMessageCategoryPicker,
     onFilterByCategory: handleFilterByCategory,
     onToggleBoardView: handleToggleBoardView,
     onSearchChats: handleSearchChats,
@@ -729,6 +758,10 @@ function initialize() {
   document.addEventListener("click", (event) => {
     if (state.pendingChatCategoryPicker && !event.target.closest("[data-action='toggle-category-picker'], [data-action='set-chat-category'], .category-picker")) {
       state.pendingChatCategoryPicker = null;
+      render();
+    }
+    if (state.pendingMessageCategoryPicker && !event.target.closest("[data-action='toggle-message-category-picker'], [data-action='set-message-category'], .category-picker")) {
+      state.pendingMessageCategoryPicker = null;
       render();
     }
   });

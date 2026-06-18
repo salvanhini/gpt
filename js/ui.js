@@ -317,6 +317,52 @@ function renderAssistantActions(message, state) {
   `;
 }
 
+function renderMessageCategoryPicker(message, state) {
+  if (state.pendingMessageCategoryPicker !== message.id) {
+    return "";
+  }
+
+  return `
+    <div class="category-picker mt-2 flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-soft">
+      ${CHAT_CATEGORIES.map((cat) => {
+        const isActive = (message.meta?.category || "") === cat.id;
+        return `
+          <button
+            type="button"
+            class="category-option rounded-full px-2 py-0.5 text-[10px] font-semibold ${isActive ? "text-white" : "text-slate-600 hover:bg-slate-100"}"
+            style="${isActive ? `background:${cat.color};` : ""}"
+            data-action="set-message-category"
+            data-message-id="${message.id}"
+            data-category="${cat.id}"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full align-middle" style="background:${cat.color}; ${isActive ? "filter:brightness(2);" : ""}"></span>
+            <span class="align-middle">${cat.label}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderMessageCategoryBadge(message) {
+  const category = getCategoryById(message.meta?.category || "");
+  const hasCategory = Boolean(message.meta?.category);
+
+  return `
+    <button
+      type="button"
+      class="message-category-chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold transition-all duration-150 ${hasCategory ? "" : "opacity-75 hover:opacity-100"}"
+      style="${hasCategory ? `background:${category.color}18; color:${category.color}; border-color:${category.color}33;` : "background:rgba(148,163,184,0.08); color:#64748b; border-color:rgba(148,163,184,0.24);"}"
+      data-action="toggle-message-category-picker"
+      data-message-id="${message.id}"
+      title="${hasCategory ? `Categoria: ${category.label}` : "Categorizar mensagem"}"
+    >
+      <span class="inline-block h-1.5 w-1.5 rounded-full" style="background:${category.color}"></span>
+      <span>${hasCategory ? category.label : "Categoria"}</span>
+    </button>
+  `;
+}
+
 function renderMessage(message, state) {
   const isUser = message.role === "user";
   const bubbleBase = isUser
@@ -354,9 +400,13 @@ function renderMessage(message, state) {
             <div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">${label}</div>
             <div class="text-xs text-slate-400">${formatTime(message.createdAt)}</div>
           </div>
-          ${renderAssistantActions(message, state)}
+          <div class="flex flex-wrap items-center justify-end gap-1.5">
+            ${renderMessageCategoryBadge(message)}
+            ${renderAssistantActions(message, state)}
+          </div>
         </div>
         ${content}
+        ${renderMessageCategoryPicker(message, state)}
       </div>
     </article>
   `;
@@ -966,8 +1016,10 @@ export function bindUIHandlers(handlers) {
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
+    if (action === "set-message-category") handlers.onSetMessageCategory(target.dataset.messageId, target.dataset.category);
     if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);
     if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
+    if (action === "toggle-message-category-picker") handlers.onToggleMessageCategoryPicker(target.dataset.messageId);
     if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);
     if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
     if (action === "toggle-board-view") handlers.onToggleBoardView();

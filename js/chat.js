@@ -85,6 +85,28 @@ export function updateChatCategory(chatId, category) {
   return updateChat(chatId, { category });
 }
 
+export function updateMessageCategory(chatId, messageId, category) {
+  const chats = loadChats();
+  const chat = chats.find((item) => item.id === chatId);
+  if (!chat) {
+    throw new Error("Conversa não encontrada.");
+  }
+
+  const message = chat.messages.find((item) => item.id === messageId);
+  if (!message) {
+    throw new Error("Mensagem não encontrada.");
+  }
+
+  message.meta = {
+    ...(message.meta || {}),
+    category,
+  };
+  chat.updatedAt = new Date().toISOString();
+
+  saveChats(chats);
+  return message;
+}
+
 export function getChatsByAgent(agentId, category = "") {
   const chats = loadChats()
     .filter((chat) => chat.agentId === agentId)
