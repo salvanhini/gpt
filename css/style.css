@@ -122,18 +122,22 @@ button {
 
 .agent-card.active,
 .chat-card.active {
-  border-color: rgba(63, 183, 214, 0.8);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(63, 183, 214, 0.14));
+  border-color: rgba(92, 201, 226, 0.82);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(63, 183, 214, 0.12));
   box-shadow:
-    0 14px 28px rgba(7, 24, 43, 0.16),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 16px 30px rgba(7, 24, 43, 0.15),
+    0 0 0 1px rgba(124, 216, 236, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .chat-card.active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 248, 255, 0.96));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(240, 249, 255, 0.97)),
+    radial-gradient(circle at top right, rgba(63, 183, 214, 0.12), transparent 52%);
   box-shadow:
-    0 14px 30px rgba(8, 35, 63, 0.12),
-    inset 0 0 0 1px rgba(63, 183, 214, 0.18);
+    0 18px 34px rgba(8, 35, 63, 0.12),
+    0 0 0 1px rgba(63, 183, 214, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .sidebar-main {
@@ -165,12 +169,12 @@ button {
   width: 2.35rem;
   height: 2.35rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 20px rgba(7, 24, 43, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 18px rgba(7, 24, 43, 0.06);
   transition:
     transform 0.18s ease,
     background-color 0.18s ease,
@@ -180,8 +184,8 @@ button {
 
 .sidebar-icon-action:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.18);
   color: white;
 }
 
@@ -362,6 +366,19 @@ button {
   max-height: 116px;
 }
 
+.agent-card-compact {
+  min-height: 3.75rem;
+  padding: 0.54rem 0.6rem;
+}
+
+.agent-card-compact .danger-mini {
+  opacity: 0.5;
+}
+
+.agent-card-compact:hover .danger-mini {
+  opacity: 1;
+}
+
 .sidebar-chats-scroll {
   flex: 1;
   display: grid;
@@ -375,8 +392,8 @@ button {
   width: auto;
   min-width: 0;
   max-width: none;
-  min-height: 4.55rem;
-  padding: 0.7rem 0.7rem 0.65rem;
+  min-height: 3.35rem;
+  padding: 0.48rem 0.52rem 0.5rem;
   border-radius: 1rem;
   box-shadow:
     0 10px 24px rgba(15, 23, 42, 0.08),
@@ -384,11 +401,11 @@ button {
 }
 
 .chat-card-compact .chat-rename-btn {
-  opacity: 0.72;
+  opacity: 0.42;
 }
 
 .chat-card-compact .danger-mini {
-  opacity: 0.62;
+  opacity: 0.45;
 }
 
 .chat-card-compact:hover .danger-mini,
@@ -1229,6 +1246,15 @@ button {
 
   .sidebar-agents-scroll {
     max-height: 86px;
+  }
+
+  .agent-card-compact {
+    min-height: 3.55rem;
+    padding: 0.48rem 0.54rem;
+  }
+
+  .chat-card-compact {
+    min-height: 3.2rem;
   }
 
   .sidebar-section-chats .category-filter {

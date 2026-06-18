@@ -116,26 +116,26 @@ function renderAgentCard(agent, state) {
   }
 
   return `
-    <div class="agent-card ${isActive ? "active" : ""} rounded-xl border border-white/10 p-2 text-white">
-      <div class="flex items-center gap-2.5">
-        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-base shadow-inner shadow-white/10">
+    <div class="agent-card ${isActive ? "active" : ""} agent-card-compact rounded-xl border border-white/10 p-2 text-white">
+      <div class="flex items-center gap-2">
+        <div class="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[0.95rem] bg-white/10 text-[15px] shadow-inner shadow-white/10">
           ${escapeHtml(agent.emoji)}
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center justify-between gap-1.5">
             <button
               type="button"
               class="min-w-0 flex-1 text-left"
               data-action="select-agent"
               data-agent-id="${agent.id}"
             >
-              <div class="truncate text-sm font-semibold">${escapeHtml(agent.name)}</div>
-              <p class="mt-0.5 truncate text-[11px] text-white/70">${escapeHtml(agent.description)}</p>
+              <div class="truncate text-[12.5px] font-semibold leading-4">${escapeHtml(agent.name)}</div>
+              <p class="mt-0.5 truncate text-[9.5px] leading-4 text-white/70">${escapeHtml(agent.description)}</p>
             </button>
             ${
               canDelete
-                ? `<div class="flex gap-1"><button type="button" class="danger-mini rounded-full p-1 text-white hover:bg-white/15" data-action="edit-agent" data-agent-id="${agent.id}" title="Editar agente">✎</button><button type="button" class="danger-mini rounded-full p-1 text-white hover:bg-white/10" data-action="delete-agent" data-agent-id="${agent.id}" title="Excluir agente">✕</button></div>`
-                : `<span class="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-400"></span>`
+                ? `<div class="flex gap-0.5"><button type="button" class="danger-mini inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/15" data-action="edit-agent" data-agent-id="${agent.id}" title="Editar agente">✎</button><button type="button" class="danger-mini inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/10" data-action="delete-agent" data-agent-id="${agent.id}" title="Excluir agente">✕</button></div>`
+                : `<span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>`
             }
           </div>
         </div>
@@ -214,40 +214,40 @@ function renderChatCard(chat, state) {
   }
 
   return `
-    <div class="chat-card ${isActive ? "active" : ""} chat-card-compact relative overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-2 shadow-sm">
-      <div class="flex items-start gap-2">
+    <div class="chat-card ${isActive ? "active" : ""} chat-card-compact relative overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-1.5 py-1.25 shadow-sm">
+      <div class="flex items-start gap-1.5">
         <div class="mt-0.5 shrink-0">
           ${chat.category
-            ? `<span class="category-selector inline-flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
-            : `<span class="category-selector inline-flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[8px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
+            ? `<span class="category-selector inline-flex h-3 w-3 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
+            : `<span class="category-selector inline-flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[7px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
           }
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-2">
+          <div class="flex items-start justify-between gap-1.5">
             <button
               type="button"
               class="min-w-0 flex-1 text-left"
               data-action="select-chat"
               data-chat-id="${chat.id}"
             >
-              <div class="truncate text-[11.5px] font-semibold leading-4 text-slate-800">${escapeHtml(chat.title)}</div>
-              <div class="mt-0.5 flex items-center gap-1.5 text-[10px] text-slate-500">
+              <div class="truncate text-[10.5px] font-semibold leading-4 text-slate-800">${escapeHtml(chat.title)}</div>
+              <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-4 text-slate-500">
                 <span>${formatRelativeDay(chat.updatedAt)}</span>
               </div>
             </button>
-            <div class="chat-card-tools flex shrink-0 flex-col items-end gap-1 pl-1">
-              <div class="chat-time-compact text-[10px] text-slate-400">${formatTime(chat.updatedAt)}</div>
+            <div class="chat-card-tools flex shrink-0 flex-col items-end gap-0.5 pl-0.5">
+              <div class="chat-time-compact text-[8.5px] text-slate-400">${formatTime(chat.updatedAt)}</div>
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="chat-rename-btn inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                class="chat-rename-btn inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[7.5px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
                 title="Renomear conversa"
               >✎</button>
               <button
                 type="button"
-                class="danger-mini inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                class="danger-mini inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[8px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                 data-action="delete-chat"
                 data-chat-id="${chat.id}"
                 title="Excluir conversa"
