@@ -88,9 +88,22 @@ export function createVoiceController({
     );
   }
 
+  function pickBestVoice() {
+    const synth = getSpeechSynthesis();
+    if (!synth) return null;
+    const voices = synth.getVoices();
+    return (
+      voices.find((v) => v.name.includes("Google português do Brasil")) ||
+      voices.find((v) => v.lang === "pt-BR") ||
+      voices.find((v) => v.lang?.toLowerCase().startsWith("pt")) ||
+      voices[0] ||
+      null
+    );
+  }
+
   async function speakMessage(messageId) {
     syncSpeechVoice();
-    const synth = getSpeechSynthesis();
+
     if (state.speakingMessageId === messageId) {
       stopSpeaking();
       render();
@@ -103,57 +116,120 @@ export function createVoiceController({
       return;
     }
 
-    if (synth) {
-      stopSpeaking();
-      const utterance = new SpeechSynthesisUtterance(message.content);
-      utterance.lang = state.availableVoice?.lang || "pt-BR";
-      utterance.rate = 1;
-      if (state.availableVoice) {
-        utterance.voice = state.availableVoice;
-      }
+    stopSpeaking();
+    state.speakingMessageId = messageId;
+    render();
 
-      utterance.onend = () => {
-        state.speakingMessageId = null;
-        render();
-      };
-      utterance.onerror = () => {
-        state.speakingMessageId = null;
-        showToast("Nao foi possivel reproduzir a resposta em voz alta.", "error");
-        render();
-      };
-      state.speakingMessageId = messageId;
-      synth.speak(utterance);
-      render();
-      return;
+    if (getSpeechSynthesis()) {
+      const success = await speakNativeOptimized(message.content);
+      if (!success && state.speakingMessageId !== null) {
+        if (state.availableVoice) {
+          showToast("Voz nativa falhou neste navegador. Usando fallback por OpenAI.", "info");
+        }
+        await speakOpenAiFallback(message.content);
+      }
+    } else {
+      await speakOpenAiFallback(message.content);
     }
 
+    state.speakingMessageId = null;
+    render();
+  }
+
+  function isNavegadorCompativelComVozNativa() {
+    if (!getSpeechSynthesis()) return false;
+    if (state.availableVoice) return true;
+    const synth = getSpeechSynthesis();
     try {
-      stopSpeaking();
-      state.speakingMessageId = messageId;
-      render();
+      const utterance = new SpeechSynthesisUtterance("teste");
+      synth.speak(utterance);
+      synth.cancel();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function speakNativeOptimized(text) {
+    return new Promise((resolve) => {
+      const synth = getSpeechSynthesis();
+      if (!synth || !text.trim()) {
+        resolve(false);
+        return;
+      }
+
+      const frases = text.match(/[^.!?]+[.!?]?/g) || [text];
+      let index = 0;
+      const voice = pickBestVoice();
+      let started = false;
+
+      function falarProximaFrase() {
+        if (index >= frases.length) {
+          resolve(true);
+          return;
+        }
+
+        if (state.speakingMessageId === null) {
+          resolve(false);
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(frases[index].trim());
+        utterance.lang = voice?.lang || "pt-BR";
+        if (voice) utterance.voice = voice;
+        utterance.rate = 1.12;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        utterance.onstart = () => { started = true; };
+        utterance.onend = () => {
+          if (!started) {
+            resolve(false);
+            return;
+          }
+          index++;
+          falarProximaFrase();
+        };
+        utterance.onerror = (e) => {
+          if (e?.error === "canceled") {
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        };
+
+        try {
+          synth.speak(utterance);
+        } catch {
+          resolve(false);
+        }
+      }
+
+      falarProximaFrase();
+    });
+  }
+
+  async function speakOpenAiFallback(text) {
+    if (!getSettings().openAIKey) {
+      showToast("Configure Audio (OpenAI) para leitura em voz alta neste navegador.", "error");
+      return;
+    }
+    try {
       const audioBlob = await generateSpeechAudio({
-        text: message.content,
+        text,
         settings: getSettings(),
       });
       const url = URL.createObjectURL(audioBlob);
       const audio = new Audio(url);
       state.currentAudioUrl = url;
       state.currentAudio = audio;
-      audio.onended = () => {
-        stopSpeaking();
-        render();
-      };
-      audio.onerror = () => {
-        stopSpeaking();
-        showToast("Nao foi possivel tocar o audio gerado.", "error");
-        render();
-      };
-      await audio.play();
-      render();
+      await new Promise((resolve, reject) => {
+        audio.onended = resolve;
+        audio.onerror = reject;
+        audio.play().catch(reject);
+      });
     } catch (error) {
-      stopSpeaking();
       showToast(buildUserErrorMessage(error, "Nao foi possivel gerar a fala da resposta."), "error");
-      render();
     }
   }
 

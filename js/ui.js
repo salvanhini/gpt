@@ -35,10 +35,27 @@ function renderMarkdown(content) {
   return globalThis.DOMPurify.sanitize(rawHtml);
 }
 
+const CHAT_CATEGORIES = [
+  { id: "", label: "Sem categoria", color: "#94A3B8" },
+  { id: "trabalho", label: "Trabalho", color: "#3B82F6" },
+  { id: "pessoal", label: "Pessoal", color: "#10B981" },
+  { id: "estudo", label: "Estudo", color: "#8B5CF6" },
+  { id: "criativo", label: "Criativo", color: "#F59E0B" },
+  { id: "tecnico", label: "Técnico", color: "#64748B" },
+];
+
+function getCategoryById(id) {
+  return CHAT_CATEGORIES.find((cat) => cat.id === id) || CHAT_CATEGORIES[0];
+}
+
 function getVisibleChats(state) {
-  return state.chats
+  const chats = state.chats
     .filter((chat) => chat.agentId === state.activeAgentId)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  if (state.activeCategory) {
+    return chats.filter((chat) => chat.category === state.activeCategory);
+  }
+  return chats;
 }
 
 function getProviderLabel(state) {
@@ -123,49 +140,120 @@ function renderAgentCard(agent, state) {
   `;
 }
 
+function renderCategoryFilter(state) {
+  if (state.sidebarCollapsed) return "";
+  const active = state.activeCategory;
+  return `
+    <div class="category-filter flex flex-wrap gap-1 px-1 py-1.5">
+      ${CHAT_CATEGORIES.map((cat) => {
+        const isActive = (cat.id === "" && !active) || active === cat.id;
+        return `
+          <button
+            type="button"
+            class="category-filter-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] transition-all duration-150 ${isActive ? "ring-2 ring-white/40" : "opacity-60 hover:opacity-90"}"
+            style="background:${cat.color}22; color:${cat.color}; border:1px solid ${cat.color}44; ${isActive ? `background:${cat.color}; color:white;` : ""}"
+            data-action="filter-by-category"
+            data-category="${cat.id}"
+            title="Filtrar: ${cat.label}"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full" style="background:${cat.color}"></span>
+            ${cat.id ? cat.label : "Todas"}
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderCategoryPicker(chat, state) {
+  if (state.pendingChatCategoryPicker !== chat.id) return "";
+  return `
+    <div class="category-picker mt-1.5 flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-soft">
+      ${CHAT_CATEGORIES.map((cat) => {
+        const isActive = chat.category === cat.id;
+        return `
+          <button
+            type="button"
+            class="category-option rounded-full px-2 py-0.5 text-[10px] font-semibold ${isActive ? "text-white" : "text-slate-600 hover:bg-slate-100"}"
+            style="${isActive ? `background:${cat.color};` : ""}"
+            data-action="set-chat-category"
+            data-chat-id="${chat.id}"
+            data-category="${cat.id}"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full align-middle" style="background:${cat.color}; ${isActive ? "filter:brightness(2);" : ""}"></span>
+            <span class="align-middle">${cat.label}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderChatCard(chat, state) {
   const isActive = chat.id === state.activeChatId;
+  const cat = getCategoryById(chat.category);
   if (state.sidebarCollapsed) {
     return `
-      <button
-        type="button"
-        class="chat-icon-card ${isActive ? "active" : ""}"
-        data-action="select-chat"
-        data-chat-id="${chat.id}"
-        title="${escapeHtml(chat.title)}"
-      >
-        💬
-      </button>
+      <div class="relative">
+        <button
+          type="button"
+          class="chat-icon-card ${isActive ? "active" : ""}"
+          data-action="select-chat"
+          data-chat-id="${chat.id}"
+          title="${escapeHtml(chat.title)}"
+        >
+          💬
+        </button>
+        ${chat.category ? `<span class="absolute -right-0.5 -top-0.5 block h-2 w-2 rounded-full ring-1 ring-white" style="background:${cat.color}"></span>` : ""}
+      </div>
     `;
   }
 
   return `
-    <div class="chat-card ${isActive ? "active" : ""} flex w-full items-center gap-2 rounded-xl border border-slate-200/80 bg-white/88 px-2.5 py-2 shadow-sm">
-      <button
-        type="button"
-        class="min-w-0 flex-1 text-left"
-        data-action="select-chat"
-        data-chat-id="${chat.id}"
-      >
-      <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="truncate text-xs font-semibold text-slate-800">${escapeHtml(chat.title)}</div>
-          <div class="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
-            <span>${formatRelativeDay(chat.updatedAt)}</span>
-          </div>
+    <div class="chat-card ${isActive ? "active" : ""} w-full rounded-xl border border-slate-200/80 bg-white/88 px-2.5 py-2 shadow-sm">
+      <div class="flex items-center gap-2">
+        <div class="shrink-0">
+          ${chat.category
+            ? `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
+            : `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[8px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
+          }
         </div>
-        <div class="text-xs text-slate-400">${formatTime(chat.updatedAt)}</div>
+        <button
+          type="button"
+          class="min-w-0 flex-1 text-left"
+          data-action="select-chat"
+          data-chat-id="${chat.id}"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="truncate text-xs font-semibold text-slate-800">${escapeHtml(chat.title)}</span>
+                <button
+                  type="button"
+                  class="chat-rename-btn inline-flex shrink-0 items-center justify-center rounded px-1 text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                  data-action="rename-chat"
+                  data-chat-id="${chat.id}"
+                  title="Renomear conversa"
+                >✎</button>
+              </div>
+              <div class="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+                <span>${formatRelativeDay(chat.updatedAt)}</span>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400">${formatTime(chat.updatedAt)}</div>
+          </div>
+        </button>
+        <button
+          type="button"
+          class="danger-mini shrink-0 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+          data-action="delete-chat"
+          data-chat-id="${chat.id}"
+          title="Excluir conversa"
+        >
+          ✕
+        </button>
       </div>
-      </button>
-      <button
-        type="button"
-        class="danger-mini shrink-0 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-        data-action="delete-chat"
-        data-chat-id="${chat.id}"
-        title="Excluir conversa"
-      >
-        ✕
-      </button>
+      ${renderCategoryPicker(chat, state)}
     </div>
   `;
 }
@@ -315,6 +403,16 @@ function renderMessages(state) {
   return messages.map((message) => renderMessage(message, state)).join("");
 }
 
+const ASPECT_RATIO_PREVIEWS = {
+  landscape_4_3: { svg: '<svg viewBox="0 0 16 12" class="aspect-svg"><rect x="0.5" y="0.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Paisagem 4:3 · Padrão fotográfico" },
+  landscape_16_9: { svg: '<svg viewBox="0 0 16 9" class="aspect-svg"><rect x="0.5" y="0.5" width="15" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Paisagem 16:9 · Telas e banners" },
+  landscape_3_2: { svg: '<svg viewBox="0 0 15 10" class="aspect-svg"><rect x="0.5" y="0.5" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Paisagem 3:2 · Fotos clássicas" },
+  square_hd: { svg: '<svg viewBox="0 0 12 12" class="aspect-svg"><rect x="0.5" y="0.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Quadrado HD · Redes sociais" },
+  square: { svg: '<svg viewBox="0 0 12 12" class="aspect-svg"><rect x="0.5" y="0.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Quadrado · Ícones e avatares" },
+  portrait_4_3: { svg: '<svg viewBox="0 0 12 16" class="aspect-svg"><rect x="0.5" y="0.5" width="11" height="15" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Retrato 4:3 · Stories e posts verticais" },
+  portrait_16_9: { svg: '<svg viewBox="0 0 9 16" class="aspect-svg"><rect x="0.5" y="0.5" width="8" height="15" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>', tip: "Retrato 16:9 · Reels e TikTok" },
+};
+
 function renderImageSizeSelector(state) {
   const options = state.imageSizeOptions || [];
   if (options.length === 0) {
@@ -323,14 +421,29 @@ function renderImageSizeSelector(state) {
 
   const current = state.settings.imageSize || "landscape_4_3";
   return `
-    <label class="inline-flex items-center rounded-full border border-slate-200/70 bg-white/60 px-1.5 py-0.5">
+    <div class="inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/60 px-1.5 py-0.5">
       <span class="text-[9px] text-slate-400 mr-0.5">Tam:</span>
-      <select class="image-size-select" data-action="change-image-size">
-        ${options.map(
-          (opt) => `<option value="${escapeHtml(opt.value)}" ${current === opt.value ? "selected" : ""}>${escapeHtml(opt.label)}</option>`,
-        ).join("")}
-      </select>
-    </label>
+      <div class="flex gap-0.5">
+        ${options.map((opt) => {
+          const preview = ASPECT_RATIO_PREVIEWS[opt.value];
+          const isActive = current === opt.value;
+          return `
+            <button
+              type="button"
+              class="aspect-btn rounded-md px-1 py-0.5 transition-all duration-150 ${isActive ? "bg-femic-cyan/15 text-femic-navy" : "text-slate-400 hover:text-slate-600"}"
+              data-action="change-image-size"
+              data-image-size="${escapeHtml(opt.value)}"
+              title="${preview?.tip || escapeHtml(opt.label)}"
+            >
+              <div class="aspect-svg-wrap inline-flex items-center justify-center" style="width:18px;height:14px;">
+                ${preview?.svg || ""}
+              </div>
+              <div class="text-[7px] font-semibold leading-none mt-0.5">${opt.label.split(" ").pop() || ""}</div>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -391,11 +504,21 @@ function renderSettingsModal(state) {
               </label>
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrão</span>
-                <select class="modal-input appearance-none" name="imageSize">
-                  ${state.imageSizeOptions.map((opt) => `
-                    <option value="${escapeHtml(opt.value)}" ${settings.imageSize === opt.value ? "selected" : ""}>${escapeHtml(opt.label)}</option>
-                  `).join("")}
-                </select>
+                <div class="flex flex-wrap gap-1.5">
+                  ${state.imageSizeOptions.map((opt) => {
+                    const preview = ASPECT_RATIO_PREVIEWS[opt.value];
+                    const isActive = settings.imageSize === opt.value;
+                    return `
+                      <label class="aspect-option cursor-pointer rounded-lg border p-2 text-center transition-all duration-150 ${isActive ? "border-femic-cyan bg-cyan-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}">
+                        <input type="radio" name="imageSize" value="${escapeHtml(opt.value)}" ${isActive ? "checked" : ""} class="hidden" />
+                        <div class="aspect-svg-wrap mx-auto mb-1 inline-flex items-center justify-center text-slate-600" style="width:28px;height:22px;">
+                          ${preview?.svg || ""}
+                        </div>
+                        <div class="text-[10px] font-medium leading-tight text-slate-700">${escapeHtml(opt.label)}</div>
+                      </label>
+                    `;
+                  }).join("")}
+                </div>
               </label>
             </div>
           </section>
@@ -566,10 +689,11 @@ export function renderApp(state) {
         </section>
 
         <section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
-          <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
+          <div class="sidebar-expanded-only mb-2 flex items-center justify-between">
             <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Conversas</div>
             <button type="button" class="rounded-full border border-white/15 px-2 py-1 text-white" style="background:rgba(255,255,255,0.08); opacity:0.92;" data-action="create-chat" title="Nova conversa">＋</button>
           </div>
+          ${renderCategoryFilter(state)}
           <div class="sidebar-scroll sidebar-chats-scroll scroll-soft flex flex-col gap-2 pr-1">
             ${chats.length ? chats.map((chat) => renderChatCard(chat, state)).join("") : `<div class="rounded-xl border border-white/10 p-3 text-xs text-white" style="background:rgba(255,255,255,0.06); opacity:0.82;">Ainda não há conversas para este agente.</div>`}
           </div>
@@ -586,7 +710,7 @@ export function renderApp(state) {
         <button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="mx-auto flex h-screen max-w-[1440px] flex-col px-4 py-2.5 sm:px-5 lg:px-5">
 
-          <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-2.5 overflow-auto pr-1 pb-1">
+          <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
             ${state.isLoading ? renderTyping() : ""}
             <div class="timeline-end-spacer" aria-hidden="true"></div>
@@ -684,6 +808,11 @@ export function bindUIHandlers(handlers) {
     if (action === "clear-attachments") handlers.onClearAttachments();
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
+    if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
+    if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);
+    if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
+    if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);
+    if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
     if (action === "export-data") handlers.onExportData();
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
@@ -718,11 +847,6 @@ export function bindUIHandlers(handlers) {
     const input = event.target;
     if (input instanceof HTMLSelectElement && input.dataset.action === "quick-model-change") {
       handlers.onQuickModelChange(input.value);
-      return;
-    }
-
-    if (input instanceof HTMLSelectElement && input.dataset.action === "change-image-size") {
-      handlers.onChangeImageSize(input.value);
       return;
     }
 

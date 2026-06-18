@@ -1,5 +1,18 @@
 const CHATS_KEY = "femicgpt:chats";
 
+export const CHAT_CATEGORIES = [
+  { id: "", label: "Sem categoria", color: "#94A3B8" },
+  { id: "trabalho", label: "Trabalho", color: "#3B82F6" },
+  { id: "pessoal", label: "Pessoal", color: "#10B981" },
+  { id: "estudo", label: "Estudo", color: "#8B5CF6" },
+  { id: "criativo", label: "Criativo", color: "#F59E0B" },
+  { id: "tecnico", label: "Técnico", color: "#64748B" },
+];
+
+export function getCategoryById(id) {
+  return CHAT_CATEGORIES.find((cat) => cat.id === id) || CHAT_CATEGORIES[0];
+}
+
 function safeParse(value, fallback) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -24,6 +37,7 @@ export function createChat(agentId) {
     title: "Nova conversa",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    category: "",
     messages: [],
   };
 }
@@ -67,10 +81,18 @@ export function updateChatTitle(chatId, title) {
   return updateChat(chatId, { title });
 }
 
-export function getChatsByAgent(agentId) {
-  return loadChats()
+export function updateChatCategory(chatId, category) {
+  return updateChat(chatId, { category });
+}
+
+export function getChatsByAgent(agentId, category = "") {
+  const chats = loadChats()
     .filter((chat) => chat.agentId === agentId)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  if (category) {
+    return chats.filter((chat) => chat.category === category);
+  }
+  return chats;
 }
 
 export function createChatTitle(content) {

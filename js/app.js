@@ -12,6 +12,10 @@ import {
   getChatsByAgent,
   loadChats,
   saveChats,
+  updateChatCategory,
+  updateChatTitle,
+  CHAT_CATEGORIES,
+  getCategoryById,
 } from "./chat.js";
 import {
   DEEPSEEK_MODELS,
@@ -51,6 +55,8 @@ const state = {
   chats: loadChats(),
   activeAgentId: null,
   activeChatId: null,
+  activeCategory: "",
+  pendingChatCategoryPicker: null,
   pendingAttachmentContext: null,
   imageMode: false,
   isLoading: false,
@@ -103,6 +109,7 @@ function saveViewState() {
     activeChatId: state.activeChatId,
     imageMode: state.imageMode,
     sidebarCollapsed: state.sidebarCollapsed,
+    activeCategory: state.activeCategory,
   });
 }
 
@@ -121,6 +128,7 @@ function hydratePersistentState() {
   state.activeChatId = reconciled.activeChatId;
   state.imageMode = reconciled.view.imageMode;
   state.sidebarCollapsed = reconciled.view.sidebarCollapsed;
+  state.activeCategory = reconciled.view.activeCategory || "";
 
   saveAgents(state.agents);
   saveChats(state.chats);
@@ -131,6 +139,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   voiceController.stopSpeaking();
   voiceController.stopInput();
   state.pendingAttachmentContext = null;
+  state.pendingChatCategoryPicker = null;
   state.isLoading = false;
   state.isVoiceProcessing = false;
   state.modalPayload = {};
@@ -350,6 +359,7 @@ function handleSelectChat(chatId) {
   state.activeAgentId = chat.agentId;
   state.activeChatId = chatId;
   state.mobileSidebarOpen = false;
+  state.pendingChatCategoryPicker = null;
   persistAndRender();
 }
 
@@ -411,6 +421,42 @@ function handleChangeImageSize(value) {
   };
 
   saveSettings(state.settings);
+  persistAndRender();
+}
+
+function handleSetChatCategory(chatId, category) {
+  try {
+    updateChatCategory(chatId, category);
+    state.chats = loadChats();
+    state.pendingChatCategoryPicker = null;
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao definir categoria.", "error");
+  }
+}
+
+function handleRenameChat(chatId) {
+  const chat = state.chats.find((item) => item.id === chatId);
+  if (!chat) return;
+  const newTitle = window.prompt("Renomear conversa:", chat.title);
+  if (!newTitle || newTitle.trim() === chat.title) return;
+  try {
+    updateChatTitle(chatId, newTitle.trim());
+    state.chats = loadChats();
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao renomear conversa.", "error");
+  }
+}
+
+function handleToggleCategoryPicker(chatId) {
+  state.pendingChatCategoryPicker =
+    state.pendingChatCategoryPicker === chatId ? null : chatId;
+  render();
+}
+
+function handleFilterByCategory(category) {
+  state.activeCategory = state.activeCategory === category ? "" : category;
   persistAndRender();
 }
 
@@ -576,6 +622,10 @@ function initialize() {
     onSpeakMessage: (messageId) => voiceController.speakMessage(messageId),
     onCopyMessage: handleCopyMessage,
     onAttachFiles: handleAttachFiles,
+    onSetChatCategory: handleSetChatCategory,
+    onRenameChat: handleRenameChat,
+    onToggleCategoryPicker: handleToggleCategoryPicker,
+    onFilterByCategory: handleFilterByCategory,
     onClearAttachments: () => {
       resetAttachments();
       persistAndRender();
@@ -630,6 +680,13 @@ function initialize() {
         showToast(buildUserErrorMessage(error, "Falha ao importar: arquivo inválido."), "error");
       }
     },
+  });
+
+  document.addEventListener("click", (event) => {
+    if (state.pendingChatCategoryPicker && !event.target.closest("[data-action='toggle-category-picker'], [data-action='set-chat-category'], .category-picker")) {
+      state.pendingChatCategoryPicker = null;
+      render();
+    }
   });
 
   window.addEventListener("beforeunload", () => {
