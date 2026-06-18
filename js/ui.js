@@ -299,6 +299,7 @@ function renderInstagramCreativePanel(state) {
   const currentFormat = getInstagramFormatById(state, state.instagramFormat);
   const activeBrand = brands.find((brand) => brand.id === state.selectedBrandId) || null;
   const draft = state.creativeFormDraft || {};
+  const templates = activeBrand?.templates || [];
 
   return `
     <section class="mb-3 rounded-[1.35rem] border border-sky-100 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(232,244,255,0.95))] p-4 shadow-sm">
@@ -351,10 +352,51 @@ function renderInstagramCreativePanel(state) {
         </label>
       </div>
 
+      <div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr),180px,auto,auto]">
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Template da marca</span>
+          <select
+            class="modal-input"
+            data-action="select-brand-template"
+            name="selectedTemplateId"
+          >
+            <option value="">Sem template aplicado</option>
+            ${templates.map((template) => `
+              <option value="${escapeHtml(template.id)}" ${template.id === state.selectedTemplateId ? "selected" : ""}>${escapeHtml(template.name)}</option>
+            `).join("")}
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Variações</span>
+          <select class="modal-input" data-action="creative-field" data-field="variationCount" name="creative-variation-count">
+            ${["1", "2", "3", "4"].map((value) => `<option value="${value}" ${String(draft.variationCount || "3") === value ? "selected" : ""}>${value}</option>`).join("")}
+          </select>
+        </label>
+        <button
+          type="button"
+          class="mt-[1.75rem] inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+          data-action="save-current-template"
+        >
+          Salvar template
+        </button>
+        <button
+          type="button"
+          class="mt-[1.75rem] inline-flex items-center justify-center rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 shadow-sm hover:bg-rose-50 ${state.selectedTemplateId ? "" : "opacity-50 pointer-events-none"}"
+          data-action="delete-brand-template"
+          data-template-id="${escapeHtml(state.selectedTemplateId || "")}"
+        >
+          Excluir template
+        </button>
+      </div>
+
       <div class="mt-3 grid gap-3 lg:grid-cols-2">
         <label class="block lg:col-span-2">
           <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Objetivo da arte</span>
           <input class="modal-input" type="text" name="creative-objective" data-action="creative-field" data-field="objective" value="${escapeHtml(draft.objective || "")}" placeholder="Ex.: Divulgar promoção, anunciar lançamento, captar leads" />
+        </label>
+        <label class="block lg:col-span-2">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Publico</span>
+          <input class="modal-input" type="text" name="creative-audience" data-action="creative-field" data-field="audience" value="${escapeHtml(draft.audience || "")}" placeholder="Ex.: Mulheres 25+, pais de primeira viagem, clientes premium" />
         </label>
         <label class="block lg:col-span-2">
           <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Texto principal</span>
@@ -377,11 +419,13 @@ function renderInstagramCreativePanel(state) {
             <div><strong class="text-slate-900">Formato:</strong> ${escapeHtml(currentFormat?.label || "Story 9:16")}</div>
             <div><strong class="text-slate-900">Marca:</strong> ${escapeHtml(activeBrand?.name || "Nenhuma marca selecionada")}</div>
             <div><strong class="text-slate-900">Paleta:</strong> ${escapeHtml(activeBrand?.primaryColor || "-")} · ${escapeHtml(activeBrand?.secondaryColor || "-")}</div>
+            <div><strong class="text-slate-900">Template:</strong> ${escapeHtml(templates.find((template) => template.id === state.selectedTemplateId)?.name || "Livre")}</div>
+            <div><strong class="text-slate-900">Variações:</strong> ${escapeHtml(String(draft.variationCount || "3"))}</div>
           </div>
         </div>
         <div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-3 shadow-sm">
           <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Saida esperada</div>
-          <p class="mt-2 text-sm leading-6 text-slate-600">O envio gera uma arte premium pronta para Instagram usando a identidade da marca e o briefing acima. O tamanho da imagem sera ajustado automaticamente pelo formato escolhido.</p>
+          <p class="mt-2 text-sm leading-6 text-slate-600">O envio gera legenda com hashtags e depois cria ${escapeHtml(String(draft.variationCount || "3"))} versão(ões) visuais da mesma ideia. O tamanho da imagem sera ajustado automaticamente pelo formato escolhido.</p>
         </div>
       </div>
     </section>
@@ -481,6 +525,8 @@ function renderMessage(message, state) {
           ? `<div class="mt-3 flex flex-wrap gap-2">
               ${message.meta?.instagramFormat ? `<span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">${escapeHtml(getInstagramFormatById(state, message.meta.instagramFormat)?.label || message.meta.instagramFormat)}</span>` : ""}
               ${message.meta?.brandId ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">${escapeHtml((state.brands || []).find((brand) => brand.id === message.meta.brandId)?.name || "Marca")}</span>` : ""}
+              ${message.meta?.variationIndex ? `<span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Variação ${escapeHtml(String(message.meta.variationIndex))}/${escapeHtml(String(message.meta.variationCount || ""))}</span>` : ""}
+              ${message.meta?.copyKind === "instagram-caption" ? `<span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">Legenda + hashtags</span>` : ""}
             </div>`
           : ""
       }
@@ -962,6 +1008,14 @@ function renderBrandModal(state) {
                 <span class="mb-2 block text-sm font-medium text-slate-700">Logo</span>
                 <input class="modal-input" name="logoUrl" type="text" value="${escapeHtml(editing.logoUrl || "")}" placeholder="Cole a URL do logo ou envie uma imagem abaixo" />
               </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Estilo do template</span>
+                <textarea class="modal-textarea min-h-[90px]" name="templateStyle" placeholder="Ex.: visual clean, sofisticado, com bastante respiro, tipografia forte e fundo claro.">${escapeHtml(editing.templateStyle || "")}</textarea>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Notas extras da marca</span>
+                <textarea class="modal-textarea min-h-[90px]" name="templateNotes" placeholder="Orientações recorrentes para manter consistência entre as artes.">${escapeHtml(editing.templateNotes || "")}</textarea>
+              </label>
               <label class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm">
                 <input id="brand-logo-input" type="file" accept=".png,.jpg,.jpeg,.svg,.webp" class="hidden" data-action="upload-brand-logo" />
                 <span>📎</span>
@@ -976,6 +1030,9 @@ function renderBrandModal(state) {
                   class="max-h-24 rounded-xl border border-slate-200 bg-white p-2 ${editing.logoUrl ? "" : "hidden"}"
                 />
                 ${editing.logoUrl ? "" : `<p class="text-sm text-slate-400">Nenhum logo selecionado ainda.</p>`}
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-sm text-slate-600">
+                <strong class="text-slate-900">Templates salvos nesta marca:</strong> ${escapeHtml(String(editing.templates?.length || 0))}
               </div>
               <div class="flex justify-end gap-3 pt-3">
                 <button type="button" class="rounded-full border border-slate-200 px-5 py-2.5 font-medium text-slate-600" data-action="close-modal" data-modal="brandForm">Cancelar</button>
@@ -1241,6 +1298,8 @@ export function bindUIHandlers(handlers) {
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
+    if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
+    if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {
@@ -1308,6 +1367,16 @@ export function bindUIHandlers(handlers) {
 
     if (input.dataset.action === "select-instagram-format") {
       handlers.onSelectInstagramFormat(input.value);
+      return;
+    }
+
+    if (input.dataset.action === "select-brand-template") {
+      handlers.onSelectBrandTemplate(input.value);
+      return;
+    }
+
+    if (input.dataset.action === "creative-field") {
+      handlers.onCreativeFieldChange(input.dataset.field, input.value);
       return;
     }
   });

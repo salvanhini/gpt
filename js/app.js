@@ -44,7 +44,10 @@ import {
 import { processFiles } from "./fileProcessor.js";
 import {
   buildCreativeBrief,
+  buildInstagramCopyFallback,
+  buildInstagramCopyPrompt,
   buildInstagramImagePrompt,
+  buildInstagramVariationPrompt,
   getInstagramFormatById,
   INSTAGRAM_FORMATS,
   isInstagramAgent,
@@ -77,12 +80,15 @@ const state = {
   pendingAttachmentContext: null,
   imageMode: false,
   selectedBrandId: "",
+  selectedTemplateId: "",
   instagramFormat: "story_9_16",
   creativeFormDraft: {
     objective: "",
+    audience: "",
     headline: "",
     supportingText: "",
     cta: "",
+    variationCount: "3",
   },
   isLoading: false,
   isListening: false,
@@ -139,6 +145,7 @@ function saveViewState() {
     activeCategory: state.activeCategory,
     viewMode: state.viewMode,
     selectedBrandId: state.selectedBrandId,
+    selectedTemplateId: state.selectedTemplateId,
     instagramFormat: state.instagramFormat,
     creativeFormDraft: state.creativeFormDraft,
   });
@@ -164,12 +171,17 @@ function hydratePersistentState() {
   state.viewMode = reconciled.view.viewMode === "board" ? "board" : "chat";
   const hasSelectedBrand = state.brands.some((brand) => brand.id === reconciled.view.selectedBrandId);
   state.selectedBrandId = hasSelectedBrand ? reconciled.view.selectedBrandId : state.brands[0]?.id || "";
+  const selectedBrand = state.brands.find((brand) => brand.id === state.selectedBrandId) || null;
+  const hasSelectedTemplate = selectedBrand?.templates?.some((template) => template.id === reconciled.view.selectedTemplateId);
+  state.selectedTemplateId = hasSelectedTemplate ? reconciled.view.selectedTemplateId : selectedBrand?.defaultTemplateId || "";
   state.instagramFormat = reconciled.view.instagramFormat || "story_9_16";
   state.creativeFormDraft = {
     objective: reconciled.view.creativeFormDraft?.objective || "",
+    audience: reconciled.view.creativeFormDraft?.audience || "",
     headline: reconciled.view.creativeFormDraft?.headline || "",
     supportingText: reconciled.view.creativeFormDraft?.supportingText || "",
     cta: reconciled.view.creativeFormDraft?.cta || "",
+    variationCount: reconciled.view.creativeFormDraft?.variationCount || "3",
   };
 
   if (isInstagramAgent(state.activeAgentId)) {
@@ -243,6 +255,11 @@ function getActiveAgent() {
 
 function getSelectedBrand() {
   return state.brands.find((brand) => brand.id === state.selectedBrandId) || null;
+}
+
+function getSelectedTemplate() {
+  const brand = getSelectedBrand();
+  return brand?.templates?.find((template) => template.id === state.selectedTemplateId) || null;
 }
 
 function getActiveChat() {
@@ -341,12 +358,20 @@ function buildInstagramPayload() {
     brand,
     format: getInstagramFormatById(state.instagramFormat),
     creativeBrief,
+    variationCount: Math.min(Math.max(Number(state.creativeFormDraft.variationCount) || 1, 1), 4),
     prompt: buildInstagramImagePrompt({
       brand,
       formatId: state.instagramFormat,
       draft: state.creativeFormDraft,
     }),
   };
+}
+
+function canGenerateInstagramCopy() {
+  if (state.settings.textProvider === "deepseek") {
+    return Boolean(state.settings.deepSeekKey);
+  }
+  return Boolean(state.settings.openRouterKey);
 }
 
 function resetAttachments() {
@@ -397,26 +422,107 @@ async function handleSendMessage(rawMessage) {
 
   try {
     if (state.imageMode || isInstagramMode) {
-      const image = await generateImage({
-        prompt: instagramPayload?.prompt || message,
-        settings: {
-          ...state.settings,
-          imageSize: instagramPayload?.format.imageSize || state.settings.imageSize,
-        },
-      });
+      if (isInstagramMode && instagramPayload) {
+        let copyContent;
+        try {
+          if (canGenerateInstagramCopy()) {
+            const copyReply = await sendTextMessage({
+              messages: [
+                {
+                  role: "system",
+                  content: "Você é um especialista em copy para Instagram e deve responder exatamente no formato pedido pelo usuário.",
+                },
+                {
+                  role: "user",
+                  content: buildInstagramCopyPrompt({
+                    brand: instagramPayload.brand,
+                    formatId: instagramPayload.format.id,
+                    draft: state.creativeFormDraft,
+                    variationCount: instagramPayload.variationCount,
+                  }),
+                },
+              ],
+              settings: state.settings,
+            });
+            copyContent = copyReply.content;
+          } else {
+            copyContent = buildInstagramCopyFallback({
+              brand: instagramPayload.brand,
+              draft: state.creativeFormDraft,
+            });
+          }
+        } catch {
+          copyContent = buildInstagramCopyFallback({
+            brand: instagramPayload.brand,
+            draft: state.creativeFormDraft,
+          });
+        }
 
-      addMessage(activeChat.id, {
-        role: "assistant",
-        content: instagramPayload?.creativeBrief || message,
-        meta: {
-          kind: "image",
-          imageUrl: image.url,
-          provider: "fal.ai",
-          brandId: instagramPayload?.brand.id || null,
-          instagramFormat: instagramPayload?.format.id || null,
-          creativeBrief: instagramPayload?.creativeBrief || null,
-        },
-      });
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: copyContent,
+          meta: {
+            kind: "text",
+            provider: canGenerateInstagramCopy()
+              ? state.settings.textProvider === "deepseek" ? "DeepSeek" : "OpenRouter"
+              : "local",
+            brandId: instagramPayload.brand.id,
+            instagramFormat: instagramPayload.format.id,
+            creativeBrief: instagramPayload.creativeBrief,
+            copyKind: "instagram-caption",
+          },
+        });
+
+        for (let index = 1; index <= instagramPayload.variationCount; index += 1) {
+          const image = await generateImage({
+            prompt: buildInstagramVariationPrompt({
+              basePrompt: instagramPayload.prompt,
+              variationIndex: index,
+              totalVariations: instagramPayload.variationCount,
+            }),
+            settings: {
+              ...state.settings,
+              imageSize: instagramPayload.format.imageSize || state.settings.imageSize,
+            },
+          });
+
+          addMessage(activeChat.id, {
+            role: "assistant",
+            content: `${instagramPayload.creativeBrief}\n\nVariação ${index} de ${instagramPayload.variationCount}`,
+            meta: {
+              kind: "image",
+              imageUrl: image.url,
+              provider: "fal.ai",
+              brandId: instagramPayload.brand.id,
+              instagramFormat: instagramPayload.format.id,
+              creativeBrief: instagramPayload.creativeBrief,
+              variationIndex: index,
+              variationCount: instagramPayload.variationCount,
+            },
+          });
+        }
+      } else {
+        const image = await generateImage({
+          prompt: instagramPayload?.prompt || message,
+          settings: {
+            ...state.settings,
+            imageSize: instagramPayload?.format.imageSize || state.settings.imageSize,
+          },
+        });
+
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: instagramPayload?.creativeBrief || message,
+          meta: {
+            kind: "image",
+            imageUrl: image.url,
+            provider: "fal.ai",
+            brandId: instagramPayload?.brand.id || null,
+            instagramFormat: instagramPayload?.format.id || null,
+            creativeBrief: instagramPayload?.creativeBrief || null,
+          },
+        });
+      }
     } else {
       const reply = await sendTextMessage({
         messages: textPayload,
@@ -473,6 +579,8 @@ function handleSelectAgent(agentId) {
   if (isInstagramAgent(agentId)) {
     state.imageMode = true;
     state.selectedBrandId = state.selectedBrandId || state.brands[0]?.id || "";
+    const brand = state.brands.find((item) => item.id === state.selectedBrandId);
+    state.selectedTemplateId = brand?.defaultTemplateId || "";
   }
   persistAndRender();
 }
@@ -657,6 +765,10 @@ function handleSaveBrand(formValues) {
     primaryColor: formValues.primaryColor?.toString() || "#1D4ED8",
     secondaryColor: formValues.secondaryColor?.toString() || "#0F172A",
     logoUrl: formValues.logoUrl?.toString() || "",
+    templateStyle: formValues.templateStyle?.toString() || "",
+    templateNotes: formValues.templateNotes?.toString() || "",
+    templates: state.modalPayload.brand?.templates || [],
+    defaultTemplateId: state.modalPayload.brand?.defaultTemplateId || "",
   };
 
   if (!payload.name.trim()) {
@@ -680,6 +792,7 @@ function handleSaveBrand(formValues) {
 
   state.brands = loadBrands();
   state.selectedBrandId = brand.id;
+  state.selectedTemplateId = brand.defaultTemplateId || "";
   state.modals.brandForm = false;
   state.modalPayload = {};
   persistAndRender();
@@ -695,6 +808,7 @@ function handleDeleteBrand(brandId) {
     state.brands = loadBrands();
     if (state.selectedBrandId === brandId) {
       state.selectedBrandId = state.brands[0]?.id || "";
+      state.selectedTemplateId = state.brands[0]?.defaultTemplateId || "";
     }
     if (state.modalPayload.brand?.id === brandId) {
       state.modalPayload = {};
@@ -819,6 +933,8 @@ function handleCreativeFieldChange(field, value) {
 
 function handleSelectBrand(brandId) {
   state.selectedBrandId = brandId;
+  const brand = state.brands.find((item) => item.id === brandId) || null;
+  state.selectedTemplateId = brand?.defaultTemplateId || "";
   saveViewState();
   render();
 }
@@ -827,6 +943,98 @@ function handleSelectInstagramFormat(formatId) {
   state.instagramFormat = formatId;
   saveViewState();
   render();
+}
+
+function applyTemplateToDraft(template) {
+  if (!template) {
+    return;
+  }
+
+  state.selectedTemplateId = template.id;
+  state.instagramFormat = template.formatId || state.instagramFormat;
+  state.creativeFormDraft = {
+    ...state.creativeFormDraft,
+    objective: template.objective || "",
+    audience: template.audience || "",
+    headline: template.headline || "",
+    supportingText: template.supportingText || "",
+    cta: template.cta || "",
+    variationCount: String(template.variationCount || 1),
+  };
+}
+
+function handleSelectBrandTemplate(templateId) {
+  const brand = getSelectedBrand();
+  const template = brand?.templates?.find((item) => item.id === templateId) || null;
+  if (!template) {
+    state.selectedTemplateId = "";
+    saveViewState();
+    render();
+    return;
+  }
+
+  applyTemplateToDraft(template);
+  saveViewState();
+  render();
+}
+
+function handleSaveCurrentAsTemplate() {
+  const brand = getSelectedBrand();
+  if (!brand) {
+    showToast("Selecione uma marca antes de salvar um template.", "error");
+    return;
+  }
+
+  const templateName = window.prompt("Nome do template:", `${brand.name} · ${getInstagramFormatById(state.instagramFormat).label}`);
+  if (!templateName || !templateName.trim()) {
+    return;
+  }
+
+  const nextTemplates = [
+    ...(brand.templates || []),
+    {
+      id: `template-${crypto.randomUUID()}`,
+      name: templateName.trim(),
+      formatId: state.instagramFormat,
+      objective: state.creativeFormDraft.objective || "",
+      audience: state.creativeFormDraft.audience || "",
+      headline: state.creativeFormDraft.headline || "",
+      supportingText: state.creativeFormDraft.supportingText || "",
+      cta: state.creativeFormDraft.cta || "",
+      variationCount: Number(state.creativeFormDraft.variationCount) || 1,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
+  const updatedBrand = updateBrand(brand.id, {
+    templates: nextTemplates,
+    defaultTemplateId: nextTemplates[nextTemplates.length - 1].id,
+  });
+  state.brands = loadBrands();
+  state.selectedTemplateId = updatedBrand.defaultTemplateId || "";
+  showToast("Template salvo para esta marca.", "success");
+  persistAndRender();
+}
+
+function handleDeleteBrandTemplate(templateId) {
+  const brand = getSelectedBrand();
+  if (!brand) {
+    return;
+  }
+
+  if (!window.confirm("Excluir este template da marca?")) {
+    return;
+  }
+
+  const nextTemplates = (brand.templates || []).filter((template) => template.id !== templateId);
+  const updatedBrand = updateBrand(brand.id, {
+    templates: nextTemplates,
+    defaultTemplateId: nextTemplates[0]?.id || "",
+  });
+  state.brands = loadBrands();
+  state.selectedTemplateId = updatedBrand.defaultTemplateId || "";
+  showToast("Template removido.", "success");
+  persistAndRender();
 }
 
 function handleBrandLogoUpload(file) {
@@ -916,6 +1124,9 @@ function initialize() {
     onCreativeFieldChange: handleCreativeFieldChange,
     onSelectBrand: handleSelectBrand,
     onSelectInstagramFormat: handleSelectInstagramFormat,
+    onSelectBrandTemplate: handleSelectBrandTemplate,
+    onSaveCurrentAsTemplate: handleSaveCurrentAsTemplate,
+    onDeleteBrandTemplate: handleDeleteBrandTemplate,
     onBrandLogoUpload: handleBrandLogoUpload,
     onDraftChange: (value) => {
       state.draftMessage = value;

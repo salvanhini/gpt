@@ -69,3 +69,27 @@ test("create, update and delete brand persist correctly", () => {
     globalThis.localStorage = previousStorage;
   }
 });
+
+test("loadBrands normalizes legacy brands with template metadata defaults", () => {
+  const previousStorage = globalThis.localStorage;
+  globalThis.localStorage = createMemoryStorage();
+
+  try {
+    globalThis.localStorage.setItem("femicgpt:brands", JSON.stringify([
+      {
+        id: "brand-legacy",
+        name: "Marca Legada",
+        primaryColor: "#111111",
+        secondaryColor: "#222222",
+      },
+    ]));
+
+    const [brand] = loadBrands();
+    assert.deepEqual(brand.templates, []);
+    assert.equal(brand.defaultTemplateId, "");
+    assert.equal(brand.templateStyle, "");
+    assert.equal(brand.templateNotes, "");
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});

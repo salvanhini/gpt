@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   buildCreativeBrief,
+  buildInstagramCopyFallback,
+  buildInstagramCopyPrompt,
   buildInstagramImagePrompt,
+  buildInstagramVariationPrompt,
   getInstagramFormatById,
   INSTAGRAM_AGENT_ID,
   isInstagramAgent,
@@ -48,9 +51,53 @@ test("buildInstagramImagePrompt includes brand, format and premium direction", (
 test("getInstagramFormatById maps story and square formats to image sizes", () => {
   assert.equal(getInstagramFormatById("story_9_16").imageSize, "portrait_16_9");
   assert.equal(getInstagramFormatById("post_square").imageSize, "square_hd");
+  assert.equal(getInstagramFormatById("carousel_cover_4_5").imageSize, "portrait_4_3");
+  assert.equal(getInstagramFormatById("highlight_cover_square").imageSize, "square_hd");
 });
 
 test("isInstagramAgent detects the dedicated Instagram agent", () => {
   assert.equal(isInstagramAgent(INSTAGRAM_AGENT_ID), true);
   assert.equal(isInstagramAgent("agent-general"), false);
+});
+
+test("buildInstagramVariationPrompt injects variation guidance", () => {
+  const prompt = buildInstagramVariationPrompt({
+    basePrompt: "Base",
+    variationIndex: 2,
+    totalVariations: 4,
+  });
+
+  assert.match(prompt, /variacao 2 de 4/i);
+  assert.match(prompt, /mesma marca/i);
+});
+
+test("buildInstagramCopyPrompt requests caption and hashtags in a strict format", () => {
+  const prompt = buildInstagramCopyPrompt({
+    brand: { name: "Marca A" },
+    formatId: "reel_cover_9_16",
+    variationCount: 3,
+    draft: {
+      objective: "Vender mais",
+      headline: "Oferta premium",
+    },
+  });
+
+  assert.match(prompt, /LEGENDA:/);
+  assert.match(prompt, /HASHTAGS:/);
+  assert.match(prompt, /Marca A/);
+  assert.match(prompt, /3/);
+});
+
+test("buildInstagramCopyFallback creates a basic caption and hashtags without API access", () => {
+  const fallback = buildInstagramCopyFallback({
+    brand: { name: "Clinica Bem Viver" },
+    draft: {
+      headline: "Avaliacao gratuita",
+      cta: "Chame no WhatsApp",
+    },
+  });
+
+  assert.match(fallback, /LEGENDA:/);
+  assert.match(fallback, /HASHTAGS:/);
+  assert.match(fallback, /#clinicabemviver/i);
 });

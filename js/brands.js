@@ -8,8 +8,48 @@ function safeParse(value, fallback) {
   }
 }
 
+function normalizeTemplate(template, index = 0) {
+  return {
+    id: template?.id || `template-${index + 1}`,
+    name: String(template?.name || "").trim() || `Template ${index + 1}`,
+    formatId: String(template?.formatId || "").trim() || "story_9_16",
+    objective: String(template?.objective || "").trim(),
+    audience: String(template?.audience || "").trim(),
+    headline: String(template?.headline || "").trim(),
+    supportingText: String(template?.supportingText || "").trim(),
+    cta: String(template?.cta || "").trim(),
+    variationCount: Number(template?.variationCount) > 0 ? Number(template.variationCount) : 1,
+    createdAt: template?.createdAt || new Date().toISOString(),
+  };
+}
+
+function normalizeBrand(brand, index = 0) {
+  const templates = Array.isArray(brand?.templates) ? brand.templates.map((item, templateIndex) => normalizeTemplate(item, templateIndex)) : [];
+  const defaultTemplateId = templates.some((template) => template.id === brand?.defaultTemplateId)
+    ? brand.defaultTemplateId
+    : templates[0]?.id || "";
+
+  return {
+    id: brand?.id || `brand-${index + 1}`,
+    name: String(brand?.name || "").trim(),
+    primaryColor: String(brand?.primaryColor || "").trim() || "#1D4ED8",
+    secondaryColor: String(brand?.secondaryColor || "").trim() || "#0F172A",
+    logoUrl: String(brand?.logoUrl || "").trim(),
+    templateStyle: String(brand?.templateStyle || "").trim(),
+    templateNotes: String(brand?.templateNotes || "").trim(),
+    templates,
+    defaultTemplateId,
+    createdAt: brand?.createdAt || new Date().toISOString(),
+    updatedAt: brand?.updatedAt || new Date().toISOString(),
+  };
+}
+
 export function loadBrands() {
-  return safeParse(localStorage.getItem(BRANDS_KEY), []);
+  const raw = safeParse(localStorage.getItem(BRANDS_KEY), []);
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.map((brand, index) => normalizeBrand(brand, index));
 }
 
 export function saveBrands(brands) {
@@ -42,15 +82,19 @@ export function createBrandId(name, brands = [], randomId = () => crypto.randomU
 
 export function createBrand(data) {
   const brands = loadBrands();
-  const brand = {
+  const brand = normalizeBrand({
     id: createBrandId(data.name, brands),
-    name: String(data.name || "").trim(),
-    primaryColor: String(data.primaryColor || "").trim() || "#1D4ED8",
-    secondaryColor: String(data.secondaryColor || "").trim() || "#0F172A",
-    logoUrl: String(data.logoUrl || "").trim(),
+    name: data.name,
+    primaryColor: data.primaryColor,
+    secondaryColor: data.secondaryColor,
+    logoUrl: data.logoUrl,
+    templateStyle: data.templateStyle,
+    templateNotes: data.templateNotes,
+    templates: Array.isArray(data.templates) ? data.templates : [],
+    defaultTemplateId: data.defaultTemplateId || "",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  };
+  });
 
   brands.unshift(brand);
   saveBrands(brands);
@@ -65,13 +109,12 @@ export function updateBrand(id, data) {
   }
 
   brands[index] = {
-    ...brands[index],
-    ...data,
-    name: data.name?.trim() ?? brands[index].name,
-    primaryColor: data.primaryColor?.trim() ?? brands[index].primaryColor,
-    secondaryColor: data.secondaryColor?.trim() ?? brands[index].secondaryColor,
-    logoUrl: data.logoUrl?.trim() ?? brands[index].logoUrl,
-    updatedAt: new Date().toISOString(),
+    ...normalizeBrand({
+      ...brands[index],
+      ...data,
+      templates: Array.isArray(data.templates) ? data.templates : brands[index].templates,
+      updatedAt: new Date().toISOString(),
+    }),
   };
 
   saveBrands(brands);
