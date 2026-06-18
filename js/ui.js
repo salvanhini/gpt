@@ -74,6 +74,10 @@ function getQuickModelValue(state) {
   return `openrouter::${state.settings.textModel}`;
 }
 
+function getInstagramFormatById(state, formatId) {
+  return (state.instagramFormats || []).find((item) => item.id === formatId) || state.instagramFormats?.[0] || null;
+}
+
 function renderQuickModelOptions(state) {
   const current = getQuickModelValue(state);
   const openRouter = (state.modelOptions || []).map(
@@ -290,6 +294,100 @@ function renderAttachmentChips(state) {
   `;
 }
 
+function renderInstagramCreativePanel(state) {
+  const brands = state.brands || [];
+  const currentFormat = getInstagramFormatById(state, state.instagramFormat);
+  const activeBrand = brands.find((brand) => brand.id === state.selectedBrandId) || null;
+  const draft = state.creativeFormDraft || {};
+
+  return `
+    <section class="mb-3 rounded-[1.35rem] border border-sky-100 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(232,244,255,0.95))] p-4 shadow-sm">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/85 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-femic-navy">
+            <span class="h-2 w-2 rounded-full bg-femic-cyan"></span>
+            Produtor Instagram
+          </div>
+          <h3 class="mt-3 text-lg font-semibold text-slate-900">Monte sua arte com briefing guiado</h3>
+          <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Escolha a marca, defina o formato e preencha o texto-chave. O sistema transforma isso em um prompt visual premium pronto para story ou post quadrado.</p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+          data-action="open-brand-modal"
+        >
+          Gerenciar marcas
+        </button>
+      </div>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-2">
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Marca</span>
+          <select
+            class="modal-input"
+            data-action="select-instagram-brand"
+            name="selectedBrandId"
+          >
+            ${brands.length
+              ? brands.map((brand) => `
+                <option value="${escapeHtml(brand.id)}" ${brand.id === state.selectedBrandId ? "selected" : ""}>${escapeHtml(brand.name)}</option>
+              `).join("")
+              : `<option value="">Cadastre uma marca primeiro</option>`
+            }
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Formato</span>
+          <select
+            class="modal-input"
+            data-action="select-instagram-format"
+            name="instagramFormat"
+          >
+            ${(state.instagramFormats || []).map((format) => `
+              <option value="${escapeHtml(format.id)}" ${format.id === state.instagramFormat ? "selected" : ""}>${escapeHtml(format.label)}</option>
+            `).join("")}
+          </select>
+        </label>
+      </div>
+
+      <div class="mt-3 grid gap-3 lg:grid-cols-2">
+        <label class="block lg:col-span-2">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Objetivo da arte</span>
+          <input class="modal-input" type="text" name="creative-objective" data-action="creative-field" data-field="objective" value="${escapeHtml(draft.objective || "")}" placeholder="Ex.: Divulgar promoção, anunciar lançamento, captar leads" />
+        </label>
+        <label class="block lg:col-span-2">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Texto principal</span>
+          <textarea class="modal-textarea min-h-[92px]" name="creative-headline" data-action="creative-field" data-field="headline" placeholder="Mensagem principal que deve aparecer em destaque na arte.">${escapeHtml(draft.headline || "")}</textarea>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Texto complementar</span>
+          <textarea class="modal-textarea min-h-[86px]" name="creative-supporting-text" data-action="creative-field" data-field="supportingText" placeholder="Subtitulo, benefício, reforço ou contexto adicional.">${escapeHtml(draft.supportingText || "")}</textarea>
+        </label>
+        <label class="block">
+          <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">CTA</span>
+          <input class="modal-input" type="text" name="creative-cta" data-action="creative-field" data-field="cta" value="${escapeHtml(draft.cta || "")}" placeholder="Ex.: Chame no direct, clique no link, fale conosco" />
+        </label>
+      </div>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr),280px]">
+        <div class="rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm">
+          <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Resumo criativo</div>
+          <div class="mt-2 space-y-2 text-sm text-slate-600">
+            <div><strong class="text-slate-900">Formato:</strong> ${escapeHtml(currentFormat?.label || "Story 9:16")}</div>
+            <div><strong class="text-slate-900">Marca:</strong> ${escapeHtml(activeBrand?.name || "Nenhuma marca selecionada")}</div>
+            <div><strong class="text-slate-900">Paleta:</strong> ${escapeHtml(activeBrand?.primaryColor || "-")} · ${escapeHtml(activeBrand?.secondaryColor || "-")}</div>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-3 shadow-sm">
+          <div class="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700">Saida esperada</div>
+          <p class="mt-2 text-sm leading-6 text-slate-600">O envio gera uma arte premium pronta para Instagram usando a identidade da marca e o briefing acima. O tamanho da imagem sera ajustado automaticamente pelo formato escolhido.</p>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderAssistantActions(message, state) {
   if (message.role !== "assistant") {
     return "";
@@ -378,6 +476,14 @@ function renderMessage(message, state) {
       <div class="image-preview p-3">
         <img src="${escapeHtml(message.meta.imageUrl)}" alt="${escapeHtml(message.content)}" class="h-auto w-full rounded-xl object-cover" />
       </div>
+      ${
+        message.meta?.brandId || message.meta?.instagramFormat
+          ? `<div class="mt-3 flex flex-wrap gap-2">
+              ${message.meta?.instagramFormat ? `<span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">${escapeHtml(getInstagramFormatById(state, message.meta.instagramFormat)?.label || message.meta.instagramFormat)}</span>` : ""}
+              ${message.meta?.brandId ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">${escapeHtml((state.brands || []).find((brand) => brand.id === message.meta.brandId)?.name || "Marca")}</span>` : ""}
+            </div>`
+          : ""
+      }
       <p class="mt-3 text-sm text-slate-700">${escapeHtml(message.content)}</p>
       <div class="mt-4">
         <a
@@ -761,7 +867,7 @@ function renderSettingsModal(state) {
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Backup</div>
-              <div class="text-xs text-slate-500">Exportar ou importar todas as conversas, agentes e configurações.</div>
+              <div class="text-xs text-slate-500">Exportar ou importar conversas, agentes, marcas e configurações.</div>
             </div>
             <div class="flex flex-wrap gap-3">
               <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white shadow-soft" data-action="export-data">⬇ Exportar backup</button>
@@ -777,6 +883,107 @@ function renderSettingsModal(state) {
             <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">Salvar</button>
           </div>
         </form>
+      </div>
+    </div>
+  `;
+}
+
+function renderBrandModal(state) {
+  if (!state.modals.brandForm) {
+    return "";
+  }
+
+  const editing = state.modalPayload.brand || {};
+  const brands = state.brands || [];
+
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="brandForm">
+      <div class="modal-panel glass-panel rounded-[2rem] p-6 shadow-panel" data-modal-surface="brandForm">
+        <div class="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-2xl font-semibold text-slate-900">Marcas do Instagram</h3>
+            <p class="mt-2 text-sm text-slate-500">Cadastre a identidade visual basica de cada marca para gerar artes mais consistentes.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="brandForm">✕</button>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-[260px,minmax(0,1fr)]">
+          <section class="rounded-2xl border border-slate-200 bg-white/80 p-3">
+            <div class="mb-3 flex items-center justify-between">
+              <div class="text-sm font-semibold text-slate-900">Marcas cadastradas</div>
+              <button type="button" class="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600" data-action="open-brand-modal">Nova</button>
+            </div>
+            <div class="max-h-[360px] space-y-2 overflow-auto pr-1">
+              ${brands.length
+                ? brands.map((brand) => `
+                  <div class="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-sm font-semibold text-slate-900">${escapeHtml(brand.name)}</div>
+                        <div class="mt-2 flex items-center gap-2">
+                          <span class="h-4 w-4 rounded-full border border-white shadow-sm" style="background:${escapeHtml(brand.primaryColor)}"></span>
+                          <span class="h-4 w-4 rounded-full border border-white shadow-sm" style="background:${escapeHtml(brand.secondaryColor)}"></span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button type="button" class="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600" data-action="open-brand-modal" data-brand-id="${escapeHtml(brand.id)}">Editar</button>
+                        <button type="button" class="rounded-full border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600" data-action="delete-brand" data-brand-id="${escapeHtml(brand.id)}">Excluir</button>
+                      </div>
+                    </div>
+                  </div>
+                `).join("")
+                : `<div class="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-sm text-slate-400">Nenhuma marca cadastrada ainda.</div>`
+              }
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+            <div class="mb-4">
+              <div class="text-lg font-semibold text-slate-900">${editing.id ? "Editar marca" : "Nova marca"}</div>
+              <div class="mt-1 text-sm text-slate-500">Defina nome, paleta e logo para orientar as artes do agente.</div>
+            </div>
+            <form data-form="brand" class="space-y-4">
+              ${editing.id ? `<input type="hidden" name="id" value="${escapeHtml(editing.id)}" />` : ""}
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Nome</span>
+                <input class="modal-input" name="name" type="text" maxlength="80" required value="${escapeHtml(editing.name || "")}" placeholder="Ex.: Clinica Bem Viver" />
+              </label>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Cor principal</span>
+                  <input class="modal-input h-11" name="primaryColor" type="color" value="${escapeHtml(editing.primaryColor || "#1D4ED8")}" />
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Cor secundaria</span>
+                  <input class="modal-input h-11" name="secondaryColor" type="color" value="${escapeHtml(editing.secondaryColor || "#0F172A")}" />
+                </label>
+              </div>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Logo</span>
+                <input class="modal-input" name="logoUrl" type="text" value="${escapeHtml(editing.logoUrl || "")}" placeholder="Cole a URL do logo ou envie uma imagem abaixo" />
+              </label>
+              <label class="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm">
+                <input id="brand-logo-input" type="file" accept=".png,.jpg,.jpeg,.svg,.webp" class="hidden" data-action="upload-brand-logo" />
+                <span>📎</span>
+                <span>Enviar logo</span>
+              </label>
+              <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                <div class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Preview do logo</div>
+                <img
+                  id="brand-logo-preview"
+                  src="${escapeHtml(editing.logoUrl || "")}"
+                  alt="Logo da marca"
+                  class="max-h-24 rounded-xl border border-slate-200 bg-white p-2 ${editing.logoUrl ? "" : "hidden"}"
+                />
+                ${editing.logoUrl ? "" : `<p class="text-sm text-slate-400">Nenhum logo selecionado ainda.</p>`}
+              </div>
+              <div class="flex justify-end gap-3 pt-3">
+                <button type="button" class="rounded-full border border-slate-200 px-5 py-2.5 font-medium text-slate-600" data-action="close-modal" data-modal="brandForm">Cancelar</button>
+                <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">${editing.id ? "Salvar marca" : "Criar marca"}</button>
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
     </div>
   `;
@@ -841,6 +1048,7 @@ export function renderApp(state) {
   const sidebarOpenClass = state.mobileSidebarOpen ? "open" : "";
   const collapsedClass = state.sidebarCollapsed ? "sidebar-collapsed" : "";
   const activeAgent = state.activeAgent;
+  const instagramMode = activeAgent?.id === "agent-instagram-producer";
   const chats = getVisibleChats(state);
   const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openAIKey);
   const voiceTitle = state.isVoiceProcessing
@@ -927,40 +1135,43 @@ export function renderApp(state) {
 
           <footer class="composer-dock shrink-0 pt-2">
             <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
-              ${renderAttachmentChips(state)}
+              ${instagramMode ? renderInstagramCreativePanel(state) : renderAttachmentChips(state)}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
-                  <textarea
-                    id="composer-input"
-                    name="message"
-                    class="min-h-[48px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2.5 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
-                    placeholder="Digite sua mensagem para ${escapeHtml(activeAgent?.name || "o FEMIC GPT")}..."
-                  >${escapeHtml(state.draftMessage || "")}</textarea>
+                  ${instagramMode
+                    ? `<div class="rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm leading-6 text-slate-600">O briefing acima sera transformado automaticamente em prompt visual premium para gerar a arte da marca selecionada.</div>`
+                    : `<textarea
+                        id="composer-input"
+                        name="message"
+                        class="min-h-[48px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2.5 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
+                        placeholder="Digite sua mensagem para ${escapeHtml(activeAgent?.name || "o FEMIC GPT")}..."
+                      >${escapeHtml(state.draftMessage || "")}</textarea>`
+                  }
                   <div class="flex flex-wrap items-center justify-between gap-1">
                     <div class="flex flex-wrap items-center gap-1">
-                      <label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-1.5 py-0.5">
+                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-1.5 py-0.5">
                         <span class="text-[9px] text-slate-400 mr-0.5">Modelo:</span>
                         <select class="quick-model-select-inline" data-action="quick-model-change">
                           ${renderQuickModelOptions(state)}
                         </select>
-                      </label>
-                      ${state.imageMode ? renderImageSizeSelector(state) : ""}
-                      <label class="control-btn inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm">
+                      </label>`}
+                      ${state.imageMode && !instagramMode ? renderImageSizeSelector(state) : ""}
+                      ${instagramMode ? "" : `<label class="control-btn inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm">
                         <input id="file-input" type="file" class="hidden" multiple accept=".pdf,.xlsx,.xls,.csv,.xml,.jpg,.jpeg,.png" data-action="attach-files" />
                         <span>📎</span>
                         <span>Anexar</span>
-                      </label>
-                      <button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.imageMode ? "border-cyan-300 bg-cyan-50 text-cyan-900" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-image-mode">
+                      </label>`}
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.imageMode ? "border-cyan-300 bg-cyan-50 text-cyan-900" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-image-mode">
                         <span>${state.imageMode ? "🖼️" : "✍️"}</span>
                         <span>${state.imageMode ? "Imagem" : "Texto"}</span>
-                      </button>
+                      </button>`}
                     </div>
                     <div class="flex items-center gap-1">
-                      <button type="button" class="control-btn inline-flex h-8 w-8 items-center justify-center rounded-full border ${state.isListening ? "border-rose-300 bg-rose-50 text-rose-600" : "border-slate-200 bg-white/70 text-slate-500"} ${state.speechRecognitionSupported === false && !canRecordFallback ? "opacity-60" : ""} shadow-sm" data-action="toggle-voice" title="${voiceTitle}">
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex h-8 w-8 items-center justify-center rounded-full border ${state.isListening ? "border-rose-300 bg-rose-50 text-rose-600" : "border-slate-200 bg-white/70 text-slate-500"} ${state.speechRecognitionSupported === false && !canRecordFallback ? "opacity-60" : ""} shadow-sm" data-action="toggle-voice" title="${voiceTitle}">
                         ${state.isVoiceProcessing ? "…" : state.isListening ? "■" : "🎙️"}
-                      </button>
+                      </button>`}
                       <button type="submit" class="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-femic-navy to-sky-700 px-3 py-1.5 text-[10px] font-semibold text-white shadow-soft">
-                        <span>${state.imageMode ? "Gerar imagem" : "Enviar"}</span>
+                        <span>${instagramMode || state.imageMode ? "Gerar arte" : "Enviar"}</span>
                         <span>➜</span>
                       </button>
                     </div>
@@ -973,10 +1184,11 @@ export function renderApp(state) {
       </main>
     </div>
     ${renderSettingsModal(state)}
+    ${renderBrandModal(state)}
     ${renderAgentModal(state)}
   `;
 
-  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm);
+  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm);
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
@@ -1009,6 +1221,7 @@ export function bindUIHandlers(handlers) {
     if (action === "create-chat") handlers.onCreateChat();
     if (action === "open-settings") handlers.onOpenSettings();
     if (action === "open-agent-modal") handlers.onOpenAgentModal();
+    if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
     if (action === "close-modal") handlers.onCloseModal(target.dataset.modal);
     if (action === "toggle-image-mode") handlers.onToggleImageMode();
     if (action === "toggle-voice") handlers.onToggleVoice();
@@ -1027,6 +1240,7 @@ export function bindUIHandlers(handlers) {
     if (action === "toggle-board-view") handlers.onToggleBoardView();
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
+    if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {
@@ -1054,6 +1268,9 @@ export function bindUIHandlers(handlers) {
     if (formType === "agent") {
       handlers.onSaveAgent(Object.fromEntries(data.entries()));
     }
+    if (formType === "brand") {
+      handlers.onSaveBrand(Object.fromEntries(data.entries()));
+    }
   });
 
   app.addEventListener("change", (event) => {
@@ -1077,12 +1294,31 @@ export function bindUIHandlers(handlers) {
       handlers.onImportData(input.files[0]);
       input.value = "";
     }
+
+    if (input instanceof HTMLInputElement && input.id === "brand-logo-input" && input.files?.[0]) {
+      handlers.onBrandLogoUpload(input.files[0]);
+      input.value = "";
+      return;
+    }
+
+    if (input.dataset.action === "select-instagram-brand") {
+      handlers.onSelectBrand(input.value);
+      return;
+    }
+
+    if (input.dataset.action === "select-instagram-format") {
+      handlers.onSelectInstagramFormat(input.value);
+      return;
+    }
   });
 
   app.addEventListener("input", (event) => {
     const target = event.target;
     if (target instanceof HTMLTextAreaElement && target.id === "composer-input") {
       handlers.onDraftChange(target.value);
+    }
+    if (target.dataset.action === "creative-field") {
+      handlers.onCreativeFieldChange(target.dataset.field, target.value);
     }
     if (target.dataset.action === "search-chats") {
       handlers.onSearchChats(target.value);

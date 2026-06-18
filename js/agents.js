@@ -1,3 +1,5 @@
+import { INSTAGRAM_AGENT_ID } from "./instagramCreator.js";
+
 const AGENTS_KEY = "femicgpt:agents";
 
 export function getDefaultAgents() {
@@ -31,6 +33,17 @@ export function getDefaultAgents() {
         "Focado em análise rigorosa de dados, leitura crítica de artigos e linguagem técnica em saúde.",
       systemPrompt:
         "Você é um cientista e pesquisador rigoroso. Priorize precisão, método, evidência, limitações, linguagem técnica quando necessário e distinção entre fatos, hipóteses e inferências.",
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: INSTAGRAM_AGENT_ID,
+      name: "Produtor Instagram",
+      emoji: "📸",
+      description:
+        "Cria artes premium para story e post quadrado com briefing guiado e identidade visual por marca.",
+      systemPrompt:
+        "Você é o Produtor Instagram do FEMIC GPT. Seu papel é transformar briefings em direções visuais premium para Instagram, respeitando identidade de marca, clareza comercial, hierarquia tipográfica e acabamento profissional. Priorize layouts limpos, elegantes, legíveis e prontos para publicação.",
       isDefault: true,
       createdAt: new Date().toISOString(),
     },

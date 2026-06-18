@@ -1,6 +1,7 @@
 export const STORAGE_KEYS = {
   chats: "femicgpt:chats",
   agents: "femicgpt:agents",
+  brands: "femicgpt:brands",
   settings: "femicgpt:settings",
   view: "femicgpt:view",
 };
@@ -116,6 +117,12 @@ export function reconcileAppData({
       sidebarCollapsed: Boolean(nextView.sidebarCollapsed),
       activeCategory: typeof nextView.activeCategory === "string" ? nextView.activeCategory : "",
       viewMode: nextView.viewMode === "board" ? "board" : "chat",
+      selectedBrandId: typeof nextView.selectedBrandId === "string" ? nextView.selectedBrandId : "",
+      instagramFormat: typeof nextView.instagramFormat === "string" ? nextView.instagramFormat : "story_9_16",
+      creativeFormDraft:
+        nextView.creativeFormDraft && typeof nextView.creativeFormDraft === "object"
+          ? nextView.creativeFormDraft
+          : {},
     },
   };
 }
@@ -125,6 +132,7 @@ export function buildBackupPayload(storage) {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     femicgpt_chats: storage.getItem(STORAGE_KEYS.chats),
     femicgpt_agents: storage.getItem(STORAGE_KEYS.agents),
+    femicgpt_brands: storage.getItem(STORAGE_KEYS.brands),
     femicgpt_settings: storage.getItem(STORAGE_KEYS.settings),
     femicgpt_view: storage.getItem(STORAGE_KEYS.view),
     exportedAt: new Date().toISOString(),
@@ -149,6 +157,7 @@ export function parseBackupPayload(text) {
     schemaVersion:
       typeof backup.schemaVersion === "number" ? backup.schemaVersion : null,
     agents: parseJsonField(backup.femicgpt_agents),
+    brands: parseJsonField(backup.femicgpt_brands),
     chats: parseJsonField(backup.femicgpt_chats),
     settings: parseJsonField(backup.femicgpt_settings),
     view: parseJsonField(backup.femicgpt_view),
@@ -161,6 +170,9 @@ export function applyParsedBackup(storage, parsedBackup) {
   }
   if (parsedBackup?.chats) {
     writeStorageJson(storage, STORAGE_KEYS.chats, parsedBackup.chats);
+  }
+  if (parsedBackup?.brands) {
+    writeStorageJson(storage, STORAGE_KEYS.brands, parsedBackup.brands);
   }
   if (parsedBackup?.settings) {
     writeStorageJson(storage, STORAGE_KEYS.settings, parsedBackup.settings);

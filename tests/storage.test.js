@@ -51,6 +51,7 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
   const storage = createMemoryStorage({
     "femicgpt:chats": JSON.stringify([{ id: "chat-1" }]),
     "femicgpt:agents": JSON.stringify([{ id: "agent-general" }]),
+    "femicgpt:brands": JSON.stringify([{ id: "brand-a" }]),
     "femicgpt:settings": JSON.stringify({ textProvider: "openrouter" }),
     "femicgpt:view": JSON.stringify({ activeAgentId: "agent-general" }),
   });
@@ -60,6 +61,7 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
   assert.equal(payload.schemaVersion, BACKUP_SCHEMA_VERSION);
   assert.equal(payload.femicgpt_chats, storage.getItem("femicgpt:chats"));
   assert.equal(payload.femicgpt_agents, storage.getItem("femicgpt:agents"));
+  assert.equal(payload.femicgpt_brands, storage.getItem("femicgpt:brands"));
   assert.equal(payload.femicgpt_settings, storage.getItem("femicgpt:settings"));
   assert.equal(payload.femicgpt_view, storage.getItem("femicgpt:view"));
 });
@@ -67,6 +69,7 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
 test("parseBackupPayload accepts legacy backups and drops invalid sections", () => {
   const backup = JSON.stringify({
     femicgpt_agents: JSON.stringify([{ id: "agent-general", name: "Ok" }]),
+    femicgpt_brands: JSON.stringify([{ id: "brand-a", name: "Marca A" }]),
     femicgpt_chats: "{invalid-json",
     femicgpt_settings: JSON.stringify({ textProvider: "openrouter" }),
     femicgpt_view: JSON.stringify({ activeAgentId: "agent-general" }),
@@ -75,6 +78,7 @@ test("parseBackupPayload accepts legacy backups and drops invalid sections", () 
   const parsed = parseBackupPayload(backup);
 
   assert.deepEqual(parsed.agents, [{ id: "agent-general", name: "Ok" }]);
+  assert.deepEqual(parsed.brands, [{ id: "brand-a", name: "Marca A" }]);
   assert.equal(parsed.chats, null);
   assert.deepEqual(parsed.settings, { textProvider: "openrouter" });
   assert.deepEqual(parsed.view, { activeAgentId: "agent-general" });
@@ -135,6 +139,7 @@ test("reconcileAppData repairs dangling active pointers and orphan chats", () =>
 test("applyParsedBackup only replaces valid sections and preserves healthy ones", () => {
   const storage = createMemoryStorage({
     "femicgpt:agents": JSON.stringify([{ id: "agent-existing" }]),
+    "femicgpt:brands": JSON.stringify([{ id: "brand-existing" }]),
     "femicgpt:chats": JSON.stringify([{ id: "chat-existing" }]),
     "femicgpt:settings": JSON.stringify({ textProvider: "openrouter" }),
     "femicgpt:view": JSON.stringify({ activeAgentId: "agent-existing" }),
@@ -142,6 +147,7 @@ test("applyParsedBackup only replaces valid sections and preserves healthy ones"
 
   applyParsedBackup(storage, {
     agents: [{ id: "agent-imported" }],
+    brands: [{ id: "brand-imported" }],
     chats: null,
     settings: { textProvider: "deepseek" },
     view: null,
@@ -149,6 +155,7 @@ test("applyParsedBackup only replaces valid sections and preserves healthy ones"
 
   const dump = storage.dump();
   assert.equal(dump["femicgpt:agents"], JSON.stringify([{ id: "agent-imported" }]));
+  assert.equal(dump["femicgpt:brands"], JSON.stringify([{ id: "brand-imported" }]));
   assert.equal(dump["femicgpt:chats"], JSON.stringify([{ id: "chat-existing" }]));
   assert.equal(dump["femicgpt:settings"], JSON.stringify({ textProvider: "deepseek" }));
   assert.equal(dump["femicgpt:view"], JSON.stringify({ activeAgentId: "agent-existing" }));
