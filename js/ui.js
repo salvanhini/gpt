@@ -218,31 +218,31 @@ function renderChatCard(chat, state) {
             : `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[8px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
           }
         </div>
-        <button
-          type="button"
-          class="min-w-0 flex-1 text-left"
-          data-action="select-chat"
-          data-chat-id="${chat.id}"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <div class="min-w-0">
-              <div class="flex items-center gap-1.5">
-                <span class="truncate text-xs font-semibold text-slate-800">${escapeHtml(chat.title)}</span>
-                <button
-                  type="button"
-                  class="chat-rename-btn inline-flex shrink-0 items-center justify-center rounded px-1 text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
-                  data-action="rename-chat"
-                  data-chat-id="${chat.id}"
-                  title="Renomear conversa"
-                >✎</button>
-              </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-2">
+            <button
+              type="button"
+              class="min-w-0 flex-1 text-left"
+              data-action="select-chat"
+              data-chat-id="${chat.id}"
+            >
+              <div class="truncate text-xs font-semibold text-slate-800">${escapeHtml(chat.title)}</div>
               <div class="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
                 <span>${formatRelativeDay(chat.updatedAt)}</span>
               </div>
+            </button>
+            <div class="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                class="chat-rename-btn inline-flex shrink-0 items-center justify-center rounded px-1 text-[9px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                data-action="rename-chat"
+                data-chat-id="${chat.id}"
+                title="Renomear conversa"
+              >✎</button>
+              <div class="text-xs text-slate-400">${formatTime(chat.updatedAt)}</div>
             </div>
-            <div class="text-xs text-slate-400">${formatTime(chat.updatedAt)}</div>
           </div>
-        </button>
+        </div>
         <button
           type="button"
           class="danger-mini shrink-0 rounded-full px-2 py-1 text-xs text-slate-500 hover:bg-rose-50 hover:text-rose-600"
@@ -387,15 +387,60 @@ export function shouldAutoScroll({
 function renderMessages(state) {
   const chat = state.chats.find((item) => item.id === state.activeChatId);
   const messages = chat?.messages || [];
+  const activeAgentName = state.activeAgent?.name || "agente ativo";
+  const activeAgentDescription = state.activeAgent?.description || "IA flexível para organizar ideias, documentos e respostas em um só workspace.";
 
   if (messages.length === 0) {
     return `
-      <div class="glass-panel flex min-h-[150px] flex-col items-center justify-center rounded-[1.5rem] border border-white/70 px-5 py-6 text-center shadow-panel">
-        <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-[1.1rem] bg-gradient-to-br from-femic-navy to-sky-600 text-xl text-white shadow-soft">✦</div>
-        <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Comece uma conversa com o ${escapeHtml(state.activeAgent?.name || "agente ativo")}</h2>
-        <p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-          Use texto, voz, anexos locais ou o modo imagem para transformar o FEMIC GPT em um workspace de IA mais flexível e organizado.
-        </p>
+      <div class="welcome-panel glass-panel flex min-h-[320px] flex-col justify-between rounded-[1.75rem] border border-white/80 px-5 py-5 shadow-panel sm:px-7 sm:py-6">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-2xl">
+            <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/80 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-femic-navy shadow-sm">
+              <span class="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.14)]"></span>
+              Workspace pronto
+            </div>
+            <h2 class="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+              Comece com o ${escapeHtml(activeAgentName)}
+            </h2>
+            <p class="mt-3 max-w-xl text-sm leading-6 text-slate-600 sm:text-[15px]">
+              ${escapeHtml(activeAgentDescription)}
+            </p>
+          </div>
+          <div class="rounded-2xl border border-slate-200/80 bg-white/75 p-4 text-left shadow-soft lg:w-[280px]">
+            <div class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Sessão atual</div>
+            <div class="mt-3 space-y-2 text-sm text-slate-600">
+              <div class="flex items-center justify-between gap-3">
+                <span>Modelo</span>
+                <strong class="truncate text-femic-navy">${escapeHtml(getProviderLabel(state))}</strong>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span>Modo</span>
+                <strong class="text-femic-navy">${state.imageMode ? "Imagem" : "Texto"}</strong>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span>Anexos</span>
+                <strong class="text-femic-navy">${state.pendingAttachmentContext?.files?.length || 0}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
+            <div class="text-lg">✍️</div>
+            <div class="mt-2 text-sm font-semibold text-slate-900">Escreva ou dite</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Use o composer abaixo para enviar texto, voz ou prompts de imagem.</p>
+          </div>
+          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
+            <div class="text-lg">📎</div>
+            <div class="mt-2 text-sm font-semibold text-slate-900">Traga contexto</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Anexe PDF, planilhas, CSV, XML ou imagens para apoiar a resposta.</p>
+          </div>
+          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
+            <div class="text-lg">📋</div>
+            <div class="mt-2 text-sm font-semibold text-slate-900">Organize no board</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Use categorias e busca para manter conversas importantes à mão.</p>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -472,24 +517,24 @@ function renderBoardCard(chat, state) {
   const preview = getChatPreview(chat);
   return `
     <div
-      class="board-card cursor-pointer rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-150 hover:shadow-soft hover:-translate-y-0.5"
+      class="board-card cursor-pointer rounded-2xl border border-slate-200/85 transition-all duration-150 hover:-translate-y-0.5"
       style="border-top:4px solid ${cat.color}"
       data-action="select-chat"
       data-chat-id="${chat.id}"
       title="${escapeHtml(chat.title)}"
     >
-      <div class="p-3.5">
+      <div class="p-4">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1">
-            <div class="truncate text-sm font-semibold text-slate-800">${escapeHtml(chat.title)}</div>
-            <div class="mt-0.5 text-xs text-slate-400">${formatRelativeDay(chat.updatedAt)} · ${formatTime(chat.updatedAt)}</div>
+            <div class="truncate text-sm font-semibold text-slate-900">${escapeHtml(chat.title)}</div>
+            <div class="mt-1 text-xs font-medium text-slate-400">${formatRelativeDay(chat.updatedAt)} · ${formatTime(chat.updatedAt)}</div>
           </div>
-          ${chat.category ? `<span class="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
+          ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
         </div>
-        ${preview ? `<div class="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">${escapeHtml(preview)}</div>` : ""}
-        <div class="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400">
-          <span>${escapeHtml(agent?.emoji || "🤖")}</span>
-          <span class="truncate">${escapeHtml(agent?.name || "FEMIC GPT")}</span>
+        ${preview ? `<div class="mt-3 line-clamp-2 text-xs leading-relaxed text-slate-500">${escapeHtml(preview)}</div>` : `<div class="mt-3 text-xs leading-relaxed text-slate-400">Conversa vazia pronta para receber novas ideias.</div>`}
+        <div class="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-slate-100">${escapeHtml(agent?.emoji || "🤖")}</span>
+          <span class="truncate font-medium">${escapeHtml(agent?.name || "FEMIC GPT")}</span>
         </div>
       </div>
     </div>
@@ -499,25 +544,25 @@ function renderBoardCard(chat, state) {
 function renderBoardView(state) {
   const cards = getBoardCards(state);
   return `
-    <div class="flex h-screen flex-col">
-      <div class="board-header shrink-0 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
-        <div class="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-5">
+    <div class="board-view flex flex-col">
+      <div class="board-header shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+        <div class="mx-auto flex max-w-[1440px] flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex items-center gap-3">
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-600 shadow-sm hover:bg-slate-50"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-600 shadow-sm hover:bg-slate-50"
               data-action="toggle-board-view"
               title="Voltar ao chat"
             >←</button>
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">📋 Board de Conversas</h2>
-              <p class="text-xs text-slate-500">${state.chats.length} conversas no total</p>
+              <h2 class="text-xl font-semibold tracking-tight text-slate-950">📋 Board de Conversas</h2>
+              <p class="text-xs font-medium text-slate-500">${cards.length} de ${state.chats.length} conversas visíveis</p>
             </div>
           </div>
-          <div class="relative max-w-xs flex-1">
+          <div class="relative w-full lg:max-w-sm">
             <input
               type="search"
-              class="board-search-input w-full rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 pl-8 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100"
+              class="board-search-input w-full rounded-full border border-slate-200 bg-slate-50/80 px-4 py-2 pl-9 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100"
               placeholder="Buscar conversas..."
               data-action="search-chats"
               value="${escapeHtml(state.boardSearchQuery || "")}"
@@ -525,15 +570,15 @@ function renderBoardView(state) {
             <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
           </div>
         </div>
-        <div class="mx-auto max-w-[1440px] px-4 pb-2 sm:px-5">
+        <div class="mx-auto max-w-[1440px] px-4 pb-4 sm:px-5">
           <div class="flex flex-wrap gap-1.5">
             ${CHAT_CATEGORIES.map((cat) => {
               const isActive = (cat.id === "" && !state.activeCategory) || state.activeCategory === cat.id;
               return `
                 <button
                   type="button"
-                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all duration-150 ${isActive ? "text-white" : "text-slate-500 hover:text-slate-700"}"
-                  style="${isActive ? `background:${cat.color};` : `background:${cat.color}15; color:${cat.color};`}"
+                  class="rounded-full px-3 py-1.5 text-[11px] font-bold transition-all duration-150 ${isActive ? "text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}"
+                  style="${isActive ? `background:${cat.color};` : `background:${cat.color}17; color:${cat.color}; border:1px solid ${cat.color}22;`}"
                   data-action="filter-by-category"
                   data-category="${cat.id}"
                 >
@@ -544,11 +589,11 @@ function renderBoardView(state) {
           </div>
         </div>
       </div>
-      <div class="flex-1 overflow-auto">
-        <div class="mx-auto max-w-[1440px] px-4 py-4 sm:px-5">
+      <div class="board-content flex-1 scroll-soft">
+        <div class="mx-auto max-w-[1440px] px-4 py-5 sm:px-5">
           ${cards.length
-            ? `<div class="board-grid grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${cards.map((chat) => renderBoardCard(chat, state)).join("")}</div>`
-            : `<div class="flex flex-col items-center justify-center py-16 text-center"><div class="text-4xl mb-3">📭</div><p class="text-lg font-medium text-slate-600">Nenhuma conversa encontrada</p><p class="mt-1 text-sm text-slate-400">${state.boardSearchQuery ? "Tente outro termo de busca." : "Nenhuma conversa nesta categoria."}</p></div>`
+            ? `<div class="board-grid grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${cards.map((chat) => renderBoardCard(chat, state)).join("")}</div>`
+            : `<div class="mx-auto flex max-w-md flex-col items-center justify-center rounded-[1.5rem] border border-white/80 bg-white/80 px-6 py-14 text-center shadow-soft"><div class="mb-3 text-4xl">📭</div><p class="text-lg font-semibold text-slate-700">Nenhuma conversa encontrada</p><p class="mt-1 text-sm leading-6 text-slate-400">${state.boardSearchQuery ? "Tente outro termo de busca." : "Nenhuma conversa nesta categoria."}</p></div>`
           }
         </div>
       </div>
@@ -790,7 +835,7 @@ export function renderApp(state) {
         <section class="sidebar-section sidebar-section-agents rounded-xl border border-white/10 bg-white/5 p-2.5">
           <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
             <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Agentes</div>
-            <button type="button" class="rounded-full border border-white/15 px-2.5 py-1 text-xs font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.92;" data-action="open-agent-modal">Novo</button>
+          <button type="button" class="rounded-full border border-white/15 px-2.5 py-1 text-xs font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal">Novo</button>
           </div>
           <div class="sidebar-scroll sidebar-agents-scroll scroll-soft flex flex-col gap-2 pr-1">
             ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
@@ -800,7 +845,7 @@ export function renderApp(state) {
         <section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
           <div class="sidebar-expanded-only mb-2 flex items-center justify-between">
             <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Conversas</div>
-            <button type="button" class="rounded-full border border-white/15 px-2 py-1 text-white" style="background:rgba(255,255,255,0.08); opacity:0.92;" data-action="create-chat" title="Nova conversa">＋</button>
+            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="create-chat" title="Nova conversa">＋</button>
           </div>
           ${renderCategoryFilter(state)}
           <div class="sidebar-scroll sidebar-chats-scroll scroll-soft flex flex-col gap-2 pr-1">
@@ -810,17 +855,17 @@ export function renderApp(state) {
         </div>
 
         <div class="mt-3 shrink-0 space-y-2">
-          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.12);" data-action="create-chat" title="Nova conversa"><span>＋</span><span class="sidebar-expanded-only">Nova conversa</span></button>
-          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.10);" data-action="toggle-board-view" title="Board de conversas"><span>📋</span><span class="sidebar-expanded-only">Board</span></button>
-          <button type="button" class="sidebar-action-btn w-full rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.95;" data-action="open-settings" title="Configurações"><span>⚙</span><span class="sidebar-expanded-only">Configurações</span></button>
+          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:linear-gradient(135deg,rgba(63,183,214,0.28),rgba(255,255,255,0.14));" data-action="create-chat" title="Nova conversa"><span>＋</span><span class="sidebar-expanded-only">Nova conversa</span></button>
+          <button type="button" class="sidebar-action-btn w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-soft" style="background:rgba(255,255,255,0.12);" data-action="toggle-board-view" title="Board de conversas"><span>📋</span><span class="sidebar-expanded-only">Board</span></button>
+          <button type="button" class="sidebar-action-btn w-full rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white" style="background:rgba(255,255,255,0.08); opacity:0.96;" data-action="open-settings" title="Configurações"><span>⚙</span><span class="sidebar-expanded-only">Configurações</span></button>
         </div>
       </aside>
 
-      <main class="relative min-w-0">
+      <main class="app-main relative min-w-0">
         ${state.viewMode === "board"
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
-        <div class="mx-auto flex h-screen max-w-[1440px] flex-col px-4 py-2.5 sm:px-5 lg:px-5">
+        <div class="chat-workspace mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
@@ -828,15 +873,15 @@ export function renderApp(state) {
             <div class="timeline-end-spacer" aria-hidden="true"></div>
           </section>
 
-          <footer class="composer-dock shrink-0 pt-1.5">
-            <div class="composer-panel glass-panel rounded-xl border border-white/50 px-2.5 py-2 shadow-sm">
+          <footer class="composer-dock shrink-0 pt-2">
+            <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
               ${renderAttachmentChips(state)}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
                   <textarea
                     id="composer-input"
                     name="message"
-                    class="min-h-[44px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/92 px-3 py-2 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
+                    class="min-h-[48px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2.5 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
                     placeholder="Digite sua mensagem para ${escapeHtml(activeAgent?.name || "o FEMIC GPT")}..."
                   >${escapeHtml(state.draftMessage || "")}</textarea>
                   <div class="flex flex-wrap items-center justify-between gap-1">

@@ -215,6 +215,7 @@ function render() {
     refreshFromStorage();
     state.activeAgent = getActiveAgent();
     renderApp(state);
+    window.scrollTo(0, 0);
   } catch (error) {
     console.error("[FEMIC GPT] Erro ao renderizar:", error);
     const app = document.getElementById("app");
@@ -351,6 +352,8 @@ function handleCreateChat() {
   state.chats.push(chat);
   saveChats(state.chats);
   state.activeChatId = chat.id;
+  state.viewMode = "chat";
+  state.boardSearchQuery = "";
   state.mobileSidebarOpen = false;
   persistAndRender();
 }
@@ -368,6 +371,8 @@ function handleSelectAgent(agentId) {
   }
 
   state.mobileSidebarOpen = false;
+  state.viewMode = "chat";
+  state.boardSearchQuery = "";
   persistAndRender();
 }
 
