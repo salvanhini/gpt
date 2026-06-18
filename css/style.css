@@ -19,15 +19,25 @@
 html,
 body {
   margin: 0;
+  width: 100%;
+  height: 100%;
   min-height: 100%;
-  overflow-x: hidden;
+  overflow: hidden;
   font-family: "Segoe UI", Inter, system-ui, sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(63, 183, 214, 0.12), transparent 28%),
-    linear-gradient(180deg, #f5f9fd 0%, var(--femic-bg) 48%, #f2f7fb 100%);
+    radial-gradient(circle at 18% 0%, rgba(63, 183, 214, 0.16), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(26, 54, 93, 0.08), transparent 24%),
+    linear-gradient(180deg, #f6faff 0%, var(--femic-bg) 52%, #eef5fb 100%);
 }
 
 body.modal-open {
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -50,8 +60,13 @@ button {
 }
 
 .femic-shell {
-  min-height: 100vh;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 280px 1fr;
   transition: grid-template-columns 0.22s ease;
@@ -69,8 +84,9 @@ button {
 
 .sidebar-gradient {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, var(--femic-navy) 0%, #163253 100%);
+    radial-gradient(circle at 18% 0%, rgba(111, 190, 224, 0.22), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 22%),
+    linear-gradient(180deg, var(--femic-navy) 0%, #132d4e 58%, #10243f 100%);
 }
 
 .line-clamp-3 {
@@ -107,12 +123,14 @@ button {
 .agent-card.active,
 .chat-card.active {
   border-color: rgba(63, 183, 214, 0.8);
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(63, 183, 214, 0.14));
+  box-shadow:
+    0 14px 28px rgba(7, 24, 43, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .chat-card.active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 249, 255, 0.94));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 248, 255, 0.96));
   box-shadow:
     0 14px 30px rgba(8, 35, 63, 0.12),
     inset 0 0 0 1px rgba(63, 183, 214, 0.18);
@@ -127,7 +145,9 @@ button {
 }
 
 .sidebar-brand-panel {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 34px rgba(6, 20, 36, 0.12);
 }
 
 .sidebar-collapse-btn {
@@ -141,7 +161,7 @@ button {
 
 .sidebar-edge-collapse {
   position: absolute;
-  right: -0.05rem;
+  right: -0.78rem;
   top: 3.25rem;
   z-index: 5;
   display: inline-flex;
@@ -150,8 +170,7 @@ button {
   width: 1.55rem;
   height: 2.55rem;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  border-right: none;
-  border-radius: 0.8rem 0 0 0.8rem;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.18);
   color: white;
   box-shadow: 0 12px 24px rgba(7, 24, 43, 0.2);
@@ -243,7 +262,7 @@ button {
 }
 
 .sidebar-collapsed .sidebar-edge-collapse {
-  right: -0.05rem;
+  right: -0.72rem;
 }
 
 .sidebar-collapsed .sidebar-main {
@@ -268,15 +287,19 @@ button {
   display: flex;
   min-height: 0;
   flex-direction: column;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 34px rgba(8, 26, 46, 0.1);
 }
 
 .sidebar-section-agents {
-  flex: 0 0 auto;
-  max-height: 34vh;
+  flex: 0 1 35%;
+  max-height: 230px;
 }
 
 .sidebar-section-chats {
   flex: 1 1 auto;
+  min-height: 220px;
 }
 
 .sidebar-scroll {
@@ -287,7 +310,7 @@ button {
 }
 
 .sidebar-agents-scroll {
-  max-height: 190px;
+  max-height: 170px;
 }
 
 .sidebar-chats-scroll {
@@ -297,6 +320,7 @@ button {
 .message-bubble {
   max-width: min(80%, 900px);
   min-width: 0;
+  box-shadow: 0 14px 34px rgba(30, 58, 86, 0.08);
 }
 
 .message-enter.items-end .message-bubble {
@@ -306,6 +330,7 @@ button {
 .chat-timeline {
   width: min(100%, 1200px);
   margin-inline: auto;
+  padding-top: 1.25rem;
 }
 
 .composer-panel {
@@ -315,8 +340,8 @@ button {
 
 .composer-panel {
   box-shadow:
-    0 2px 8px rgba(26, 54, 93, 0.06),
-    0 8px 24px rgba(26, 54, 93, 0.04);
+    0 16px 45px rgba(26, 54, 93, 0.12),
+    0 2px 10px rgba(26, 54, 93, 0.05);
   transition: box-shadow 0.2s ease;
 }
 
@@ -335,14 +360,14 @@ button {
   position: absolute;
   left: 0;
   right: 0;
-  top: -1rem;
-  height: 1.2rem;
+  top: -1.8rem;
+  height: 2rem;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.92));
 }
 
 .timeline-end-spacer {
-  height: 1.25rem;
+  height: 2rem;
 }
 
 .danger-mini {
@@ -757,6 +782,53 @@ button {
   -webkit-backdrop-filter: blur(12px);
 }
 
+.app-main {
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-workspace,
+.board-view {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-workspace {
+  background:
+    radial-gradient(circle at 35% 0%, rgba(63, 183, 214, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(248, 250, 252, 0));
+}
+
+.welcome-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 249, 255, 0.9)),
+    radial-gradient(circle at 12% 12%, rgba(63, 183, 214, 0.16), transparent 30%);
+}
+
+.welcome-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(26, 54, 93, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(26, 54, 93, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(135deg, rgba(0, 0, 0, 0.55), transparent 58%);
+}
+
+.welcome-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
 .sidebar-overlay {
   display: none;
 }
@@ -768,12 +840,17 @@ button {
 .board-card {
   transition: all 0.15s ease;
   overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 255, 0.94));
+  box-shadow:
+    0 16px 36px rgba(26, 54, 93, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
 .board-card:hover {
   box-shadow:
-    0 12px 30px rgba(15, 23, 42, 0.08),
-    0 4px 12px rgba(15, 23, 42, 0.04);
+    0 22px 45px rgba(26, 54, 93, 0.13),
+    0 7px 18px rgba(15, 23, 42, 0.05);
 }
 
 .line-clamp-2 {
@@ -787,6 +864,16 @@ button {
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 12px 32px rgba(26, 54, 93, 0.06);
+}
+
+.board-content {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(circle at 22% 4%, rgba(63, 183, 214, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(239, 247, 253, 0.92), rgba(248, 250, 252, 0.96));
 }
 
 .board-search-input {
@@ -805,6 +892,14 @@ button {
 
   .femic-shell.sidebar-collapsed {
     grid-template-columns: 1fr;
+  }
+
+  .app-main {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
   }
 
   .sidebar-overlay {
