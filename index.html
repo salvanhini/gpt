@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FEMIC GPT</title>
+    <meta
+      name="description"
+      content="FEMIC GPT é um sistema de chat de IA modular, client-side e com suporte a agentes customizados."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%231A365D'/%3E%3Cpath d='M32 13l4.5 13.5L50 31l-13.5 4.5L32 49l-4.5-13.5L14 31l13.5-4.5z' fill='%23ffffff'/%3E%3C/svg%3E"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              femic: {
+                navy: "#1A365D",
+                cyan: "#3FB7D6",
+                mist: "#E6F4F7",
+                bg: "#F8FAFC",
+                line: "#D8E2EC",
+              },
+            },
+            boxShadow: {
+              panel: "0 24px 70px rgba(26, 54, 93, 0.12)",
+              soft: "0 12px 30px rgba(15, 23, 42, 0.08)",
+            },
+            fontFamily: {
+              sans: [
+                "Segoe UI",
+                "Inter",
+                "ui-sans-serif",
+                "system-ui",
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body class="bg-femic-bg text-slate-800">
+    <div id="app" class="min-h-screen"></div>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
