@@ -39,6 +39,7 @@ export function createChat(agentId) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     category: "",
+    summary: "",
     messages: [],
   };
 }

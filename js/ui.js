@@ -375,6 +375,8 @@ function renderActiveChatHeader(state) {
           <span>${chat.titleMode === "manual" ? "Nome definido por você" : "Nome automático"}</span>
           <span>•</span>
           <span>${formatRelativeDay(chat.updatedAt)} às ${formatTime(chat.updatedAt)}</span>
+          <span>•</span>
+          <span class="text-slate-400">💬 ${chat.messages.length} msgs · ~${Math.ceil((chat.messages || []).reduce((t, m) => t + (m.content || "").length, 0) * 0.25)} tokens</span>
         </div>
       </div>
       ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
@@ -1736,6 +1738,10 @@ export function renderApp(state) {
                         <span>${state.imageMode ? "Imagem" : "Texto"}</span>
                       </button>`}
                       ${instagramMode ? "" : renderWebSearchControls(state)}
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.smartMode ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-smart-mode" title="Modo automatico: escolhe modelo e web search conforme a pergunta">
+                        <span>🤖</span>
+                        <span>${state.smartMode ? "Auto" : "Manual"}</span>
+                      </button>`}
                     </div>
                     <div class="flex items-center gap-1">
                       ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex h-8 w-8 items-center justify-center rounded-full border ${state.isListening ? "border-rose-300 bg-rose-50 text-rose-600" : "border-slate-200 bg-white/70 text-slate-500"} ${state.speechRecognitionSupported === false && !canRecordFallback ? "opacity-60" : ""} shadow-sm" data-action="toggle-voice" title="${voiceTitle}">
@@ -1801,6 +1807,7 @@ export function bindUIHandlers(handlers) {
     if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
     if (action === "close-modal") handlers.onCloseModal(target.dataset.modal);
     if (action === "toggle-image-mode") handlers.onToggleImageMode();
+    if (action === "toggle-smart-mode") handlers.onToggleSmartMode();
     if (action === "toggle-voice") handlers.onToggleVoice();
     if (action === "speak-message") handlers.onSpeakMessage(target.dataset.messageId);
     if (action === "copy-message") handlers.onCopyMessage(target.dataset.messageId);

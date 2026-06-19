@@ -237,7 +237,7 @@ export function getDefaultSettings() {
       braveDailyLimit: 65,
       groqTranscriptionDailyLimit: 20,
       e2bDailyLimit: 5,
-      maxHistoryMessages: 12,
+      maxHistoryMessages: 30,
       tokenWarningLimit: 12000,
     },
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,

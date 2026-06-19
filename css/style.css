@@ -1410,7 +1410,14 @@ button {
 }
 
 .chat-workspace.reading-mode .quick-model-wrap {
-  display: none !important;
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.chat-workspace.reading-mode .quick-model-wrap span {
+  display: none;
 }
 
 .chat-workspace.reading-mode .composer-panel .control-btn span:last-child {

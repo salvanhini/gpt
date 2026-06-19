@@ -108,6 +108,7 @@ const state = {
   selectedBrandId: "",
   selectedTemplateId: "",
   pubmedMode: false,
+  smartMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
   modelGuidanceCollapsed: false,
@@ -190,6 +191,7 @@ function saveViewState() {
     selectedBrandId: state.selectedBrandId,
     selectedTemplateId: state.selectedTemplateId,
     pubmedMode: state.pubmedMode,
+    smartMode: state.smartMode,
     pubmedResultLimit: state.pubmedResultLimit,
     webSearchMode: state.webSearchMode,
     modelGuidanceCollapsed: state.modelGuidanceCollapsed,
@@ -223,6 +225,7 @@ function hydratePersistentState() {
   const hasSelectedTemplate = selectedBrand?.templates?.some((template) => template.id === reconciled.view.selectedTemplateId);
   state.selectedTemplateId = hasSelectedTemplate ? reconciled.view.selectedTemplateId : selectedBrand?.defaultTemplateId || "";
   state.pubmedMode = Boolean(reconciled.view.pubmedMode);
+  state.smartMode = Boolean(reconciled.view.smartMode);
   state.pubmedResultLimit = Number(reconciled.view.pubmedResultLimit) > 0 ? Number(reconciled.view.pubmedResultLimit) : 5;
   state.webSearchMode = Boolean(reconciled.view.webSearchMode);
   state.modelGuidanceCollapsed = Boolean(reconciled.view.modelGuidanceCollapsed);
@@ -297,6 +300,29 @@ function autoScrollChat() {
   if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 48) {
     panel.scrollTop = panel.scrollHeight;
   }
+}
+
+function estimarTokens(chat) {
+  if (!chat?.messages?.length) return 0;
+  return chat.messages.reduce((t, m) => t + Math.ceil((m.content || "").length * 0.25), 0);
+}
+
+function smartClassify(message) {
+  const lower = message.toLowerCase();
+  const res = { webSearch: false, modelTier: "default" };
+
+  const palavrasWeb = ["noticias", "noticia", "hoje", "ultimas", "ultimo", "preco", "cotacao", "tendencia", "lancamento", "atualizacao", "agora", "recem", "previsao", "tempo", "clima", "jogo", "resultado"];
+  if (palavrasWeb.some((p) => lower.includes(p))) {
+    res.webSearch = true;
+  }
+
+  if (message.length < 50 && !message.includes("?")) {
+    res.modelTier = "fast";
+  } else if (message.length > 500 || lower.includes("codigo") || lower.includes("```")) {
+    res.modelTier = "deep";
+  }
+
+  return res;
 }
 
 function addAssistantErrorMessage(chatId, error) {
@@ -406,7 +432,7 @@ function persistAndRender() {
 }
 
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
-  const maxHistoryMessages = Math.max(4, Number(settings.usageLimits?.maxHistoryMessages) || 12);
+  const maxHistoryMessages = Math.max(4, Number(settings.usageLimits?.maxHistoryMessages) || 30);
 
   const mapear = (msg) => ({
     role: msg.role,
@@ -420,21 +446,25 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
     return messages.map(mapear);
   }
 
-  const oldMessages = messages.slice(0, -maxHistoryMessages);
+  const chat = getActiveChat();
   const recentMessages = messages.slice(-maxHistoryMessages);
-  const summary = oldMessages
-    .slice(-8)
-    .map((message) => {
-      const role = message.role === "user" ? "Usuario" : "Assistente";
-      return `${role}: ${String(message.content || "").replace(/\s+/g, " ").slice(0, 280)}`;
-    })
-    .join("\n");
+
+  if (chat?.summary) {
+    return [
+      { role: "system", content: `Resumo da conversa ate aqui:\n${chat.summary}` },
+      ...recentMessages.map(mapear),
+    ];
+  }
+
+  const oldMessages = messages.slice(0, -maxHistoryMessages);
+  const linhas = oldMessages.map((msg) => {
+    const papel = msg.role === "user" ? "U" : "A";
+    const texto = String(msg.content || "").replace(/\s+/g, " ").slice(0, 200);
+    return `${papel}: ${texto}`;
+  });
 
   return [
-    {
-      role: "system",
-      content: `Resumo compacto do historico anterior para economizar tokens:\n${summary}`,
-    },
+    { role: "system", content: `Resumo compacto do historico anterior:\n${linhas.join("\n")}` },
     ...recentMessages.map(mapear),
   ];
 }
@@ -792,6 +822,28 @@ async function handleSendMessage(rawMessage) {
         return;
       }
 
+      // Modo automatico: classifica a pergunta para rotear modelo e web search
+      let modeloOriginal;
+      if (state.smartMode && !isBrasilAgent) {
+        const classe = smartClassify(message);
+        if (classe.webSearch && !state.webSearchMode) {
+          state.webSearchMode = true;
+        }
+        if (classe.modelTier === "fast" && !state.webSearchMode) {
+          modeloOriginal = {
+            provider: state.settings.textProvider,
+            model: state.settings.textModel || state.settings.groqModel || state.settings.deepSeekModel,
+          };
+          if (state.settings.groqKey) {
+            state.settings.textProvider = "groq";
+            state.settings.groqModel = "llama-3.1-8b-instant";
+          } else {
+            state.settings.textProvider = "openrouter";
+            state.settings.textModel = "qwen/qwen3.7-plus";
+          }
+        }
+      }
+
       if (state.webSearchMode) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
       } else {
@@ -837,6 +889,16 @@ async function handleSendMessage(rawMessage) {
     }
 
     resetAttachments();
+
+    // Restaura modelo original se o modo automatico tiver alterado
+    if (modeloOriginal) {
+      state.settings.textProvider = modeloOriginal.provider;
+      if (modeloOriginal.provider === "groq") {
+        state.settings.groqModel = modeloOriginal.model;
+      } else {
+        state.settings.textModel = modeloOriginal.model;
+      }
+    }
   } catch (error) {
     addAssistantErrorMessage(activeChat.id, error);
     showToast(buildUserErrorMessage(error, "Erro ao enviar mensagem."), "error");
@@ -846,6 +908,22 @@ async function handleSendMessage(rawMessage) {
     refreshFromStorage();
     persistAndRender();
     incrementUsage("textMessages");
+
+    // Atualiza resumo acumulativo se houver mensagens demais
+    const chat = getActiveChat();
+    if (chat?.messages?.length > 40 && chat.summary !== false) {
+      const maxMsg = Math.max(4, Number(state.settings.usageLimits?.maxHistoryMessages) || 30);
+      const extras = chat.messages.length - maxMsg;
+      if (extras > 10) {
+        const antigas = chat.messages.slice(0, -(maxMsg + extras));
+        const linhas = antigas.map((m) => {
+          const p = m.role === "user" ? "U" : "A";
+          return `${p}: ${String(m.content || "").replace(/\s+/g, " ").slice(0, 200)}`;
+        });
+        chat.summary = linhas.join("\n");
+        saveChats(state.chats);
+      }
+    }
   }
 }
 
@@ -1068,6 +1146,12 @@ function handleTogglePubMedMode() {
 
 function handleToggleWebSearchMode() {
   state.webSearchMode = !state.webSearchMode;
+  persistAndRender();
+}
+
+function handleToggleSmartMode() {
+  state.smartMode = !state.smartMode;
+  showToast(state.smartMode ? "Modo automatico ativado: modelo e busca web sao escolhidos conforme a pergunta." : "Modo automatico desativado.", "info");
   persistAndRender();
 }
 
@@ -1531,6 +1615,7 @@ function initialize() {
     onSearchChats: handleSearchChats,
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleWebSearchMode: handleToggleWebSearchMode,
+    onToggleSmartMode: handleToggleSmartMode,
     onToggleModelGuidance: handleToggleModelGuidance,
     onToggleAgentSummary: () => {
       state.agentSummaryCollapsed = !state.agentSummaryCollapsed;
