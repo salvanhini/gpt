@@ -86,6 +86,7 @@ import {
 } from "./storage.js";
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
+import { checkLimit, incrementUsage, getDailyUsage, getMonthlyUsage, getAllUsage } from "./usageTracker.js";
 
 let bootSettingsFallbacks = [];
 
@@ -844,6 +845,7 @@ async function handleSendMessage(rawMessage) {
     saveChats(state.chats);
     refreshFromStorage();
     persistAndRender();
+    incrementUsage("textMessages");
   }
 }
 
@@ -1091,6 +1093,8 @@ function handleSaveSettings(formValues) {
     openRouterKey: formValues.openRouterKey?.trim() || "",
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
     groqKey: formValues.groqKey?.trim() || "",
+    tavilyKey: formValues.tavilyKey?.trim() || "",
+    braveSearchKey: formValues.braveSearchKey?.trim() || "",
     falKey: formValues.falKey?.trim() || "",
     openAIKey: formValues.openAIKey?.trim() || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
@@ -1099,6 +1103,14 @@ function handleSaveSettings(formValues) {
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
+    usageLimits: {
+      tavilyDailyLimit: Math.max(0, Number(formValues.tavilyDailyLimit) || 30),
+      braveDailyLimit: Math.max(0, Number(formValues.braveDailyLimit) || 65),
+      groqTranscriptionDailyLimit: Math.max(0, Number(formValues.groqTranscriptionDailyLimit) || 20),
+      e2bDailyLimit: Math.max(0, Number(formValues.e2bDailyLimit) || 5),
+      maxHistoryMessages: Math.max(4, Number(formValues.maxHistoryMessages) || 12),
+      tokenWarningLimit: Math.max(0, Number(formValues.tokenWarningLimit) || 12000),
+    },
   };
 
   saveSettings(state.settings);

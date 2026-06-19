@@ -78,12 +78,16 @@ export function createVoiceController({
 
   function canUseRecordedVoiceFallback() {
     state.mediaRecorderSupported = isMediaRecorderSupported();
-    return Boolean(getSettings().openAIKey && state.mediaRecorderSupported);
+    const settings = getSettings();
+    return Boolean(
+      state.mediaRecorderSupported &&
+      (settings.groqKey || settings.openAIKey)
+    );
   }
 
   function showUnsupportedVoiceInputMessage() {
     showToast(
-      "Ditado nativo indisponivel neste navegador. Configure Audio (OpenAI) para usar o microfone por fallback.",
+      "Ditado nativo indisponivel neste navegador. Configure a chave da Groq em Configuracoes para usar o microfone por fallback.",
       "error",
     );
   }
@@ -239,8 +243,8 @@ export function createVoiceController({
       return;
     }
 
-    if (!getSettings().openAIKey) {
-      showToast("Adicione a chave da OpenAI em Configurações > Audio para usar o microfone neste navegador.", "error");
+    if (!getSettings().groqKey && !getSettings().openAIKey) {
+      showToast("Adicione a chave da Groq ou OpenAI em Configuracoes para usar o microfone neste navegador.", "error");
       return;
     }
 
@@ -322,7 +326,7 @@ export function createVoiceController({
       render();
 
       if (canUseRecordedVoiceFallback() && !["not-allowed", "audio-capture", "no-speech"].includes(event.error)) {
-        showToast("Voz nativa falhou. Vou usar a transcricao por OpenAI.", "info");
+        showToast("Voz nativa falhou. Vou usar transcricao por Groq/OpenAI.", "info");
         await startRecordedFallbackInput();
         return;
       }
@@ -352,7 +356,7 @@ export function createVoiceController({
       render();
 
       if (canUseRecordedVoiceFallback()) {
-        showToast("Voz nativa indisponivel. Vou usar a transcricao por OpenAI.", "info");
+        showToast("Voz nativa indisponivel. Vou usar transcricao por Groq/OpenAI.", "info");
         await startRecordedFallbackInput();
         return;
       }

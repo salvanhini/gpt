@@ -259,14 +259,26 @@ test("runWebSearchQuery falls back to DuckDuckGo when premium web search fails",
       };
     }
 
+    if (calls === 2) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            Heading: "OpenAI",
+            AbstractText: "Resumo principal",
+            AbstractURL: "https://duckduckgo.com/OpenAI",
+            RelatedTopics: [],
+          };
+        },
+      };
+    }
+
+    // Terceira chamada: LLM generate answer
     return {
       ok: true,
       async json() {
         return {
-          Heading: "OpenAI",
-          AbstractText: "Resumo principal",
-          AbstractURL: "https://duckduckgo.com/OpenAI",
-          RelatedTopics: [],
+          choices: [{ message: { content: "Resposta gerada com base na busca." } }],
         };
       },
     };
@@ -284,7 +296,8 @@ test("runWebSearchQuery falls back to DuckDuckGo when premium web search fails",
 
     assert.equal(result.provider, "DuckDuckGo");
     assert.equal(result.isFallback, true);
-    assert.ok(result.error instanceof Error);
+    assert.ok(result.answerProvider);
+    assert.ok(result.content);
   } finally {
     global.fetch = originalFetch;
     delete global.window;

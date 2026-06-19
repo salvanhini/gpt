@@ -1385,22 +1385,41 @@ button {
   }
 }
 
-/* Area de leitura maior: compacta composer quando ha mensagens */
-.chat-workspace.has-messages .composer-dock {
-  padding-top: 0.25rem;
+/* Modo leitura: compacta ainda mais que has-messages */
+.chat-workspace.reading-mode .agent-summary-panel {
+  margin-bottom: 0.4rem;
+  padding-block: 0.35rem;
+  border-radius: 0.85rem;
 }
 
-.chat-workspace.has-messages .composer-panel {
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
+.chat-workspace.reading-mode .agent-summary-header .inline-flex.items-center.gap-2.rounded-full {
+  font-size: 0.55rem;
+  padding: 0.2rem 0.5rem;
 }
 
-.chat-workspace.has-messages #composer-input {
-  min-height: 36px;
+.chat-workspace.reading-mode .agent-summary-panel .agent-summary-header h2 {
+  font-size: 0.82rem;
 }
 
-.chat-workspace.has-messages .agent-summary-panel {
-  margin-bottom: 0.5rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+.chat-workspace.reading-mode .agent-summary-panel .agent-summary-header p {
+  display: none;
+}
+
+.chat-workspace.reading-mode .model-guidance {
+  display: none !important;
+}
+
+.chat-workspace.reading-mode .quick-model-wrap {
+  display: none !important;
+}
+
+.chat-workspace.reading-mode .composer-panel .control-btn span:last-child {
+  display: none;
+}
+
+.chat-workspace.reading-mode #composer-input {
+  min-height: 2.2rem;
+  max-height: 4rem;
+  padding: 0.4rem 0.7rem !important;
+  font-size: 0.85rem;
 }

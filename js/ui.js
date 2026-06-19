@@ -1104,6 +1104,23 @@ function renderSettingsModal(state) {
             </section>
           </div>
 
+          <section class="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3">
+            <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Busca Web (fallback)</div>
+              <div class="text-xs text-slate-600">Usado quando a busca premium falha. Tavily primeiro, depois Brave, e DuckDuckGo como ultimo recurso.</div>
+            </div>
+            <div class="grid gap-2 lg:grid-cols-2">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Tavily (API Key)</span>
+                <input class="modal-input" name="tavilyKey" type="password" value="${escapeHtml(settings.tavilyKey || "")}" placeholder="tvly-..." />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Brave Search (Subscription-Token)</span>
+                <input class="modal-input" name="braveSearchKey" type="password" value="${escapeHtml(settings.braveSearchKey || "")}" placeholder="BSA..." />
+              </label>
+            </div>
+          </section>
+
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Imagem (fal.ai)</div>
@@ -1177,6 +1194,39 @@ function renderSettingsModal(state) {
               <span class="mb-2 block text-sm font-medium text-slate-700">Instrução global</span>
               <textarea class="modal-textarea min-h-[96px]" name="globalSystemPrompt" placeholder="Ex.: Responda sempre em português do Brasil, com clareza, objetividade e foco em ações práticas.">${escapeHtml(settings.globalSystemPrompt || "")}</textarea>
             </label>
+          </section>
+
+          <section class="rounded-xl border border-emerald-200/70 bg-emerald-50/40 p-3">
+            <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Uso e Limites</div>
+              <div class="text-xs text-slate-600">Limites diarios para economizar uso das APIs. Quando atingir 80% aparece um aviso; em 100% o serviço e bloqueado ate o proximo dia.</div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">Tavily (busca/dia)</span>
+                <input class="modal-input" name="tavilyDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tavilyDailyLimit ?? 30))}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">Brave (busca/dia)</span>
+                <input class="modal-input" name="braveDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.braveDailyLimit ?? 65))}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">Transcricao Groq (transc/dia)</span>
+                <input class="modal-input" name="groqTranscriptionDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.groqTranscriptionDailyLimit ?? 20))}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">E2B (execucoes/dia)</span>
+                <input class="modal-input" name="e2bDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.e2bDailyLimit ?? 5))}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">Historico maximo (mensagens)</span>
+                <input class="modal-input" name="maxHistoryMessages" type="number" min="4" max="100" value="${escapeHtml(String(settings.usageLimits?.maxHistoryMessages ?? 12))}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-xs font-medium text-slate-700">Alerta de tokens</span>
+                <input class="modal-input" name="tokenWarningLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tokenWarningLimit ?? 12000))}" />
+              </label>
+            </div>
           </section>
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
@@ -1645,7 +1695,7 @@ export function renderApp(state) {
         ${state.viewMode === "board"
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
-        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
+        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${renderActiveAgentSummary(state)}
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">

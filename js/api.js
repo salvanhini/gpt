@@ -2,6 +2,9 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
+const TAVILY_URL = "https://api.tavily.com/search";
+const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
+const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "openrouter";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
@@ -227,6 +230,16 @@ export function getDefaultSettings() {
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
     globalSystemPrompt: "",
+    tavilyKey: "",
+    braveSearchKey: "",
+    usageLimits: {
+      tavilyDailyLimit: 30,
+      braveDailyLimit: 65,
+      groqTranscriptionDailyLimit: 20,
+      e2bDailyLimit: 5,
+      maxHistoryMessages: 12,
+      tokenWarningLimit: 12000,
+    },
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
     openAITtsModel: DEFAULT_OPENAI_TTS_MODEL,
     openAITtsVoice: DEFAULT_OPENAI_TTS_VOICE,
@@ -445,6 +458,213 @@ export async function searchDuckDuckGoFallback(query) {
   };
 }
 
+// --- Web search cache ---
+
+function readWebSearchCache() {
+  try {
+    return JSON.parse(localStorage.getItem(WEB_SEARCH_CACHE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeWebSearchCache(cache) {
+  try {
+    localStorage.setItem(WEB_SEARCH_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Cache e apenas economia; falhas nao quebram o chat
+  }
+}
+
+function getCachedWebSearch(query) {
+  const cache = readWebSearchCache();
+  const key = query.trim().toLowerCase().replace(/\s+/g, " ");
+  return cache[key] || null;
+}
+
+function setCachedWebSearch(query, result) {
+  const cache = readWebSearchCache();
+  const key = query.trim().toLowerCase().replace(/\s+/g, " ");
+  cache[key] = { ...result, fromCache: true };
+  writeWebSearchCache(cache);
+}
+
+// --- Tavily ---
+
+function buildTavilySearchBody(query, maxResults = 5) {
+  return {
+    query,
+    search_depth: "basic",
+    include_answer: false,
+    include_raw_content: false,
+    max_results: maxResults,
+  };
+}
+
+function normalizeTavilyResults(data) {
+  return (Array.isArray(data?.results) ? data.results : [])
+    .filter((r) => r?.url && (r?.content || r?.title))
+    .slice(0, 5)
+    .map((r) => ({
+      title: r.title || r.url,
+      url: r.url,
+      snippet: r.content || r.snippet || "",
+      provider: "Tavily",
+    }));
+}
+
+async function searchTavily(query, settings) {
+  if (!settings?.tavilyKey) {
+    throw new Error("Tavily sem chave configurada.");
+  }
+
+  let response;
+  try {
+    response = await fetch(TAVILY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.tavilyKey}`,
+      },
+      body: JSON.stringify(buildTavilySearchBody(query)),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar a Tavily.");
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao consultar a Tavily."));
+  }
+
+  const results = normalizeTavilyResults(data);
+  if (!results.length) {
+    throw new Error("A Tavily nao retornou resultados suficientes.");
+  }
+
+  return {
+    provider: "Tavily",
+    citations: results,
+    raw: data,
+  };
+}
+
+// --- Brave ---
+
+function buildBraveSearchUrl(query, count = 5) {
+  const url = new URL(BRAVE_URL);
+  url.searchParams.set("q", query);
+  url.searchParams.set("count", String(count));
+  url.searchParams.set("safesearch", "moderate");
+  url.searchParams.set("text_decorations", "false");
+  return url.toString();
+}
+
+function normalizeBraveResults(data) {
+  return (Array.isArray(data?.web?.results) ? data.web.results : [])
+    .filter((r) => r?.url && (r?.description || r?.title))
+    .slice(0, 5)
+    .map((r) => ({
+      title: r.title || r.url,
+      url: r.url,
+      snippet: r.description || (Array.isArray(r.extra_snippets) ? r.extra_snippets.join(" ") : ""),
+      provider: "Brave",
+    }));
+}
+
+async function searchBrave(query, settings) {
+  if (!settings?.braveSearchKey) {
+    throw new Error("Brave Search sem chave configurada.");
+  }
+
+  let response;
+  try {
+    response = await fetch(buildBraveSearchUrl(query), {
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": settings.braveSearchKey,
+      },
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar ao Brave Search.");
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao consultar o Brave Search."));
+  }
+
+  const results = normalizeBraveResults(data);
+  if (!results.length) {
+    throw new Error("O Brave Search nao retornou resultados suficientes.");
+  }
+
+  return {
+    provider: "Brave",
+    citations: results,
+    raw: data,
+  };
+}
+
+// --- Coletor de fontes web (Tavily > Brave > DuckDuckGo) ---
+
+function buildWebSearchContext(query, provider, citations) {
+  const lines = [
+    `Busca web para: ${query}`,
+    `Provedor usado: ${provider}`,
+    "",
+    "Use as fontes abaixo para responder em portugues do Brasil e cite links relevantes:",
+  ];
+
+  citations.forEach((r, i) => {
+    lines.push(`${i + 1}. ${r.title}`);
+    lines.push(r.snippet);
+    lines.push(r.url);
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
+}
+
+export async function collectWebSearchSources({ query, settings }) {
+  if (!query?.trim()) {
+    throw new Error("Digite uma pergunta valida para usar a Busca Web.");
+  }
+
+  const cached = getCachedWebSearch(query);
+  if (cached) {
+    return cached;
+  }
+
+  const errors = [];
+  const providers = [
+    ["tavily", () => searchTavily(query, settings)],
+    ["brave", () => searchBrave(query, settings)],
+    ["duckduckgo", () => searchDuckDuckGoFallback(query)],
+  ];
+
+  for (const [, search] of providers) {
+    try {
+      const result = await search();
+      const normalizedResult = {
+        content: buildWebSearchContext(query, result.provider, result.citations),
+        provider: result.provider,
+        sourceType: "web-search",
+        webSearch: true,
+        isFallback: result.isFallback || false,
+        citations: result.citations,
+        raw: result.raw,
+      };
+      setCachedWebSearch(query, normalizedResult);
+      return normalizedResult;
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  throw errors[errors.length - 1] || new Error("Nao foi possivel concluir a busca web.");
+}
+
 export async function runWebSearchQuery({ messages, settings }) {
   const query = getLatestUserQuery(messages);
   if (!query) {
@@ -476,10 +696,24 @@ export async function runWebSearchQuery({ messages, settings }) {
       throw error;
     }
 
-    const fallback = await searchDuckDuckGoFallback(query);
+    // Fallback: Tavily > Brave > DuckDuckGo com cache
+    const sources = await collectWebSearchSources({ query, settings });
+    const reply = await sendTextMessage({
+      messages: [
+        ...messages,
+        {
+          role: "user",
+          content: `Use a referencia abaixo para responder com base nas fontes consultadas:\n\n${sources.content}`,
+        },
+      ],
+      settings,
+      webSearchMode: false,
+    });
+
     return {
-      ...fallback,
-      error,
+      ...sources,
+      content: `${reply.content}\n\nFontes consultadas:\n${sources.citations.map((item, index) => `${index + 1}. ${item.title}\n${item.url}`).join("\n")}`,
+      answerProvider: getTextProviderDisplayName(settings.textProvider),
     };
   }
 }
