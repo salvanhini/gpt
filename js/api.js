@@ -482,6 +482,7 @@ export async function runWebSearchQuery({ messages, settings }) {
       error,
     };
   }
+<<<<<<< HEAD
 }
 
 async function chatFetch(url, headers, body) {
@@ -513,6 +514,8 @@ async function chatFetch(url, headers, body) {
   }
 
   return data;
+=======
+>>>>>>> parent of e19e45d (3.8)
 }
 
 export async function sendTextMessage({ messages, settings, webSearchMode = false }) {

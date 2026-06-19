@@ -415,6 +415,7 @@ function buildTextPayload(userMessage) {
         : message.content,
   }));
 <<<<<<< HEAD
+<<<<<<< HEAD
 }
 
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
@@ -446,6 +447,8 @@ function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
+=======
+>>>>>>> parent of e19e45d (3.8)
 =======
 >>>>>>> parent of e19e45d (3.8)
 
