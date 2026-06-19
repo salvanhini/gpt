@@ -5,6 +5,7 @@ import {
   applyParsedBackup,
   BACKUP_SCHEMA_VERSION,
   buildBackupPayload,
+  normalizeSettings,
   parseBackupPayload,
   reconcileAppData,
 } from "../js/storage.js";
@@ -138,6 +139,7 @@ test("reconcileAppData repairs dangling active pointers and orphan chats", () =>
   assert.equal(reconciled.view.sidebarCollapsed, true);
   assert.equal(reconciled.view.pubmedMode, true);
   assert.equal(reconciled.view.pubmedResultLimit, 8);
+  assert.equal(reconciled.view.webSearchMode, false);
 });
 
 test("applyParsedBackup only replaces valid sections and preserves healthy ones", () => {
@@ -163,4 +165,43 @@ test("applyParsedBackup only replaces valid sections and preserves healthy ones"
   assert.equal(dump["femicgpt:chats"], JSON.stringify([{ id: "chat-existing" }]));
   assert.equal(dump["femicgpt:settings"], JSON.stringify({ textProvider: "deepseek" }));
   assert.equal(dump["femicgpt:view"], JSON.stringify({ activeAgentId: "agent-existing" }));
+});
+
+test("normalizeSettings accepts groq provider and repairs invalid groq model", () => {
+  const defaults = {
+    textProvider: "openrouter",
+    textModel: "qwen/qwen3.7-plus",
+    deepSeekModel: "deepseek-v4-flash",
+    groqModel: "openai/gpt-oss-20b",
+  };
+
+  const normalized = normalizeSettings(
+    {
+      textProvider: "groq",
+      groqModel: "invalid-model",
+    },
+    defaults,
+    [{ value: "qwen/qwen3.7-plus" }],
+    [{ value: "deepseek-v4-flash" }],
+    [{ value: "openai/gpt-oss-20b" }],
+  );
+
+  assert.equal(normalized.textProvider, "groq");
+  assert.equal(normalized.groqModel, "openai/gpt-oss-20b");
+});
+
+test("reconcileAppData preserves web search mode in view state", () => {
+  const reconciled = reconcileAppData({
+    agents: [{ id: "agent-a", name: "A" }],
+    chats: [createChat("agent-a", "a1")],
+    view: {
+      activeAgentId: "agent-a",
+      activeChatId: "chat-a1",
+      webSearchMode: true,
+    },
+    defaultAgents: createDefaultAgents,
+    createChat: (agentId) => createChat(agentId, "fallback"),
+  });
+
+  assert.equal(reconciled.view.webSearchMode, true);
 });

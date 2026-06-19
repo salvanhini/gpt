@@ -25,7 +25,7 @@ export function writeStorageJson(storage, key, value) {
   return value;
 }
 
-export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModels) {
+export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModels, groqModels = []) {
   const settings = {
     ...defaults,
     ...(raw && typeof raw === "object" ? raw : {}),
@@ -39,7 +39,11 @@ export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModel
     settings.deepSeekModel = defaults.deepSeekModel;
   }
 
-  if (!["openrouter", "deepseek"].includes(settings.textProvider)) {
+  if (!groqModels.some((model) => model.value === settings.groqModel)) {
+    settings.groqModel = defaults.groqModel;
+  }
+
+  if (!["openrouter", "deepseek", "groq"].includes(settings.textProvider)) {
     settings.textProvider = defaults.textProvider;
   }
 
@@ -121,6 +125,7 @@ export function reconcileAppData({
       selectedTemplateId: typeof nextView.selectedTemplateId === "string" ? nextView.selectedTemplateId : "",
       pubmedMode: Boolean(nextView.pubmedMode),
       pubmedResultLimit: Number(nextView.pubmedResultLimit) > 0 ? Number(nextView.pubmedResultLimit) : 5,
+      webSearchMode: Boolean(nextView.webSearchMode),
       instagramFormat: typeof nextView.instagramFormat === "string" ? nextView.instagramFormat : "story_9_16",
       creativeFormDraft:
         nextView.creativeFormDraft && typeof nextView.creativeFormDraft === "object"

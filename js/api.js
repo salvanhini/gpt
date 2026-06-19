@@ -1,8 +1,10 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "openrouter";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_IMAGE_MODEL = "fal-ai/flux/schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
@@ -54,6 +56,52 @@ export const DEEPSEEK_MODELS = [
   },
 ];
 
+export const GROQ_MODELS = [
+  {
+    value: "openai/gpt-oss-20b",
+    label: "GPT OSS 20B",
+    description: "Modelo leve e rapido da Groq, compativel com browser search.",
+  },
+  {
+    value: "openai/gpt-oss-120b",
+    label: "GPT OSS 120B",
+    description: "Modelo Groq mais forte para raciocinio e web search com mais profundidade.",
+  },
+  {
+    value: "llama-3.1-8b-instant",
+    label: "Llama 3.1 8B Instant",
+    description: "Opcao muito rapida e economica para chat geral na Groq.",
+  },
+];
+
+const GROQ_BROWSER_SEARCH_MODELS = new Set([
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+]);
+
+function buildOpenRouterSearchMessages(messages = []) {
+  const searchInstruction = {
+    role: "system",
+    content:
+      "Quando a busca web estiver ativa, use informacoes atuais da internet, responda em portugues do Brasil e cite as fontes com links no final quando relevante.",
+  };
+
+  if (messages.some((message) => message.role === "system")) {
+    return messages.map((message, index) => {
+      if (index !== 0 || message.role !== "system") {
+        return message;
+      }
+
+      return {
+        ...message,
+        content: `${searchInstruction.content}\n\n${message.content}`,
+      };
+    });
+  }
+
+  return [searchInstruction, ...messages];
+}
+
 function extractErrorMessage(data, fallback) {
   if (!data) {
     return fallback;
@@ -77,10 +125,12 @@ export function getDefaultSettings() {
     textProvider: DEFAULT_TEXT_PROVIDER,
     openRouterKey: "",
     deepSeekKey: "",
+    groqKey: "",
     falKey: "",
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
     deepSeekModel: DEFAULT_DEEPSEEK_MODEL,
+    groqModel: DEFAULT_GROQ_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
@@ -89,9 +139,125 @@ export function getDefaultSettings() {
   };
 }
 
-export async function sendTextMessage({ messages, settings }) {
+export function getTextProviderDisplayName(provider) {
+  if (provider === "deepseek") {
+    return "DeepSeek";
+  }
+
+  if (provider === "groq") {
+    return "Groq";
+  }
+
+  return "OpenRouter";
+}
+
+export function hasTextProviderKey(settings, provider = settings?.textProvider) {
+  if (provider === "deepseek") {
+    return Boolean(settings?.deepSeekKey);
+  }
+
+  if (provider === "groq") {
+    return Boolean(settings?.groqKey);
+  }
+
+  return Boolean(settings?.openRouterKey);
+}
+
+function normalizeAssistantContent(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => item?.text || item?.content || "")
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  return "";
+}
+
+function buildGroqSearchMessages(messages = []) {
+  const searchInstruction = {
+    role: "system",
+    content:
+      "Quando a busca web estiver ativa, consulte a internet para responder com informacoes atuais, organize uma sintese clara em portugues do Brasil e cite as fontes relevantes com links no final.",
+  };
+
+  if (messages.some((message) => message.role === "system")) {
+    return messages.map((message, index) => {
+      if (index !== 0 || message.role !== "system") {
+        return message;
+      }
+
+      return {
+        ...message,
+        content: `${searchInstruction.content}\n\n${message.content}`,
+      };
+    });
+  }
+
+  return [searchInstruction, ...messages];
+}
+
+function getGroqModelForRequest(settings, webSearchMode = false) {
+  const selectedModel = settings.groqModel || DEFAULT_GROQ_MODEL;
+  if (!webSearchMode) {
+    return selectedModel;
+  }
+
+  return GROQ_BROWSER_SEARCH_MODELS.has(selectedModel)
+    ? selectedModel
+    : DEFAULT_GROQ_MODEL;
+}
+
+export function buildGroqRequestBody({ messages, settings, webSearchMode = false }) {
+  const body = {
+    model: getGroqModelForRequest(settings, webSearchMode),
+    messages: webSearchMode ? buildGroqSearchMessages(messages) : messages,
+    stream: false,
+  };
+
+  if (webSearchMode) {
+    body.tool_choice = "required";
+    body.tools = [{ type: "browser_search" }];
+  }
+
+  return body;
+}
+
+export function buildOpenRouterRequestBody({ messages, settings, webSearchMode = false }) {
+  const body = {
+    model: settings.textModel || DEFAULT_TEXT_MODEL,
+    messages: webSearchMode ? buildOpenRouterSearchMessages(messages) : messages,
+  };
+
+  if (webSearchMode) {
+    body.tools = [
+      {
+        type: "openrouter:web_search",
+        parameters: {
+          max_results: 5,
+          search_context_size: "medium",
+        },
+      },
+    ];
+  }
+
+  return body;
+}
+
+export async function sendTextMessage({ messages, settings, webSearchMode = false }) {
   if (settings.textProvider === "deepseek") {
+    if (webSearchMode) {
+      throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
+    }
     return sendDeepSeekMessage({ messages, settings });
+  }
+
+  if (settings.textProvider === "groq") {
+    return sendGroqMessage({ messages, settings, webSearchMode });
   }
 
   if (!settings.openRouterKey) {
@@ -108,10 +274,7 @@ export async function sendTextMessage({ messages, settings }) {
         "HTTP-Referer": window.location.href,
         "X-Title": "FEMIC GPT",
       },
-      body: JSON.stringify({
-        model: settings.textModel || DEFAULT_TEXT_MODEL,
-        messages,
-      }),
+      body: JSON.stringify(buildOpenRouterRequestBody({ messages, settings, webSearchMode })),
     });
   } catch {
     throw new Error("Não foi possível conectar à OpenRouter. Verifique internet, chave e o modelo selecionado.");
@@ -125,7 +288,7 @@ export async function sendTextMessage({ messages, settings }) {
     );
   }
 
-  const content = data?.choices?.[0]?.message?.content;
+  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
   if (!content) {
     throw new Error("A resposta da OpenRouter veio vazia.");
   }
@@ -165,9 +328,45 @@ async function sendDeepSeekMessage({ messages, settings }) {
     throw new Error(extractErrorMessage(data, "Falha ao consultar a DeepSeek."));
   }
 
-  const content = data?.choices?.[0]?.message?.content;
+  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
   if (!content) {
     throw new Error("A resposta da DeepSeek veio vazia.");
+  }
+
+  return {
+    content,
+    raw: data,
+  };
+}
+
+async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
+  if (!settings.groqKey) {
+    throw new Error("Adicione sua chave da Groq nas configuracoes.");
+  }
+
+  let response;
+  try {
+    response = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.groqKey}`,
+      },
+      body: JSON.stringify(buildGroqRequestBody({ messages, settings, webSearchMode })),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar a Groq. Verifique internet, chave e modelo selecionado.");
+  }
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao consultar a Groq."));
+  }
+
+  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
+  if (!content) {
+    throw new Error("A resposta da Groq veio vazia.");
   }
 
   return {

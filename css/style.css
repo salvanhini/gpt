@@ -281,7 +281,7 @@ button {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 2.65rem;
+  min-height: 2.8rem;
   border-radius: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.07);
@@ -305,6 +305,18 @@ button {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.agent-icon-glyph {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.agent-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-content: start;
+}
+
 .sidebar-collapsed .sidebar-expanded-only {
   display: none !important;
 }
@@ -319,6 +331,11 @@ button {
 
 .sidebar-collapsed .sidebar-main {
   gap: 0.6rem;
+}
+
+.sidebar-collapsed .agent-icon-grid {
+  grid-template-columns: 1fr;
+  gap: 0.38rem;
 }
 
 .sidebar-collapsed .sidebar-section {
@@ -347,7 +364,7 @@ button {
 
 .sidebar-section-agents {
   flex: 0 0 auto;
-  max-height: 170px;
+  max-height: 176px;
 }
 
 .sidebar-section-chats {
@@ -363,20 +380,7 @@ button {
 }
 
 .sidebar-agents-scroll {
-  max-height: 116px;
-}
-
-.agent-card-compact {
-  min-height: 3.75rem;
-  padding: 0.54rem 0.6rem;
-}
-
-.agent-card-compact .danger-mini {
-  opacity: 0.5;
-}
-
-.agent-card-compact:hover .danger-mini {
-  opacity: 1;
+  max-height: 112px;
 }
 
 .sidebar-chats-scroll {
@@ -424,6 +428,16 @@ button {
 .chat-card-compact .chat-time-compact {
   white-space: nowrap;
   line-height: 1;
+}
+
+.agent-summary-panel {
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.agent-inline-meta {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-chats-scroll > .chat-card {
@@ -1213,7 +1227,7 @@ button {
   }
 
   .sidebar-section-agents {
-    max-height: 28vh;
+    max-height: 26vh;
   }
 
   .sidebar-mobile {
@@ -1241,16 +1255,11 @@ button {
   }
 
   .sidebar-section-agents {
-    max-height: 148px;
+    max-height: 156px;
   }
 
   .sidebar-agents-scroll {
-    max-height: 86px;
-  }
-
-  .agent-card-compact {
-    min-height: 3.55rem;
-    padding: 0.48rem 0.54rem;
+    max-height: 92px;
   }
 
   .chat-card-compact {

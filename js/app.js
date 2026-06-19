@@ -30,6 +30,9 @@ import {
   generateSpeechAudio,
   generateImage,
   getDefaultSettings,
+  getTextProviderDisplayName,
+  GROQ_MODELS,
+  hasTextProviderKey,
   IMAGE_SIZE_OPTIONS,
   OPENROUTER_MODELS,
   sendTextMessage,
@@ -96,6 +99,7 @@ const state = {
   selectedTemplateId: "",
   pubmedMode: false,
   pubmedResultLimit: 5,
+  webSearchMode: false,
   instagramFormat: "story_9_16",
   creativeFormDraft: {
     objective: "",
@@ -130,6 +134,7 @@ const state = {
   availableVoice: null,
   modelOptions: OPENROUTER_MODELS,
   deepSeekModelOptions: DEEPSEEK_MODELS,
+  groqModelOptions: GROQ_MODELS,
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
@@ -140,6 +145,7 @@ function loadSettings() {
     getDefaultSettings(),
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
+    GROQ_MODELS,
   );
 }
 
@@ -163,6 +169,7 @@ function saveViewState() {
     selectedTemplateId: state.selectedTemplateId,
     pubmedMode: state.pubmedMode,
     pubmedResultLimit: state.pubmedResultLimit,
+    webSearchMode: state.webSearchMode,
     instagramFormat: state.instagramFormat,
     creativeFormDraft: state.creativeFormDraft,
   });
@@ -193,6 +200,7 @@ function hydratePersistentState() {
   state.selectedTemplateId = hasSelectedTemplate ? reconciled.view.selectedTemplateId : selectedBrand?.defaultTemplateId || "";
   state.pubmedMode = Boolean(reconciled.view.pubmedMode);
   state.pubmedResultLimit = Number(reconciled.view.pubmedResultLimit) > 0 ? Number(reconciled.view.pubmedResultLimit) : 5;
+  state.webSearchMode = Boolean(reconciled.view.webSearchMode);
   state.instagramFormat = reconciled.view.instagramFormat || "story_9_16";
   state.creativeFormDraft = {
     objective: reconciled.view.creativeFormDraft?.objective || "",
@@ -239,6 +247,7 @@ function loadImportedSettings(rawSettings) {
     getDefaultSettings(),
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
+    GROQ_MODELS,
   );
 }
 
@@ -401,10 +410,23 @@ function buildInstagramPayload() {
 }
 
 function canGenerateInstagramCopy() {
-  if (state.settings.textProvider === "deepseek") {
-    return Boolean(state.settings.deepSeekKey);
+  return hasTextProviderKey(state.settings);
+}
+
+function getActiveTextProviderLabel() {
+  return getTextProviderDisplayName(state.settings.textProvider);
+}
+
+function canUseWebSearch() {
+  if (state.settings.textProvider === "groq") {
+    return Boolean(state.settings.groqKey);
   }
-  return Boolean(state.settings.openRouterKey);
+
+  if (state.settings.textProvider === "openrouter") {
+    return Boolean(state.settings.openRouterKey);
+  }
+
+  return false;
 }
 
 function resetAttachments() {
@@ -439,7 +461,7 @@ async function handleSendMessage(rawMessage) {
     message = instagramPayload.creativeBrief;
   }
 
-  const textPayload = state.imageMode || isInstagramMode || isPubMedMode || isBrasilAgent
+  const textPayload = state.imageMode || isInstagramMode || isPubMedMode
     ? null
     : buildTextPayload(message);
   state.isLoading = true;
@@ -484,6 +506,37 @@ async function handleSendMessage(rawMessage) {
             brasilData: result,
           },
         });
+      } else if (state.webSearchMode) {
+        if (!canUseWebSearch()) {
+          addMessage(activeChat.id, {
+            role: "assistant",
+            content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para usar a internet aqui no chat.",
+            meta: {
+              kind: "text",
+              provider: "local",
+              sourceType: "web-search",
+              webSearch: true,
+              failed: true,
+            },
+          });
+        } else {
+          const reply = await sendTextMessage({
+            messages: buildTextPayload(message),
+            settings: state.settings,
+            webSearchMode: true,
+          });
+
+          addMessage(activeChat.id, {
+            role: "assistant",
+            content: reply.content,
+            meta: {
+              kind: "text",
+              provider: getActiveTextProviderLabel(),
+              sourceType: "web-search",
+              webSearch: true,
+            },
+          });
+        }
       } else {
         addMessage(activeChat.id, {
           role: "assistant",
@@ -578,7 +631,7 @@ async function handleSendMessage(rawMessage) {
           meta: {
             kind: "text",
             provider: canGenerateInstagramCopy()
-              ? state.settings.textProvider === "deepseek" ? "DeepSeek" : "OpenRouter"
+              ? getActiveTextProviderLabel()
               : "local",
             brandId: instagramPayload.brand.id,
             instagramFormat: instagramPayload.format.id,
@@ -638,9 +691,26 @@ async function handleSendMessage(rawMessage) {
         });
       }
     } else {
+      if (state.webSearchMode && !canUseWebSearch()) {
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para continuar.",
+          meta: {
+            kind: "text",
+            provider: "local",
+            sourceType: "web-search",
+            webSearch: true,
+            failed: true,
+          },
+        });
+        resetAttachments();
+        return;
+      }
+
       const reply = await sendTextMessage({
         messages: textPayload,
         settings: state.settings,
+        webSearchMode: state.webSearchMode,
       });
 
       addMessage(activeChat.id, {
@@ -648,7 +718,13 @@ async function handleSendMessage(rawMessage) {
         content: reply.content,
         meta: {
           kind: "text",
-          provider: state.settings.textProvider === "deepseek" ? "DeepSeek" : "OpenRouter",
+          provider: getActiveTextProviderLabel(),
+          ...(state.webSearchMode
+            ? {
+                sourceType: "web-search",
+                webSearch: true,
+              }
+            : {}),
         },
       });
     }
@@ -763,11 +839,13 @@ function handleQuickModelChange(value) {
     textProvider: provider,
     ...(provider === "deepseek"
       ? { deepSeekModel: model }
-      : { textModel: model }),
+      : provider === "groq"
+        ? { groqModel: model }
+        : { textModel: model }),
   };
 
   saveSettings(state.settings);
-  showToast(`Modelo ativo: ${provider === "deepseek" ? "DeepSeek" : "OpenRouter"}`, "success");
+  showToast(`Modelo ativo: ${getTextProviderDisplayName(provider)}`, "success");
   persistAndRender();
 }
 
@@ -852,6 +930,11 @@ function handleTogglePubMedMode() {
   persistAndRender();
 }
 
+function handleToggleWebSearchMode() {
+  state.webSearchMode = !state.webSearchMode;
+  persistAndRender();
+}
+
 function handleChangePubMedResultLimit(value) {
   const parsed = Number(value);
   state.pubmedResultLimit = parsed > 0 ? parsed : 5;
@@ -868,6 +951,7 @@ function handleSaveSettings(formValues) {
     ...state.settings,
     openRouterKey: formValues.openRouterKey?.trim() || "",
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
+    groqKey: formValues.groqKey?.trim() || "",
     falKey: formValues.falKey?.trim() || "",
     openAIKey: formValues.openAIKey?.trim() || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
@@ -1240,6 +1324,7 @@ function initialize() {
     onToggleBoardView: handleToggleBoardView,
     onSearchChats: handleSearchChats,
     onTogglePubMedMode: handleTogglePubMedMode,
+    onToggleWebSearchMode: handleToggleWebSearchMode,
     onChangePubMedResultLimit: handleChangePubMedResultLimit,
     onClearAttachments: () => {
       resetAttachments();

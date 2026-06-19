@@ -44,6 +44,39 @@ const CHAT_CATEGORIES = [
   { id: "tecnico", label: "Técnico", color: "#64748B" },
 ];
 
+const AGENT_GUIDES = {
+  "agent-general": {
+    badge: "Workspace geral",
+    title: "Coordena tarefas, textos e decisoes do dia a dia",
+    highlights: ["Escrita e revisao", "Planejamento e estrategia", "Analise com contexto dos anexos"],
+    examples: ["Resuma este PDF em 5 pontos", "Monte um plano de acao para esta semana", "Revise esta mensagem para cliente"],
+  },
+  "agent-marketing": {
+    badge: "Marketing e Reels",
+    title: "Gera ideias, copy e estrutura para conteudo com foco em conversao",
+    highlights: ["Ganchos e CTA", "Roteiros curtos para reels", "Campanhas e ofertas locais"],
+    examples: ["Crie 5 ganchos para um reel", "Escreva uma oferta para Instagram", "Monte um funil simples para este servico"],
+  },
+  "agent-science": {
+    badge: "Pesquisa tecnica",
+    title: "Ajuda com leitura critica, evidencia e analise de artigos",
+    highlights: ["Resumo tecnico", "Modo PubMed", "Limites e nivel de evidencia"],
+    examples: ["Compare estes dois estudos", "Busque artigos sobre este tema", "Explique os achados em linguagem simples"],
+  },
+  "agent-brasil-consultor": {
+    badge: "Dados nacionais",
+    title: "Consulta CEP, CNPJ e agora tambem pode buscar contexto atual na web",
+    highlights: ["Resumo de CEP", "Resumo de CNPJ", "Busca web quando precisar de contexto atual"],
+    examples: ["Consulte este CEP", "Verifique este CNPJ", "Busque noticias recentes sobre este setor"],
+  },
+  "agent-instagram-producer": {
+    badge: "Estudio criativo",
+    title: "Cria artes, legenda e variacoes visuais com identidade por marca",
+    highlights: ["Stories e posts", "Templates por marca", "Legenda e hashtags"],
+    examples: ["Monte um story de promocao", "Crie um post quadrado premium", "Gere 3 variacoes da mesma campanha"],
+  },
+};
+
 function getCategoryById(id) {
   return CHAT_CATEGORIES.find((cat) => cat.id === id) || CHAT_CATEGORIES[0];
 }
@@ -63,12 +96,20 @@ function getProviderLabel(state) {
     return state.settings.deepSeekModel || "DeepSeek";
   }
 
+  if (state.settings.textProvider === "groq") {
+    return (state.settings.groqModel || "").split("/").pop() || "Groq";
+  }
+
   return (state.settings.textModel || "").split("/").pop() || "OpenRouter";
 }
 
 function getQuickModelValue(state) {
   if (state.settings.textProvider === "deepseek") {
     return `deepseek::${state.settings.deepSeekModel}`;
+  }
+
+  if (state.settings.textProvider === "groq") {
+    return `groq::${state.settings.groqModel}`;
   }
 
   return `openrouter::${state.settings.textModel}`;
@@ -102,53 +143,30 @@ function renderQuickModelOptions(state) {
       </option>
     `,
   );
+  const groq = (state.groqModelOptions || []).map(
+    (model) => `
+      <option value="groq::${escapeHtml(model.value)}" ${current === `groq::${model.value}` ? "selected" : ""}>
+        Groq · ${escapeHtml(model.label)}
+      </option>
+    `,
+  );
 
-  return [...openRouter, ...deepSeek].join("");
+  return [...openRouter, ...deepSeek, ...groq].join("");
 }
 
 function renderAgentCard(agent, state) {
   const isActive = state.activeAgentId === agent.id;
-  const canDelete = state.agents.length > 1;
-  if (state.sidebarCollapsed) {
-    return `
-      <button
-        type="button"
-        class="agent-icon-card ${isActive ? "active" : ""}"
-        data-action="select-agent"
-        data-agent-id="${agent.id}"
-        title="${escapeHtml(agent.name)}"
-      >
-        ${escapeHtml(agent.emoji)}
-      </button>
-    `;
-  }
-
   return `
-    <div class="agent-card ${isActive ? "active" : ""} agent-card-compact rounded-xl border border-white/10 p-2 text-white">
-      <div class="flex items-center gap-2">
-        <div class="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-[0.95rem] bg-white/10 text-[15px] shadow-inner shadow-white/10">
-          ${escapeHtml(agent.emoji)}
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center justify-between gap-1.5">
-            <button
-              type="button"
-              class="min-w-0 flex-1 text-left"
-              data-action="select-agent"
-              data-agent-id="${agent.id}"
-            >
-              <div class="truncate text-[12.5px] font-semibold leading-4">${escapeHtml(agent.name)}</div>
-              <p class="mt-0.5 truncate text-[9.5px] leading-4 text-white/70">${escapeHtml(agent.description)}</p>
-            </button>
-            ${
-              canDelete
-                ? `<div class="flex gap-0.5"><button type="button" class="danger-mini inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/15" data-action="edit-agent" data-agent-id="${agent.id}" title="Editar agente">✎</button><button type="button" class="danger-mini inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/10" data-action="delete-agent" data-agent-id="${agent.id}" title="Excluir agente">✕</button></div>`
-                : `<span class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></span>`
-            }
-          </div>
-        </div>
-      </div>
-    </div>
+    <button
+      type="button"
+      class="agent-icon-card ${isActive ? "active" : ""}"
+      data-action="select-agent"
+      data-agent-id="${agent.id}"
+      title="${escapeHtml(agent.name)}"
+      aria-label="${escapeHtml(agent.name)}"
+    >
+      <span class="agent-icon-glyph">${escapeHtml(agent.emoji)}</span>
+    </button>
   `;
 }
 
@@ -325,6 +343,66 @@ function renderPubMedControls(state) {
       </label>
       <div class="text-[11px] text-slate-500">Busca metadados e abstracts da PubMed antes de resumir.</div>
     </div>
+  `;
+}
+
+function renderWebSearchControls(state) {
+  if (state.imageMode || state.activeAgent?.id === "agent-instagram-producer") {
+    return "";
+  }
+
+  return `
+    <div class="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2.5">
+      <button
+        type="button"
+        class="control-btn inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm ${state.webSearchMode ? "border-amber-300 bg-white text-amber-900" : "border-slate-200 bg-white/75 text-slate-600"}"
+        data-action="toggle-web-search-mode"
+      >
+        <span>🌐</span>
+        <span>${state.webSearchMode ? "Busca Web ativa" : "Ativar Busca Web"}</span>
+      </button>
+      <div class="text-[11px] text-slate-500">Usa a internet em tempo real com Groq ou OpenRouter. DeepSeek direto continua no chat normal.</div>
+    </div>
+  `;
+}
+
+function renderActiveAgentSummary(state) {
+  const agent = state.activeAgent;
+  if (!agent) {
+    return "";
+  }
+
+  const guide = AGENT_GUIDES[agent.id] || {
+    badge: "Agente ativo",
+    title: agent.description || "Pronto para ajudar.",
+    highlights: ["Conversa organizada", "Respostas com contexto", "Fluxo guiado pelo chat"],
+    examples: ["Comece com uma pergunta clara", "Anexe um arquivo se precisar de contexto", "Use o board para organizar conversas"],
+  };
+
+  return `
+    <section class="agent-summary-panel mb-3 rounded-[1.45rem] border border-white/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(240,248,255,0.92))] px-4 py-3 shadow-soft">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div class="min-w-0 flex-1">
+          <div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-femic-navy">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sm">${escapeHtml(agent.emoji || "🤖")}</span>
+            <span>${escapeHtml(guide.badge)}</span>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
+            <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
+            ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web</span>` : ""}
+            ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
+          </div>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>
+        </div>
+        <div class="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
+          ${guide.highlights.map((item) => `<span class="inline-flex items-center rounded-full border border-white/80 bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">${escapeHtml(item)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        ${guide.examples.map((example) => `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50/85 px-3 py-1.5 text-[11px] text-slate-500">${escapeHtml(example)}</span>`).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -636,7 +714,8 @@ function renderMessages(state) {
   const chat = state.chats.find((item) => item.id === state.activeChatId);
   const messages = chat?.messages || [];
   const activeAgentName = state.activeAgent?.name || "agente ativo";
-  const activeAgentDescription = state.activeAgent?.description || "IA flexível para organizar ideias, documentos e respostas em um só workspace.";
+  const guide = AGENT_GUIDES[state.activeAgent?.id] || null;
+  const activeAgentDescription = guide?.title || state.activeAgent?.description || "IA flexível para organizar ideias, documentos e respostas em um só workspace.";
 
   if (messages.length === 0) {
     return `
@@ -674,19 +753,19 @@ function renderMessages(state) {
         </div>
         <div class="mt-6 grid gap-3 sm:grid-cols-3">
           <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
-            <div class="text-lg">✍️</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">Escreva ou dite</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Use o composer abaixo para enviar texto, voz ou prompts de imagem.</p>
+            <div class="text-lg">${escapeHtml((guide?.highlights || ["✍️"])[0] === "Escrita e revisao" ? "✍️" : (state.activeAgent?.emoji || "✦"))}</div>
+            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Comece por aqui"])[0])}</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Use o composer abaixo para enviar sua primeira mensagem."])[0])}</p>
           </div>
           <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
             <div class="text-lg">📎</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">Traga contexto</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Anexe PDF, planilhas, CSV, XML ou imagens para apoiar a resposta.</p>
+            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Traga contexto"])[1] || "Traga contexto")}</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Anexe um arquivo para aprofundar a resposta."])[1] || "Anexe um arquivo para aprofundar a resposta.")}</p>
           </div>
           <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
             <div class="text-lg">📋</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">Organize no board</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Use categorias e busca para manter conversas importantes à mão.</p>
+            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Organize no board"])[2] || "Organize no board")}</div>
+            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Use categorias e busca para manter conversas importantes à mão."])[2] || "Use categorias e busca para manter conversas importantes à mão.")}</p>
           </div>
         </div>
       </div>
@@ -866,7 +945,7 @@ function renderSettingsModal(state) {
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="settings">✕</button>
         </div>
         <form data-form="settings" class="space-y-3">
-          <div class="grid gap-3 lg:grid-cols-2">
+          <div class="grid gap-3 lg:grid-cols-3">
             <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
               <div class="mb-2">
                 <div class="text-sm font-semibold text-slate-900">OpenRouter</div>
@@ -886,6 +965,17 @@ function renderSettingsModal(state) {
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
                 <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." />
+              </label>
+            </section>
+
+            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+              <div class="mb-2">
+                <div class="text-sm font-semibold text-slate-900">Groq</div>
+                <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
+              </div>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." />
               </label>
             </section>
           </div>
@@ -1210,11 +1300,12 @@ export function renderApp(state) {
         <section class="sidebar-section sidebar-section-agents rounded-xl border border-white/10 bg-white/5 p-2.5">
           <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
             <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Agentes</div>
-          <button type="button" class="rounded-full border border-white/15 px-2.5 py-1 text-xs font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal">Novo</button>
+          <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal" title="Novo agente">＋</button>
           </div>
-          <div class="sidebar-scroll sidebar-agents-scroll scroll-soft flex flex-col gap-2 pr-1">
+          <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
             ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
           </div>
+          ${state.sidebarCollapsed || !activeAgent ? "" : `<div class="agent-inline-meta mt-2 rounded-xl border border-white/10 bg-white/8 px-2.5 py-2"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="truncate text-[11px] font-semibold text-white">${escapeHtml(activeAgent.name)}</div><div class="truncate text-[9px] text-white/55">${escapeHtml(activeAgent.description || "Agente ativo")}</div></div><div class="flex items-center gap-1">${state.agents.length > 1 ? `<button type="button" class="danger-mini inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/12" data-action="edit-agent" data-agent-id="${activeAgent.id}" title="Editar agente">✎</button>${activeAgent.isDefault ? "" : `<button type="button" class="danger-mini inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/12" data-action="delete-agent" data-agent-id="${activeAgent.id}" title="Excluir agente">✕</button>`}` : ""}</div></div></div>`}
         </section>
 
         <section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
@@ -1236,6 +1327,7 @@ export function renderApp(state) {
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
+          ${renderActiveAgentSummary(state)}
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
@@ -1245,7 +1337,7 @@ export function renderApp(state) {
 
           <footer class="composer-dock shrink-0 pt-2">
             <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
-              ${instagramMode ? renderInstagramCreativePanel(state) : `${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
+              ${instagramMode ? renderInstagramCreativePanel(state) : `${renderWebSearchControls(state)}${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
                   ${instagramMode
@@ -1254,7 +1346,7 @@ export function renderApp(state) {
                         id="composer-input"
                         name="message"
                         class="min-h-[48px] max-h-[120px] w-full resize-y rounded-xl border border-slate-200/90 bg-white/95 px-3.5 py-2.5 text-sm text-slate-800 shadow-inner outline-none ring-0 placeholder:text-slate-400 focus:border-sky-300 focus:ring-3 focus:ring-sky-100"
-                        placeholder="${escapeHtml(brasilMode ? "Digite um CEP ou CNPJ para consultar..." : scienceMode && state.pubmedMode ? "Digite sua pergunta científica para buscar na PubMed..." : `Digite sua mensagem para ${activeAgent?.name || "o FEMIC GPT"}...`)}"
+                        placeholder="${escapeHtml(brasilMode ? state.webSearchMode ? "Digite um CEP, CNPJ ou uma pergunta para buscar na internet..." : "Digite um CEP ou CNPJ para consultar..." : scienceMode && state.pubmedMode ? "Digite sua pergunta científica para buscar na PubMed..." : state.webSearchMode ? `Digite sua pergunta para buscar na internet com ${getProviderLabel(state)}...` : `Digite sua mensagem para ${activeAgent?.name || "o FEMIC GPT"}...`)}"
                       >${escapeHtml(state.draftMessage || "")}</textarea>`
                   }
                   <div class="flex flex-wrap items-center justify-between gap-1">
@@ -1349,6 +1441,7 @@ export function bindUIHandlers(handlers) {
     if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
     if (action === "toggle-board-view") handlers.onToggleBoardView();
     if (action === "toggle-pubmed-mode") handlers.onTogglePubMedMode();
+    if (action === "toggle-web-search-mode") handlers.onToggleWebSearchMode();
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
