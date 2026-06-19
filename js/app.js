@@ -35,6 +35,7 @@ import {
   hasTextProviderKey,
   IMAGE_SIZE_OPTIONS,
   OPENROUTER_MODELS,
+  runWebSearchQuery,
   sendTextMessage,
   transcribeAudio,
 } from "./api.js";
@@ -418,19 +419,34 @@ function getActiveTextProviderLabel() {
 }
 
 function canUseWebSearch() {
-  if (state.settings.textProvider === "groq") {
-    return Boolean(state.settings.groqKey);
-  }
-
-  if (state.settings.textProvider === "openrouter") {
-    return Boolean(state.settings.openRouterKey);
-  }
-
-  return false;
+  return state.settings.textProvider !== "deepseek";
 }
 
 function resetAttachments() {
   state.pendingAttachmentContext = null;
+}
+
+function addWebSearchMessage(chatId, searchResult) {
+  addMessage(chatId, {
+    role: "assistant",
+    content: searchResult.content,
+    meta: {
+      kind: "text",
+      provider: searchResult.provider,
+      sourceType: searchResult.sourceType || "web-search",
+      webSearch: true,
+      isFallback: Boolean(searchResult.isFallback),
+      citations: searchResult.citations || [],
+      ...(searchResult.failed ? { failed: true } : {}),
+    },
+  });
+}
+
+async function resolveWebSearchForMessage(message) {
+  return runWebSearchQuery({
+    messages: buildTextPayload(message),
+    settings: state.settings,
+  });
 }
 
 async function handleSendMessage(rawMessage) {
@@ -520,22 +536,7 @@ async function handleSendMessage(rawMessage) {
             },
           });
         } else {
-          const reply = await sendTextMessage({
-            messages: buildTextPayload(message),
-            settings: state.settings,
-            webSearchMode: true,
-          });
-
-          addMessage(activeChat.id, {
-            role: "assistant",
-            content: reply.content,
-            meta: {
-              kind: "text",
-              provider: getActiveTextProviderLabel(),
-              sourceType: "web-search",
-              webSearch: true,
-            },
-          });
+          addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
         }
       } else {
         addMessage(activeChat.id, {
@@ -707,26 +708,24 @@ async function handleSendMessage(rawMessage) {
         return;
       }
 
-      const reply = await sendTextMessage({
-        messages: textPayload,
-        settings: state.settings,
-        webSearchMode: state.webSearchMode,
-      });
+      if (state.webSearchMode) {
+        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
+      } else {
+        const reply = await sendTextMessage({
+          messages: textPayload,
+          settings: state.settings,
+          webSearchMode: false,
+        });
 
-      addMessage(activeChat.id, {
-        role: "assistant",
-        content: reply.content,
-        meta: {
-          kind: "text",
-          provider: getActiveTextProviderLabel(),
-          ...(state.webSearchMode
-            ? {
-                sourceType: "web-search",
-                webSearch: true,
-              }
-            : {}),
-        },
-      });
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: reply.content,
+          meta: {
+            kind: "text",
+            provider: getActiveTextProviderLabel(),
+          },
+        });
+      }
     }
 
     resetAttachments();

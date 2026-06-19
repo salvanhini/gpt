@@ -361,7 +361,7 @@ function renderWebSearchControls(state) {
         <span>🌐</span>
         <span>${state.webSearchMode ? "Busca Web ativa" : "Ativar Busca Web"}</span>
       </button>
-      <div class="text-[11px] text-slate-500">Usa a internet em tempo real com Groq ou OpenRouter. DeepSeek direto continua no chat normal.</div>
+      <div class="text-[11px] text-slate-500">Usa busca premium com Groq ou OpenRouter e pode cair para Busca leve DuckDuckGo se a rota principal falhar.</div>
     </div>
   `;
 }
@@ -390,7 +390,7 @@ function renderActiveAgentSummary(state) {
           <div class="mt-3 flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
             <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
-            ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web</span>` : ""}
+            ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web hibrida</span>` : ""}
             ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
           </div>
           <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>
@@ -660,7 +660,10 @@ function renderMessage(message, state) {
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
   const sourceBadge = message.meta?.sourceType && message.meta?.provider !== "fal.ai"
-    ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType)}</span>`
+    ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType === "web-search" ? "Busca Web" : message.meta.sourceType)}</span>`
+    : "";
+  const fallbackBadge = message.meta?.webSearch
+    ? `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${message.meta.isFallback ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}">${message.meta.isFallback ? "Busca leve" : "Busca premium"}</span>`
     : "";
 
   return `
@@ -673,6 +676,7 @@ function renderMessage(message, state) {
               <div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600">${label}</div>
               ${providerBadge}
               ${sourceBadge}
+              ${fallbackBadge}
             </div>
             <div class="text-xs text-slate-400">${formatTime(message.createdAt)}</div>
           </div>

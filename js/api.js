@@ -1,6 +1,7 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "openrouter";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
@@ -102,6 +103,16 @@ function buildOpenRouterSearchMessages(messages = []) {
   return [searchInstruction, ...messages];
 }
 
+function flattenDuckDuckGoTopics(topics = []) {
+  return topics.flatMap((topic) => {
+    if (Array.isArray(topic?.Topics)) {
+      return flattenDuckDuckGoTopics(topic.Topics);
+    }
+
+    return topic ? [topic] : [];
+  });
+}
+
 function extractErrorMessage(data, fallback) {
   if (!data) {
     return fallback;
@@ -161,6 +172,11 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
   }
 
   return Boolean(settings?.openRouterKey);
+}
+
+function getLatestUserQuery(messages = []) {
+  const latestUserMessage = [...messages].reverse().find((message) => message?.role === "user");
+  return String(latestUserMessage?.content || "").trim();
 }
 
 function normalizeAssistantContent(content) {
@@ -246,6 +262,128 @@ export function buildOpenRouterRequestBody({ messages, settings, webSearchMode =
   }
 
   return body;
+}
+
+export function buildDuckDuckGoSearchUrl(query) {
+  const url = new URL(DUCKDUCKGO_URL);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("no_html", "1");
+  url.searchParams.set("no_redirect", "1");
+  url.searchParams.set("skip_disambig", "1");
+  return url.toString();
+}
+
+export function normalizeDuckDuckGoResults(data = {}) {
+  const results = [];
+
+  if (data?.AbstractText && data?.AbstractURL) {
+    results.push({
+      title: data?.Heading || "Resposta direta",
+      url: data.AbstractURL,
+      snippet: data.AbstractText,
+    });
+  }
+
+  const topics = flattenDuckDuckGoTopics(data?.RelatedTopics || [])
+    .filter((topic) => topic?.Text && topic?.FirstURL)
+    .slice(0, 5)
+    .map((topic) => ({
+      title: topic.Text.split(" - ")[0] || "Resultado relacionado",
+      url: topic.FirstURL,
+      snippet: topic.Text,
+    }));
+
+  return [...results, ...topics];
+}
+
+function buildDuckDuckGoSummary(query, results = []) {
+  const lines = [
+    `Busca leve DuckDuckGo para: ${query}`,
+    "",
+    "Encontrei estas referencias iniciais:",
+  ];
+
+  results.forEach((result, index) => {
+    lines.push(`${index + 1}. ${result.title}`);
+    lines.push(`${result.snippet}`);
+    lines.push(result.url);
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
+}
+
+export async function searchDuckDuckGoFallback(query) {
+  if (!query.trim()) {
+    throw new Error("Nao foi possivel montar a busca leve sem uma pergunta valida.");
+  }
+
+  let response;
+  try {
+    response = await fetch(buildDuckDuckGoSearchUrl(query));
+  } catch {
+    throw new Error("Nao foi possivel conectar ao fallback DuckDuckGo.");
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao consultar o fallback DuckDuckGo."));
+  }
+
+  const results = normalizeDuckDuckGoResults(data);
+  if (!results.length) {
+    throw new Error("O fallback DuckDuckGo nao encontrou resultados suficientes para essa busca.");
+  }
+
+  return {
+    content: buildDuckDuckGoSummary(query, results),
+    provider: "DuckDuckGo",
+    sourceType: "web-search",
+    webSearch: true,
+    isFallback: true,
+    citations: results,
+    raw: data,
+  };
+}
+
+export async function runWebSearchQuery({ messages, settings }) {
+  const query = getLatestUserQuery(messages);
+  if (!query) {
+    throw new Error("Digite uma pergunta valida para usar a Busca Web.");
+  }
+
+  if (settings.textProvider === "deepseek") {
+    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
+  }
+
+  try {
+    const reply = await sendTextMessage({
+      messages,
+      settings,
+      webSearchMode: true,
+    });
+
+    return {
+      content: reply.content,
+      provider: getTextProviderDisplayName(settings.textProvider),
+      sourceType: "web-search",
+      webSearch: true,
+      isFallback: false,
+      citations: [],
+      raw: reply.raw,
+    };
+  } catch (error) {
+    if (!["groq", "openrouter"].includes(settings.textProvider)) {
+      throw error;
+    }
+
+    const fallback = await searchDuckDuckGoFallback(query);
+    return {
+      ...fallback,
+      error,
+    };
+  }
 }
 
 export async function sendTextMessage({ messages, settings, webSearchMode = false }) {
