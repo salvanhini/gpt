@@ -6,6 +6,47 @@ export const MARKETING_AGENT_ID = "agent-marketing";
 export const SCIENCE_AGENT_ID = "agent-science";
 export const BRASIL_AGENT_ID = "agent-brasil-consultor";
 
+const AGENT_PARAMETER_DEFAULTS = {
+  modelOverrideEnabled: false,
+  textProvider: "",
+  textModel: "",
+  deepSeekModel: "",
+  groqModel: "",
+  defaultImageMode: "inherit",
+  defaultWebSearchMode: "inherit",
+  defaultPubmedMode: "inherit",
+  responseStyle: "",
+};
+
+const MODE_DEFAULTS = new Set(["inherit", "on", "off"]);
+const TEXT_PROVIDERS = new Set(["", "openrouter", "deepseek", "groq"]);
+
+export function normalizeAgent(agent = {}) {
+  const normalized = {
+    ...AGENT_PARAMETER_DEFAULTS,
+    ...agent,
+    id: typeof agent.id === "string" ? agent.id : "",
+    name: typeof agent.name === "string" ? agent.name : "",
+    emoji: typeof agent.emoji === "string" && agent.emoji.trim() ? agent.emoji : "✨",
+    description: typeof agent.description === "string" ? agent.description : "",
+    systemPrompt: typeof agent.systemPrompt === "string" ? agent.systemPrompt : "",
+    modelOverrideEnabled: Boolean(agent.modelOverrideEnabled),
+    textProvider: TEXT_PROVIDERS.has(agent.textProvider) ? agent.textProvider : "",
+    defaultImageMode: MODE_DEFAULTS.has(agent.defaultImageMode) ? agent.defaultImageMode : "inherit",
+    defaultWebSearchMode: MODE_DEFAULTS.has(agent.defaultWebSearchMode) ? agent.defaultWebSearchMode : "inherit",
+    defaultPubmedMode: MODE_DEFAULTS.has(agent.defaultPubmedMode) ? agent.defaultPubmedMode : "inherit",
+    responseStyle: typeof agent.responseStyle === "string" ? agent.responseStyle : "",
+  };
+
+  return normalized;
+}
+
+function normalizeAgents(agents = []) {
+  return agents
+    .filter((agent) => agent && typeof agent.id === "string")
+    .map(normalizeAgent);
+}
+
 export function getDefaultAgents() {
   return [
     {
@@ -76,7 +117,7 @@ function safeParse(value, fallback) {
 export function loadAgents() {
   const stored = safeParse(localStorage.getItem(AGENTS_KEY), null);
   if (Array.isArray(stored) && stored.length > 0) {
-    return stored;
+    return normalizeAgents(stored);
   }
 
   const defaults = getDefaultAgents();
@@ -117,15 +158,24 @@ export function createAgentId(name, agents = [], randomId = () => crypto.randomU
 
 export function createAgent(data) {
   const agents = loadAgents();
-  const agent = {
+  const agent = normalizeAgent({
     id: createAgentId(data.name, agents),
     name: data.name.trim(),
     emoji: data.emoji?.trim() || "✨",
     description: data.description.trim(),
     systemPrompt: data.systemPrompt.trim(),
+    modelOverrideEnabled: Boolean(data.modelOverrideEnabled),
+    textProvider: data.textProvider || "",
+    textModel: data.textModel || "",
+    deepSeekModel: data.deepSeekModel || "",
+    groqModel: data.groqModel || "",
+    defaultImageMode: data.defaultImageMode || "inherit",
+    defaultWebSearchMode: data.defaultWebSearchMode || "inherit",
+    defaultPubmedMode: data.defaultPubmedMode || "inherit",
+    responseStyle: data.responseStyle || "",
     isDefault: false,
     createdAt: new Date().toISOString(),
-  };
+  });
 
   agents.unshift(agent);
   saveAgents(agents);
@@ -139,7 +189,7 @@ export function updateAgent(id, data) {
     throw new Error("Agente não encontrado.");
   }
 
-  agents[index] = {
+  agents[index] = normalizeAgent({
     ...agents[index],
     ...data,
     name: data.name?.trim() ?? agents[index].name,
@@ -147,7 +197,7 @@ export function updateAgent(id, data) {
     description: data.description?.trim() ?? agents[index].description,
     systemPrompt: data.systemPrompt?.trim() ?? agents[index].systemPrompt,
     updatedAt: new Date().toISOString(),
-  };
+  });
 
   saveAgents(agents);
   return agents[index];
@@ -167,4 +217,49 @@ export function deleteAgent(id) {
   const nextAgents = agents.filter((agent) => agent.id !== id);
   saveAgents(nextAgents);
   return nextAgents;
+}
+
+export function duplicateAgent(id, randomId) {
+  const agents = loadAgents();
+  const source = agents.find((agent) => agent.id === id);
+  if (!source) {
+    throw new Error("Agente não encontrado.");
+  }
+
+  const name = `${source.name} copia`;
+  const agent = normalizeAgent({
+    ...source,
+    id: createAgentId(name, agents, randomId),
+    name,
+    isDefault: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: undefined,
+  });
+
+  agents.unshift(agent);
+  saveAgents(agents);
+  return agent;
+}
+
+export function restoreDefaultAgents() {
+  const defaults = getDefaultAgents().map(normalizeAgent);
+  const customAgents = loadAgents().filter((agent) => !defaults.some((item) => item.id === agent.id));
+  const agents = [...defaults, ...customAgents];
+  saveAgents(agents);
+  return agents;
+}
+
+export function getEffectiveAgentSettings(settings = {}, agent = {}) {
+  const normalized = normalizeAgent(agent);
+  if (!normalized.modelOverrideEnabled) {
+    return { ...settings };
+  }
+
+  return {
+    ...settings,
+    textProvider: normalized.textProvider || settings.textProvider,
+    textModel: normalized.textModel || settings.textModel,
+    deepSeekModel: normalized.deepSeekModel || settings.deepSeekModel,
+    groqModel: normalized.groqModel || settings.groqModel,
+  };
 }

@@ -2,8 +2,11 @@ import {
   BRASIL_AGENT_ID,
   createAgent,
   deleteAgent,
+  duplicateAgent,
+  getEffectiveAgentSettings,
   getDefaultAgents,
   loadAgents,
+  restoreDefaultAgents,
   SCIENCE_AGENT_ID,
   saveAgents,
   updateAgent,
@@ -311,6 +314,10 @@ function getActiveAgent() {
   return state.agents.find((agent) => agent.id === state.activeAgentId) || null;
 }
 
+function getActiveSettings() {
+  return getEffectiveAgentSettings(state.settings, getActiveAgent());
+}
+
 function getSelectedBrand() {
   return state.brands.find((brand) => brand.id === state.selectedBrandId) || null;
 }
@@ -322,6 +329,26 @@ function getSelectedTemplate() {
 
 function getActiveChat() {
   return state.chats.find((chat) => chat.id === state.activeChatId) || null;
+}
+
+function applyAgentModeDefaults(agentId) {
+  const agent = state.agents.find((item) => item.id === agentId);
+  if (!agent) {
+    return;
+  }
+
+  if (!isInstagramAgent(agentId) && agentId !== BRASIL_AGENT_ID) {
+    if (agent.defaultImageMode === "on") state.imageMode = true;
+    if (agent.defaultImageMode === "off") state.imageMode = false;
+  }
+
+  if (agent.defaultWebSearchMode === "on") state.webSearchMode = true;
+  if (agent.defaultWebSearchMode === "off") state.webSearchMode = false;
+
+  if (agentId === SCIENCE_AGENT_ID) {
+    if (agent.defaultPubmedMode === "on") state.pubmedMode = true;
+    if (agent.defaultPubmedMode === "off") state.pubmedMode = false;
+  }
 }
 
 function refreshFromStorage() {
@@ -341,6 +368,7 @@ function render() {
   try {
     refreshFromStorage();
     state.activeAgent = getActiveAgent();
+    state.effectiveSettings = getActiveSettings();
     renderApp(state);
     window.scrollTo(0, 0);
   } catch (error) {
@@ -381,6 +409,7 @@ function buildTextPayload(userMessage) {
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
+    responseStyle: activeAgent?.responseStyle || "",
     history,
     attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
     userMessage,
@@ -401,6 +430,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
+    responseStyle: activeAgent?.responseStyle || "",
     history,
     attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
     referenceContext,
@@ -433,15 +463,15 @@ function buildInstagramPayload() {
 }
 
 function canGenerateInstagramCopy() {
-  return hasTextProviderKey(state.settings);
+  return hasTextProviderKey(getActiveSettings());
 }
 
 function getActiveTextProviderLabel() {
-  return getTextProviderDisplayName(state.settings.textProvider);
+  return getTextProviderDisplayName(getActiveSettings().textProvider);
 }
 
 function canUseWebSearch() {
-  return state.settings.textProvider !== "deepseek";
+  return getActiveSettings().textProvider !== "deepseek";
 }
 
 function resetAttachments() {
@@ -467,7 +497,7 @@ function addWebSearchMessage(chatId, searchResult) {
 async function resolveWebSearchForMessage(message) {
   return runWebSearchQuery({
     messages: buildTextPayload(message),
-    settings: state.settings,
+    settings: getActiveSettings(),
   });
 }
 
@@ -592,7 +622,7 @@ async function handleSendMessage(rawMessage) {
       } else {
         const reply = await sendTextMessage({
           messages: buildTextPayloadWithReference(message, buildPubMedContext(articles)),
-          settings: state.settings,
+          settings: getActiveSettings(),
         });
 
         const sources = articles
@@ -632,7 +662,7 @@ async function handleSendMessage(rawMessage) {
                   }),
                 },
               ],
-              settings: state.settings,
+              settings: getActiveSettings(),
             });
             copyContent = copyReply.content;
           } else {
@@ -671,7 +701,7 @@ async function handleSendMessage(rawMessage) {
               totalVariations: instagramPayload.variationCount,
             }),
             settings: {
-              ...state.settings,
+              ...getActiveSettings(),
               imageSize: instagramPayload.format.imageSize || state.settings.imageSize,
             },
           });
@@ -695,7 +725,7 @@ async function handleSendMessage(rawMessage) {
         const image = await generateImage({
           prompt: instagramPayload?.prompt || message,
           settings: {
-            ...state.settings,
+            ...getActiveSettings(),
             imageSize: instagramPayload?.format.imageSize || state.settings.imageSize,
           },
         });
@@ -735,7 +765,7 @@ async function handleSendMessage(rawMessage) {
       } else {
         const reply = await sendTextMessage({
           messages: textPayload,
-          settings: state.settings,
+          settings: getActiveSettings(),
           webSearchMode: false,
         });
 
@@ -795,6 +825,7 @@ function handleSelectAgent(agentId) {
   } else if (agentId === BRASIL_AGENT_ID) {
     state.imageMode = false;
   }
+  applyAgentModeDefaults(agentId);
   persistAndRender();
 }
 
@@ -814,6 +845,7 @@ function handleSelectChat(chatId) {
   } else if (chat.agentId === BRASIL_AGENT_ID) {
     state.imageMode = false;
   }
+  applyAgentModeDefaults(chat.agentId);
   persistAndRender();
 }
 
@@ -1093,6 +1125,15 @@ function handleSaveAgent(formValues) {
     emoji: formValues.emoji?.toString() || "✨",
     description: formValues.description?.toString() || "",
     systemPrompt: formValues.systemPrompt?.toString() || "",
+    modelOverrideEnabled: formValues.modelOverrideEnabled === "on",
+    textProvider: formValues.textProvider?.toString() || "",
+    textModel: formValues.textModel?.toString() || "",
+    deepSeekModel: formValues.deepSeekModel?.toString() || "",
+    groqModel: formValues.groqModel?.toString() || "",
+    defaultImageMode: formValues.defaultImageMode?.toString() || "inherit",
+    defaultWebSearchMode: formValues.defaultWebSearchMode?.toString() || "inherit",
+    defaultPubmedMode: formValues.defaultPubmedMode?.toString() || "inherit",
+    responseStyle: formValues.responseStyle?.toString() || "",
   };
 
   if (!payload.name.trim() || !payload.description.trim() || !payload.systemPrompt.trim()) {
@@ -1131,6 +1172,34 @@ function handleSaveAgent(formValues) {
   persistAndRender();
 }
 
+function handleDuplicateAgent(agentId) {
+  try {
+    const agent = duplicateAgent(agentId);
+    state.agents = loadAgents();
+    state.activeAgentId = agent.id;
+    state.modals.agentForm = true;
+    state.modalPayload = { agent };
+    showToast("Agente duplicado.", "success");
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Não foi possível duplicar o agente.", "error");
+  }
+}
+
+function handleRestoreDefaultAgents() {
+  if (!window.confirm("Restaurar os agentes padrão? Seus agentes customizados serão preservados.")) {
+    return;
+  }
+
+  state.agents = restoreDefaultAgents();
+  const activeStillExists = state.agents.some((agent) => agent.id === state.activeAgentId);
+  if (!activeStillExists) {
+    state.activeAgentId = state.agents[0]?.id || null;
+  }
+  showToast("Agentes padrão restaurados.", "success");
+  persistAndRender();
+}
+
 function handleDeleteAgent(agentId) {
   if (!window.confirm("Excluir este agente? As conversas ligadas a ele também serão removidas.")) {
     return;
@@ -1147,6 +1216,9 @@ function handleDeleteAgent(agentId) {
     state.agents = loadAgents();
     state.activeAgentId = state.agents[0]?.id || null;
     state.activeChatId = state.chats.find((chat) => chat.agentId === state.activeAgentId)?.id || state.chats[0]?.id || null;
+    if (state.modalPayload.agent?.id === agentId) {
+      state.modalPayload = {};
+    }
     syncActivePointers();
     showToast("Agente removido.", "success");
     persistAndRender();
@@ -1393,6 +1465,8 @@ function initialize() {
     onSaveSettings: handleSaveSettings,
     onSaveChatRename: handleSaveChatRename,
     onSaveAgent: handleSaveAgent,
+    onDuplicateAgent: handleDuplicateAgent,
+    onRestoreDefaultAgents: handleRestoreDefaultAgents,
     onSaveBrand: handleSaveBrand,
     onDeleteBrand: handleDeleteBrand,
     onQuickModelChange: handleQuickModelChange,

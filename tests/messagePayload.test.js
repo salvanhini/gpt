@@ -36,3 +36,18 @@ test("buildChatMessages injects attachment and reference context before final us
   assert.match(payload[2].content, /fontes consultadas/i);
   assert.equal(payload[3].content, "Resuma tudo.");
 });
+
+test("buildChatMessages appends response style to the agent prompt", () => {
+  const payload = buildChatMessages({
+    globalSystemPrompt: "",
+    agentSystemPrompt: "Você é um analista.",
+    responseStyle: "Responda com subtítulos curtos e bullets.",
+    history: [],
+    userMessage: "Analise este caso.",
+  });
+
+  assert.equal(payload[0].role, "system");
+  assert.match(payload[0].content, /Você é um analista/);
+  assert.match(payload[0].content, /Estilo de resposta/);
+  assert.match(payload[0].content, /subtítulos curtos/);
+});

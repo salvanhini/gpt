@@ -1,6 +1,7 @@
 export function buildChatMessages({
   globalSystemPrompt = "",
   agentSystemPrompt = "",
+  responseStyle = "",
   history = [],
   attachmentContext = "",
   referenceContext = "",
@@ -15,10 +16,15 @@ export function buildChatMessages({
     });
   }
 
-  if (agentSystemPrompt.trim()) {
+  const agentInstructions = [
+    agentSystemPrompt.trim(),
+    responseStyle.trim() ? `Estilo de resposta:\n${responseStyle.trim()}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  if (agentInstructions) {
     payload.push({
       role: "system",
-      content: agentSystemPrompt.trim(),
+      content: agentInstructions,
     });
   }
 

@@ -904,6 +904,15 @@ button {
   width: min(820px, calc(100vw - 2rem));
 }
 
+.agent-manager-panel {
+  width: min(1180px, calc(100vw - 2rem));
+}
+
+.agent-manager-form,
+.agent-manager-list-scroll {
+  scrollbar-gutter: stable;
+}
+
 .modal-input,
 .modal-textarea {
   width: 100%;

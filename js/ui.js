@@ -92,15 +92,16 @@ function getVisibleChats(state) {
 }
 
 function getProviderLabel(state) {
-  if (state.settings.textProvider === "deepseek") {
-    return state.settings.deepSeekModel || "DeepSeek";
+  const settings = state.effectiveSettings || state.settings || {};
+  if (settings.textProvider === "deepseek") {
+    return settings.deepSeekModel || "DeepSeek";
   }
 
-  if (state.settings.textProvider === "groq") {
-    return (state.settings.groqModel || "").split("/").pop() || "Groq";
+  if (settings.textProvider === "groq") {
+    return (settings.groqModel || "").split("/").pop() || "Groq";
   }
 
-  return (state.settings.textModel || "").split("/").pop() || "OpenRouter";
+  return (settings.textModel || "").split("/").pop() || "OpenRouter";
 }
 
 function getQuickModelValue(state) {
@@ -116,7 +117,8 @@ function getQuickModelValue(state) {
 }
 
 function getActiveModelDetails(state) {
-  const provider = state.settings?.textProvider || "openrouter";
+  const settings = state.effectiveSettings || state.settings || {};
+  const provider = settings.textProvider || "openrouter";
   const collection =
     provider === "deepseek"
       ? state.deepSeekModelOptions || []
@@ -125,10 +127,10 @@ function getActiveModelDetails(state) {
         : state.modelOptions || [];
   const selectedValue =
     provider === "deepseek"
-      ? state.settings?.deepSeekModel
+      ? settings.deepSeekModel
       : provider === "groq"
-        ? state.settings?.groqModel
-        : state.settings?.textModel;
+        ? settings.groqModel
+        : settings.textModel;
   const model = collection.find((item) => item.value === selectedValue) || collection[0] || null;
 
   return {
@@ -1379,41 +1381,152 @@ function renderAgentModal(state) {
   }
 
   const editing = state.modalPayload.agent || {};
+  const isEditing = Boolean(editing.id);
+  const modeOptions = [
+    ["inherit", "Usar padrão atual"],
+    ["on", "Ativar ao escolher"],
+    ["off", "Desativar ao escolher"],
+  ];
+  const renderModeOptions = (current) => modeOptions
+    .map(([value, label]) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`)
+    .join("");
+  const renderModelOptions = (models = [], current = "") => models
+    .map((model) => `<option value="${escapeHtml(model.value)}" ${current === model.value ? "selected" : ""}>${escapeHtml(model.label)}</option>`)
+    .join("");
+
   return `
     <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="agentForm">
-      <div class="modal-panel glass-panel rounded-[2rem] p-6 shadow-panel" data-modal-surface="agentForm">
-        <div class="mb-6 flex items-start justify-between gap-4">
+      <div class="modal-panel agent-manager-panel glass-panel rounded-[2rem] p-5 shadow-panel" data-modal-surface="agentForm">
+        <div class="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-2xl font-semibold text-slate-900">${editing.id ? "Editar agente" : "Criar novo agente"}</h3>
-            <p class="mt-2 text-sm text-slate-500">Defina o papel, a personalidade e a instrução principal deste agente customizado.</p>
+            <h3 class="text-2xl font-semibold text-slate-900">Gerenciador de agentes</h3>
+            <p class="mt-2 text-sm text-slate-500">Ajuste prompts, modelos e modos padrão sem alterar suas chaves globais.</p>
           </div>
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="agentForm">✕</button>
         </div>
-        <form data-form="agent" class="space-y-4">
-          ${editing.id ? `<input type="hidden" name="id" value="${escapeHtml(editing.id)}" />` : ""}
-          <div class="grid gap-4 sm:grid-cols-[1fr,120px]">
+
+        <div class="agent-manager-grid grid min-h-0 gap-4 lg:grid-cols-[280px,minmax(0,1fr)]">
+          <aside class="agent-manager-list rounded-2xl border border-slate-200/80 bg-white/70 p-3">
+            <div class="mb-3 flex items-center justify-between gap-2">
+              <div class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Agentes</div>
+              <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-femic-navy shadow-sm" data-action="open-agent-modal">Novo</button>
+            </div>
+            <div class="agent-manager-list-scroll scroll-soft flex max-h-[54vh] flex-col gap-2 overflow-auto pr-1">
+              ${(state.agents || []).map((agent) => `
+                <div class="rounded-xl border ${editing.id === agent.id ? "border-sky-200 bg-sky-50/80" : "border-slate-200 bg-white/85"} p-2 shadow-sm">
+                  <div class="flex items-start gap-2">
+                    <button type="button" class="min-w-0 flex-1 text-left" data-action="edit-agent" data-agent-id="${escapeHtml(agent.id)}">
+                      <div class="flex items-center gap-2">
+                        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm">${escapeHtml(agent.emoji || "✨")}</span>
+                        <div class="min-w-0">
+                          <div class="truncate text-sm font-semibold text-slate-900">${escapeHtml(agent.name)}</div>
+                          <div class="truncate text-[11px] text-slate-500">${agent.modelOverrideEnabled ? `Modelo proprio · ${escapeHtml(agent.textProvider || "global")}` : "Modelo global"}</div>
+                        </div>
+                      </div>
+                    </button>
+                    <div class="flex shrink-0 gap-1">
+                      <button type="button" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500" data-action="duplicate-agent" data-agent-id="${escapeHtml(agent.id)}" title="Duplicar agente">Duplicar</button>
+                      <button type="button" class="rounded-lg border border-rose-100 bg-white px-2 py-1 text-[10px] font-semibold text-rose-500" data-action="delete-agent" data-agent-id="${escapeHtml(agent.id)}" title="Excluir agente">Excluir</button>
+                    </div>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+            <button type="button" class="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm" data-action="restore-default-agents">Restaurar padrões</button>
+          </aside>
+
+          <form data-form="agent" class="agent-manager-form scroll-soft max-h-[68vh] space-y-4 overflow-auto rounded-2xl border border-white/80 bg-white/75 p-4">
+            ${isEditing ? `<input type="hidden" name="id" value="${escapeHtml(editing.id)}" />` : ""}
+            <div class="grid gap-4 sm:grid-cols-[1fr,120px]">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Nome</span>
+                <input class="modal-input" name="name" type="text" maxlength="60" required value="${escapeHtml(editing.name || "")}" placeholder="Ex.: Mentor em Conteúdo" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Emoji</span>
+                <input class="modal-input text-center text-2xl" name="emoji" type="text" maxlength="4" value="${escapeHtml(editing.emoji || "✨")}" />
+              </label>
+            </div>
             <label class="block">
-              <span class="mb-2 block text-sm font-medium text-slate-700">Nome</span>
-              <input class="modal-input" name="name" type="text" maxlength="60" required value="${escapeHtml(editing.name || "")}" placeholder="Ex.: Mentor em Conteúdo" />
+              <span class="mb-2 block text-sm font-medium text-slate-700">Descrição curta</span>
+              <input class="modal-input" name="description" type="text" maxlength="180" required value="${escapeHtml(editing.description || "")}" placeholder="Resumo rápido do foco desse agente" />
             </label>
             <label class="block">
-              <span class="mb-2 block text-sm font-medium text-slate-700">Emoji</span>
-              <input class="modal-input text-center text-2xl" name="emoji" type="text" maxlength="4" value="${escapeHtml(editing.emoji || "✨")}" />
+              <span class="mb-2 block text-sm font-medium text-slate-700">System Prompt</span>
+              <textarea class="modal-textarea min-h-[180px]" name="systemPrompt" required placeholder="Diga como o agente deve pensar, responder e se comportar.">${escapeHtml(editing.systemPrompt || "")}</textarea>
             </label>
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-700">Estilo de resposta</span>
+              <textarea class="modal-textarea min-h-[88px]" name="responseStyle" placeholder="Ex.: responda com subtítulos curtos, bullets e uma conclusão objetiva.">${escapeHtml(editing.responseStyle || "")}</textarea>
+            </label>
+
+            <section class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <label class="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" name="modelOverrideEnabled" ${editing.modelOverrideEnabled ? "checked" : ""} />
+                Usar modelo próprio para este agente
+              </label>
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Provedor</span>
+                  <select class="modal-input" name="textProvider">
+                    <option value="" ${!editing.textProvider ? "selected" : ""}>Usar provedor global</option>
+                    <option value="openrouter" ${editing.textProvider === "openrouter" ? "selected" : ""}>OpenRouter</option>
+                    <option value="deepseek" ${editing.textProvider === "deepseek" ? "selected" : ""}>DeepSeek</option>
+                    <option value="groq" ${editing.textProvider === "groq" ? "selected" : ""}>Groq</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">OpenRouter</span>
+                  <select class="modal-input" name="textModel">
+                    <option value="">Modelo global</option>
+                    ${renderModelOptions(state.modelOptions, editing.textModel)}
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">DeepSeek</span>
+                  <select class="modal-input" name="deepSeekModel">
+                    <option value="">Modelo global</option>
+                    ${renderModelOptions(state.deepSeekModelOptions, editing.deepSeekModel)}
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Groq</span>
+                  <select class="modal-input" name="groqModel">
+                    <option value="">Modelo global</option>
+                    ${renderModelOptions(state.groqModelOptions, editing.groqModel)}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-3">
+              <label class="block">
+                <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Imagem</span>
+                <select class="modal-input" name="defaultImageMode">${renderModeOptions(editing.defaultImageMode || "inherit")}</select>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Busca web</span>
+                <select class="modal-input" name="defaultWebSearchMode">${renderModeOptions(editing.defaultWebSearchMode || "inherit")}</select>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">PubMed</span>
+                <select class="modal-input" name="defaultPubmedMode">${renderModeOptions(editing.defaultPubmedMode || "inherit")}</select>
+              </label>
+            </section>
+
+            <div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-sm text-slate-600">
+              <div class="text-xs font-bold uppercase tracking-[0.16em] text-femic-navy">Preview</div>
+              <p class="mt-2"><strong class="text-slate-900">${escapeHtml(editing.name || "Novo agente")}</strong> ${escapeHtml(editing.description || "ainda sem descrição.")}</p>
+              <p class="mt-1">Modelo: ${editing.modelOverrideEnabled ? `próprio (${escapeHtml(editing.textProvider || "global")})` : "global do sistema"}.</p>
+            </div>
+
+            <div class="flex flex-wrap justify-end gap-3 pt-2">
+              <button type="button" class="rounded-full border border-slate-200 px-5 py-2.5 font-medium text-slate-600" data-action="close-modal" data-modal="agentForm">Cancelar</button>
+              <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">${isEditing ? "Salvar agente" : "Criar agente"}</button>
+            </div>
+          </form>
           </div>
-          <label class="block">
-            <span class="mb-2 block text-sm font-medium text-slate-700">Descrição curta</span>
-            <input class="modal-input" name="description" type="text" maxlength="180" required value="${escapeHtml(editing.description || "")}" placeholder="Resumo rápido do foco desse agente" />
-          </label>
-          <label class="block">
-            <span class="mb-2 block text-sm font-medium text-slate-700">System Prompt</span>
-            <textarea class="modal-textarea min-h-[180px]" name="systemPrompt" required placeholder="Diga como o agente deve pensar, responder e se comportar.">${escapeHtml(editing.systemPrompt || "")}</textarea>
-          </label>
-          <div class="flex justify-end gap-3 pt-3">
-            <button type="button" class="rounded-full border border-slate-200 px-5 py-2.5 font-medium text-slate-600" data-action="close-modal" data-modal="agentForm">Cancelar</button>
-            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">${editing.id ? "Salvar agente" : "Criar agente"}</button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   `;
@@ -1619,6 +1732,8 @@ export function bindUIHandlers(handlers) {
     if (action === "select-agent") handlers.onSelectAgent(target.dataset.agentId);
     if (action === "delete-agent") handlers.onDeleteAgent(target.dataset.agentId);
     if (action === "edit-agent") handlers.onEditAgent(target.dataset.agentId);
+    if (action === "duplicate-agent") handlers.onDuplicateAgent(target.dataset.agentId);
+    if (action === "restore-default-agents") handlers.onRestoreDefaultAgents();
     if (action === "select-chat") handlers.onSelectChat(target.dataset.chatId);
     if (action === "delete-chat") handlers.onDeleteChat(target.dataset.chatId);
     if (action === "create-chat") handlers.onCreateChat();
