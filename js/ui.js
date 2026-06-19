@@ -115,6 +115,31 @@ function getQuickModelValue(state) {
   return `openrouter::${state.settings.textModel}`;
 }
 
+function getActiveModelDetails(state) {
+  const provider = state.settings?.textProvider || "openrouter";
+  const collection =
+    provider === "deepseek"
+      ? state.deepSeekModelOptions || []
+      : provider === "groq"
+        ? state.groqModelOptions || []
+        : state.modelOptions || [];
+  const selectedValue =
+    provider === "deepseek"
+      ? state.settings?.deepSeekModel
+      : provider === "groq"
+        ? state.settings?.groqModel
+        : state.settings?.textModel;
+  const model = collection.find((item) => item.value === selectedValue) || collection[0] || null;
+
+  return {
+    providerLabel:
+      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : "OpenRouter",
+    label: model?.label || "Modelo padrão",
+    helperText: model?.helperText || model?.description || "Modelo pronto para uso geral.",
+    badges: Array.isArray(model?.badges) ? model.badges : [],
+  };
+}
+
 function isScienceAgent(state) {
   return state.activeAgent?.id === "agent-science";
 }
@@ -152,6 +177,18 @@ function renderQuickModelOptions(state) {
   );
 
   return [...openRouter, ...deepSeek, ...groq].join("");
+}
+
+function renderModelGuidance(state) {
+  const details = getActiveModelDetails(state);
+
+  return `
+    <div class="model-guidance mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+      <span class="font-semibold text-slate-700">${escapeHtml(details.providerLabel)} · ${escapeHtml(details.label)}</span>
+      ${details.badges.map((badge) => `<span class="model-guidance-badge">${escapeHtml(badge)}</span>`).join("")}
+      <span class="model-guidance-text">${escapeHtml(details.helperText)}</span>
+    </div>
+  `;
 }
 
 function renderAgentCard(agent, state) {
@@ -266,7 +303,7 @@ function renderChatCard(chat, state) {
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="chat-rename-btn inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-md text-[7px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                class="chat-rename-btn inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[8px] text-slate-400 opacity-100 hover:bg-slate-100 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
                 title="Renomear conversa"
@@ -287,6 +324,37 @@ function renderChatCard(chat, state) {
       </div>
       ${renderCategoryPicker(chat, state)}
     </div>
+  `;
+}
+
+function renderActiveChatHeader(state) {
+  const chat = state.chats.find((item) => item.id === state.activeChatId);
+  if (!chat) {
+    return "";
+  }
+
+  const category = getCategoryById(chat.category);
+  return `
+    <section class="active-chat-header mb-3 flex items-center justify-between gap-3 rounded-[1.2rem] border border-white/70 bg-white/88 px-4 py-3 shadow-sm">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h3 class="truncate text-base font-semibold tracking-tight text-slate-900">${escapeHtml(chat.title)}</h3>
+          <button
+            type="button"
+            class="active-chat-rename inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-500 shadow-sm hover:border-sky-200 hover:text-femic-cyan"
+            data-action="rename-chat"
+            data-chat-id="${chat.id}"
+            title="Renomear conversa"
+          >✎</button>
+        </div>
+        <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <span>${chat.titleMode === "manual" ? "Nome definido por você" : "Nome automático"}</span>
+          <span>•</span>
+          <span>${formatRelativeDay(chat.updatedAt)} às ${formatTime(chat.updatedAt)}</span>
+        </div>
+      </div>
+      ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
+    </section>
   `;
 }
 
@@ -1096,6 +1164,40 @@ function renderSettingsModal(state) {
   `;
 }
 
+function renderRenameChatModal(state) {
+  if (!state.modals.renameChat) {
+    return "";
+  }
+
+  const chatId = state.modalPayload.chatId || "";
+  const title = state.modalPayload.title || "";
+
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="renameChat">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel" data-modal-surface="renameChat">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Renomear conversa</h3>
+            <p class="mt-1 text-sm text-slate-500">Esse nome passa a valer no lugar do título automático.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="renameChat">✕</button>
+        </div>
+        <form data-form="rename-chat" class="space-y-4">
+          <input type="hidden" name="chatId" value="${escapeHtml(chatId)}" />
+          <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Nome da conversa</span>
+            <input class="modal-input" name="title" type="text" maxlength="80" value="${escapeHtml(title)}" placeholder="Ex.: Planejamento semanal" autofocus />
+          </label>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" class="rounded-full border border-slate-200 px-5 py-2.5 font-medium text-slate-600" data-action="close-modal" data-modal="renameChat">Cancelar</button>
+            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">Salvar nome</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
 function renderBrandModal(state) {
   if (!state.modals.brandForm) {
     return "";
@@ -1292,18 +1394,18 @@ export function renderApp(state) {
         >
           ${state.sidebarCollapsed ? "›" : "‹"}
         </button>
-        <div class="sidebar-brand-panel mb-3 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2.5" style="background:rgba(255,255,255,0.08);">
-          <div class="flex items-center gap-3">
-            <div class="sidebar-brand-mark flex h-9 w-9 items-center justify-center rounded-xl text-lg shadow-inner shadow-white/10" style="background:rgba(255,255,255,0.12);">✦</div>
+        <div class="sidebar-brand-panel sidebar-brand-panel-compact mb-2 flex shrink-0 items-center justify-between gap-2 rounded-xl border border-white/10 px-2.5 py-2" style="background:rgba(255,255,255,0.08);">
+          <div class="flex min-w-0 items-center gap-2.5">
+            <div class="sidebar-brand-mark flex h-8 w-8 items-center justify-center rounded-lg text-base shadow-inner shadow-white/10" style="background:rgba(255,255,255,0.12);">✦</div>
             <div class="sidebar-expanded-only">
-              <div class="text-lg font-semibold tracking-tight">FEMIC GPT</div>
-              <div class="text-[11px] uppercase tracking-[0.18em] text-white/55">Workspace de IA</div>
+              <div class="text-[15px] font-semibold tracking-tight leading-none">FEMIC GPT</div>
+              <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/50">IA organizada</div>
             </div>
           </div>
-          <button type="button" class="sidebar-expanded-only rounded-full border border-white/15 p-2 text-white lg:hidden" style="background:rgba(255,255,255,0.08); opacity:0.85;" data-action="toggle-sidebar">✕</button>
+          <button type="button" class="sidebar-expanded-only inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm text-white lg:hidden" style="background:rgba(255,255,255,0.08); opacity:0.85;" data-action="toggle-sidebar">✕</button>
           <button
             type="button"
-            class="sidebar-collapse-btn sidebar-expanded-only rounded-full border border-white/15 p-2 text-white"
+            class="sidebar-collapse-btn sidebar-expanded-only rounded-full border border-white/15 text-white"
             style="background:rgba(255,255,255,0.08); opacity:0.9;"
             data-action="toggle-sidebar-collapse"
             title="${state.sidebarCollapsed ? "Expandir barra lateral" : "Minimizar barra lateral"}"
@@ -1355,6 +1457,7 @@ export function renderApp(state) {
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${renderActiveAgentSummary(state)}
+          ${renderActiveChatHeader(state)}
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
@@ -1405,6 +1508,7 @@ export function renderApp(state) {
                       </button>
                     </div>
                   </div>
+                  ${instagramMode ? "" : renderModelGuidance(state)}
                 </div>
               </form>
             </div>
@@ -1413,11 +1517,12 @@ export function renderApp(state) {
       </main>
     </div>
     ${renderSettingsModal(state)}
+    ${renderRenameChatModal(state)}
     ${renderBrandModal(state)}
     ${renderAgentModal(state)}
   `;
 
-  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm);
+  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat);
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
@@ -1498,6 +1603,9 @@ export function bindUIHandlers(handlers) {
     }
     if (formType === "settings") {
       handlers.onSaveSettings(Object.fromEntries(data.entries()));
+    }
+    if (formType === "rename-chat") {
+      handlers.onSaveChatRename(Object.fromEntries(data.entries()));
     }
     if (formType === "agent") {
       handlers.onSaveAgent(Object.fromEntries(data.entries()));

@@ -7,6 +7,7 @@ import {
   buildOpenRouterRequestBody,
   buildGroqRequestBody,
   getDefaultSettings,
+  getModelSelectionDetails,
   runWebSearchQuery,
   searchDuckDuckGoFallback,
   sendTextMessage,
@@ -65,6 +66,19 @@ test("buildOpenRouterRequestBody enables web search server tool", () => {
   assert.equal(body.tools[0].type, "openrouter:web_search");
   assert.equal(body.tools[0].parameters.max_results, 5);
   assert.equal(body.messages[0].role, "system");
+});
+
+test("getModelSelectionDetails returns guidance badges for the active provider/model", () => {
+  const details = getModelSelectionDetails({
+    textProvider: "openrouter",
+    textModel: "qwen/qwen3.7-plus",
+  });
+
+  assert.equal(details.providerLabel, "OpenRouter");
+  assert.equal(details.label, "Qwen 3.7 Plus");
+  assert.match(details.helperText, /produtividade/i);
+  assert.ok(details.badges.includes("Rapido"));
+  assert.ok(details.badges.includes("Equilibrado"));
 });
 
 test("buildDuckDuckGoSearchUrl encodes the query and default params", () => {

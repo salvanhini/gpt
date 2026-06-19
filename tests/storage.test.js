@@ -6,6 +6,7 @@ import {
   BACKUP_SCHEMA_VERSION,
   buildBackupPayload,
   normalizeSettings,
+  normalizeSettingsWithFallback,
   parseBackupPayload,
   reconcileAppData,
 } from "../js/storage.js";
@@ -188,6 +189,38 @@ test("normalizeSettings accepts groq provider and repairs invalid groq model", (
 
   assert.equal(normalized.textProvider, "groq");
   assert.equal(normalized.groqModel, "openai/gpt-oss-20b");
+});
+
+test("normalizeSettingsWithFallback reports repairs for invalid saved models", () => {
+  const defaults = {
+    textProvider: "openrouter",
+    textModel: "qwen/qwen3.7-plus",
+    deepSeekModel: "deepseek-v4-flash",
+    groqModel: "openai/gpt-oss-20b",
+  };
+
+  const normalized = normalizeSettingsWithFallback(
+    {
+      textProvider: "deepseek",
+      textModel: "expired-openrouter-model",
+      deepSeekModel: "expired-deepseek-model",
+      groqModel: "expired-groq-model",
+    },
+    defaults,
+    [{ value: "qwen/qwen3.7-plus" }],
+    [{ value: "deepseek-v4-flash" }],
+    [{ value: "openai/gpt-oss-20b" }],
+  );
+
+  assert.equal(normalized.settings.textProvider, "deepseek");
+  assert.equal(normalized.settings.textModel, "qwen/qwen3.7-plus");
+  assert.equal(normalized.settings.deepSeekModel, "deepseek-v4-flash");
+  assert.equal(normalized.settings.groqModel, "openai/gpt-oss-20b");
+  assert.equal(normalized.fallbacks.length, 3);
+  assert.deepEqual(
+    normalized.fallbacks.map((item) => item.provider),
+    ["openrouter", "deepseek", "groq"],
+  );
 });
 
 test("reconcileAppData preserves web search mode in view state", () => {

@@ -16,11 +16,15 @@ export const OPENROUTER_MODELS = [
     value: "qwen/qwen3.7-plus",
     label: "Qwen 3.7 Plus",
     description: "Modelo Qwen recente via OpenRouter para uso geral e produtividade.",
+    badges: ["Rapido", "Equilibrado", "Texto", "Web"],
+    helperText: "Boa escolha para produtividade, conversa geral e pesquisas com resposta bem equilibrada.",
   },
   {
     value: "deepseek/deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
     description: "DeepSeek recente via OpenRouter, com foco em qualidade de resposta.",
+    badges: ["Qualidade", "Analise", "Texto", "Web"],
+    helperText: "Melhor quando voce quer respostas mais densas, analise e acabamento acima de velocidade.",
   },
 ];
 
@@ -39,21 +43,29 @@ export const DEEPSEEK_MODELS = [
     value: "deepseek-v4-flash",
     label: "DeepSeek V4 Flash",
     description: "Modelo direto da DeepSeek para respostas rápidas.",
+    badges: ["Rapido", "Economico", "Texto"],
+    helperText: "Ideal para conversas frequentes e respostas rapidas com custo mais leve.",
   },
   {
     value: "deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
     description: "Modelo direto da DeepSeek com mais capacidade.",
+    badges: ["Qualidade", "Analise", "Texto"],
+    helperText: "Use quando quiser mais profundidade e consistencia em tarefas mais exigentes.",
   },
   {
     value: "deepseek-chat",
     label: "DeepSeek Chat",
     description: "Modelo legado compatível, mantido por conveniência.",
+    badges: ["Legado", "Texto"],
+    helperText: "Opcao mantida por compatibilidade para quem ja usa esse fluxo.",
   },
   {
     value: "deepseek-reasoner",
     label: "DeepSeek Reasoner",
     description: "Modelo legado de raciocínio, quando disponível na conta.",
+    badges: ["Raciocinio", "Legado", "Texto"],
+    helperText: "Serve para cadeias de raciocinio quando esse modelo ainda estiver habilitado na conta.",
   },
 ];
 
@@ -62,18 +74,36 @@ export const GROQ_MODELS = [
     value: "openai/gpt-oss-20b",
     label: "GPT OSS 20B",
     description: "Modelo leve e rapido da Groq, compativel com browser search.",
+    badges: ["Rapido", "Web", "Economico", "Texto"],
+    helperText: "Melhor para velocidade e busca web com resposta curta ou media.",
   },
   {
     value: "openai/gpt-oss-120b",
     label: "GPT OSS 120B",
     description: "Modelo Groq mais forte para raciocinio e web search com mais profundidade.",
+    badges: ["Qualidade", "Web", "Raciocinio", "Texto"],
+    helperText: "Escolha quando quiser busca web com mais contexto e respostas mais robustas.",
   },
   {
     value: "llama-3.1-8b-instant",
     label: "Llama 3.1 8B Instant",
     description: "Opcao muito rapida e economica para chat geral na Groq.",
+    badges: ["Rapido", "Economico", "Texto"],
+    helperText: "Bom para respostas instantaneas e tarefas simples do dia a dia.",
   },
 ];
+
+function findModelByProvider(provider, settings = {}) {
+  if (provider === "deepseek") {
+    return DEEPSEEK_MODELS.find((model) => model.value === settings.deepSeekModel) || null;
+  }
+
+  if (provider === "groq") {
+    return GROQ_MODELS.find((model) => model.value === settings.groqModel) || null;
+  }
+
+  return OPENROUTER_MODELS.find((model) => model.value === settings.textModel) || null;
+}
 
 const GROQ_BROWSER_SEARCH_MODELS = new Set([
   "openai/gpt-oss-20b",
@@ -160,6 +190,21 @@ export function getTextProviderDisplayName(provider) {
   }
 
   return "OpenRouter";
+}
+
+export function getModelSelectionDetails(settings = {}) {
+  const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
+  const model = findModelByProvider(provider, settings);
+
+  return {
+    provider,
+    providerLabel: getTextProviderDisplayName(provider),
+    value: model?.value || "",
+    label: model?.label || "Modelo padrao",
+    description: model?.description || "Modelo configurado para uso geral.",
+    helperText: model?.helperText || "Modelo pronto para conversa geral.",
+    badges: Array.isArray(model?.badges) ? model.badges : [],
+  };
 }
 
 export function hasTextProviderKey(settings, provider = settings?.textProvider) {

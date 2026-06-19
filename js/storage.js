@@ -26,20 +26,49 @@ export function writeStorageJson(storage, key, value) {
 }
 
 export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModels, groqModels = []) {
+  return normalizeSettingsWithFallback(
+    raw,
+    defaults,
+    openRouterModels,
+    deepSeekModels,
+    groqModels,
+  ).settings;
+}
+
+export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, deepSeekModels, groqModels = []) {
   const settings = {
     ...defaults,
     ...(raw && typeof raw === "object" ? raw : {}),
   };
+  const fallbacks = [];
 
   if (!openRouterModels.some((model) => model.value === settings.textModel)) {
+    fallbacks.push({
+      provider: "openrouter",
+      settingKey: "textModel",
+      previousValue: settings.textModel,
+      nextValue: defaults.textModel,
+    });
     settings.textModel = defaults.textModel;
   }
 
   if (!deepSeekModels.some((model) => model.value === settings.deepSeekModel)) {
+    fallbacks.push({
+      provider: "deepseek",
+      settingKey: "deepSeekModel",
+      previousValue: settings.deepSeekModel,
+      nextValue: defaults.deepSeekModel,
+    });
     settings.deepSeekModel = defaults.deepSeekModel;
   }
 
   if (!groqModels.some((model) => model.value === settings.groqModel)) {
+    fallbacks.push({
+      provider: "groq",
+      settingKey: "groqModel",
+      previousValue: settings.groqModel,
+      nextValue: defaults.groqModel,
+    });
     settings.groqModel = defaults.groqModel;
   }
 
@@ -47,7 +76,10 @@ export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModel
     settings.textProvider = defaults.textProvider;
   }
 
-  return settings;
+  return {
+    settings,
+    fallbacks,
+  };
 }
 
 export function normalizeAgents(rawAgents) {
@@ -63,17 +95,22 @@ export function normalizeChats(rawChats, validAgentIds) {
     return [];
   }
 
-  return rawChats.filter((chat) => {
-    if (!chat || typeof chat.id !== "string" || typeof chat.agentId !== "string") {
-      return false;
-    }
+  return rawChats
+    .filter((chat) => {
+      if (!chat || typeof chat.id !== "string" || typeof chat.agentId !== "string") {
+        return false;
+      }
 
-    if (!validAgentIds.has(chat.agentId)) {
-      return false;
-    }
+      if (!validAgentIds.has(chat.agentId)) {
+        return false;
+      }
 
-    return Array.isArray(chat.messages);
-  });
+      return Array.isArray(chat.messages);
+    })
+    .map((chat) => ({
+      ...chat,
+      titleMode: chat.titleMode === "manual" ? "manual" : "auto",
+    }));
 }
 
 export function reconcileAppData({

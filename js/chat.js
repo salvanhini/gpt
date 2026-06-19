@@ -35,6 +35,7 @@ export function createChat(agentId) {
     id: crypto.randomUUID(),
     agentId,
     title: "Nova conversa",
+    titleMode: "auto",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     category: "",
@@ -57,8 +58,9 @@ export function addMessage(chatId, message) {
   });
   chat.updatedAt = new Date().toISOString();
 
-  if (chat.title === "Nova conversa" && message.role === "user") {
+  if (chat.titleMode !== "manual" && chat.title === "Nova conversa" && message.role === "user") {
     chat.title = createChatTitle(message.content);
+    chat.titleMode = "auto";
   }
 
   saveChats(chats);
@@ -78,7 +80,7 @@ export function updateChat(chatId, partial) {
 }
 
 export function updateChatTitle(chatId, title) {
-  return updateChat(chatId, { title });
+  return updateChat(chatId, { title, titleMode: "manual" });
 }
 
 export function updateChatCategory(chatId, category) {

@@ -77,13 +77,16 @@ import {
   reconcileAppData,
   STORAGE_KEYS,
   writeStorageJson,
-  normalizeSettings,
+  normalizeSettingsWithFallback,
 } from "./storage.js";
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 
+let bootSettingsFallbacks = [];
+
 const state = {
   settings: loadSettings(),
+  settingsFallbacks: bootSettingsFallbacks,
   agents: loadAgents(),
   brands: loadBrands(),
   chats: loadChats(),
@@ -122,6 +125,7 @@ const state = {
     settings: false,
     agentForm: false,
     brandForm: false,
+    renameChat: false,
   },
   modalPayload: {},
   draftMessage: "",
@@ -142,13 +146,21 @@ const state = {
 };
 
 function loadSettings() {
-  return normalizeSettings(
+  const normalized = normalizeSettingsWithFallback(
     readStorageJson(localStorage, STORAGE_KEYS.settings, {}),
     getDefaultSettings(),
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
   );
+
+  bootSettingsFallbacks = normalized.fallbacks;
+
+  if (normalized.fallbacks.length) {
+    writeStorageJson(localStorage, STORAGE_KEYS.settings, normalized.settings);
+  }
+
+  return normalized.settings;
 }
 
 function saveSettings(settings) {
@@ -238,6 +250,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   state.modals.settings = false;
   state.modals.agentForm = false;
   state.modals.brandForm = false;
+  state.modals.renameChat = false;
   state.mobileSidebarOpen = false;
   state.recordedAudioChunks = [];
   if (!keepDraft) {
@@ -246,13 +259,20 @@ function resetTransientState({ keepDraft = false } = {}) {
 }
 
 function loadImportedSettings(rawSettings) {
-  return normalizeSettings(
+  const normalized = normalizeSettingsWithFallback(
     rawSettings,
     getDefaultSettings(),
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
   );
+
+  state.settingsFallbacks = normalized.fallbacks;
+  if (normalized.fallbacks.length) {
+    writeStorageJson(localStorage, STORAGE_KEYS.settings, normalized.settings);
+  }
+
+  return normalized.settings;
 }
 
 function buildUserErrorMessage(error, fallback) {
@@ -847,6 +867,7 @@ function handleQuickModelChange(value) {
   };
 
   saveSettings(state.settings);
+  state.settingsFallbacks = [];
   showToast(`Modelo ativo: ${getTextProviderDisplayName(provider)}`, "success");
   persistAndRender();
 }
@@ -875,11 +896,35 @@ function handleSetChatCategory(chatId, category) {
 function handleRenameChat(chatId) {
   const chat = state.chats.find((item) => item.id === chatId);
   if (!chat) return;
-  const newTitle = window.prompt("Renomear conversa:", chat.title);
-  if (!newTitle || newTitle.trim() === chat.title) return;
+  setModal("renameChat", true, { chatId, title: chat.title });
+}
+
+function handleSaveChatRename(formValues) {
+  const chatId = formValues.chatId?.toString() || "";
+  const newTitle = formValues.title?.toString().trim() || "";
+  if (!chatId) return;
+  if (!newTitle) {
+    showToast("Digite um nome para a conversa.", "error");
+    return;
+  }
+
+  const chat = state.chats.find((item) => item.id === chatId);
+  if (!chat) {
+    showToast("Conversa não encontrada.", "error");
+    return;
+  }
+
+  if (newTitle === chat.title) {
+    setModal("renameChat", false);
+    return;
+  }
+
   try {
-    updateChatTitle(chatId, newTitle.trim());
+    updateChatTitle(chatId, newTitle);
     state.chats = loadChats();
+    state.modals.renameChat = false;
+    state.modalPayload = {};
+    showToast("Conversa renomeada.", "success");
     persistAndRender();
   } catch (error) {
     showToast(error.message || "Erro ao renomear conversa.", "error");
@@ -964,6 +1009,7 @@ function handleSaveSettings(formValues) {
   };
 
   saveSettings(state.settings);
+  state.settingsFallbacks = [];
   state.modals.settings = false;
   showToast("Configurações salvas no navegador.", "success");
   persistAndRender();
@@ -1338,6 +1384,7 @@ function initialize() {
     },
     onSendMessage: handleSendMessage,
     onSaveSettings: handleSaveSettings,
+    onSaveChatRename: handleSaveChatRename,
     onSaveAgent: handleSaveAgent,
     onSaveBrand: handleSaveBrand,
     onDeleteBrand: handleDeleteBrand,
@@ -1392,6 +1439,15 @@ function initialize() {
         state.brands = loadBrands();
         showToast("Dados importados com sucesso.", "success");
         persistAndRender();
+        if (state.settingsFallbacks.length) {
+          state.settingsFallbacks.forEach((fallback) => {
+            showToast(
+              `Modelo salvo da ${getTextProviderDisplayName(fallback.provider)} ficou indisponível. Usei ${fallback.nextValue} automaticamente.`,
+              "info",
+            );
+          });
+          state.settingsFallbacks = [];
+        }
       } catch (error) {
         showToast(buildUserErrorMessage(error, "Falha ao importar: arquivo inválido."), "error");
       }
@@ -1415,6 +1471,16 @@ function initialize() {
   });
 
   render();
+
+  if (state.settingsFallbacks.length) {
+    state.settingsFallbacks.forEach((fallback) => {
+      showToast(
+        `Modelo salvo da ${getTextProviderDisplayName(fallback.provider)} ficou indisponível. Usei ${fallback.nextValue} automaticamente.`,
+        "info",
+      );
+    });
+    state.settingsFallbacks = [];
+  }
 }
 
 initialize();
