@@ -126,6 +126,7 @@ export function reconcileAppData({
       pubmedMode: Boolean(nextView.pubmedMode),
       pubmedResultLimit: Number(nextView.pubmedResultLimit) > 0 ? Number(nextView.pubmedResultLimit) : 5,
       webSearchMode: Boolean(nextView.webSearchMode),
+      agentSummaryCollapsed: Boolean(nextView.agentSummaryCollapsed),
       instagramFormat: typeof nextView.instagramFormat === "string" ? nextView.instagramFormat : "story_9_16",
       creativeFormDraft:
         nextView.creativeFormDraft && typeof nextView.creativeFormDraft === "object"

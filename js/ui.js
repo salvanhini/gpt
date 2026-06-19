@@ -372,6 +372,8 @@ function renderActiveAgentSummary(state) {
     return "";
   }
 
+  const isCollapsed = Boolean(state.agentSummaryCollapsed);
+
   const guide = AGENT_GUIDES[agent.id] || {
     badge: "Agente ativo",
     title: agent.description || "Pronto para ajudar.",
@@ -380,28 +382,40 @@ function renderActiveAgentSummary(state) {
   };
 
   return `
-    <section class="agent-summary-panel mb-3 rounded-[1.45rem] border border-white/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(240,248,255,0.92))] px-4 py-3 shadow-soft">
-      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <section class="agent-summary-panel ${isCollapsed ? "is-collapsed" : ""} mb-3 rounded-[1.45rem] border border-white/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(240,248,255,0.92))] px-4 py-3 shadow-soft">
+      <div class="agent-summary-header flex ${isCollapsed ? "items-center justify-between gap-3" : "flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"}">
         <div class="min-w-0 flex-1">
           <div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-femic-navy">
             <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sm">${escapeHtml(agent.emoji || "🤖")}</span>
             <span>${escapeHtml(guide.badge)}</span>
           </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2">
+          <div class="${isCollapsed ? "mt-2" : "mt-3"} flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
             <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
             ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web hibrida</span>` : ""}
             ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
           </div>
-          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>
+          ${isCollapsed ? "" : `<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>`}
         </div>
-        <div class="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
-          ${guide.highlights.map((item) => `<span class="inline-flex items-center rounded-full border border-white/80 bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">${escapeHtml(item)}</span>`).join("")}
+        <div class="agent-summary-actions flex shrink-0 ${isCollapsed ? "items-center" : "items-start"} gap-2 lg:justify-end">
+          ${isCollapsed ? "" : `<div class="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
+            ${guide.highlights.map((item) => `<span class="inline-flex items-center rounded-full border border-white/80 bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">${escapeHtml(item)}</span>`).join("")}
+          </div>`}
+          <button
+            type="button"
+            class="agent-summary-toggle inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/90 bg-white/90 text-sm text-slate-500 shadow-sm"
+            data-action="toggle-agent-summary"
+            title="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"
+            aria-label="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"
+            aria-expanded="${isCollapsed ? "false" : "true"}"
+          >
+            ${isCollapsed ? "▾" : "▴"}
+          </button>
         </div>
       </div>
-      <div class="mt-3 flex flex-wrap gap-2">
+      ${isCollapsed ? "" : `<div class="mt-3 flex flex-wrap gap-2">
         ${guide.examples.map((example) => `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50/85 px-3 py-1.5 text-[11px] text-slate-500">${escapeHtml(example)}</span>`).join("")}
-      </div>
+      </div>`}
     </section>
   `;
 }
@@ -1435,6 +1449,7 @@ export function bindUIHandlers(handlers) {
     if (action === "clear-attachments") handlers.onClearAttachments();
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
+    if (action === "toggle-agent-summary") handlers.onToggleAgentSummary();
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
     if (action === "set-message-category") handlers.onSetMessageCategory(target.dataset.messageId, target.dataset.category);
     if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);

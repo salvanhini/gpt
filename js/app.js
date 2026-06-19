@@ -101,6 +101,7 @@ const state = {
   pubmedMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
+  agentSummaryCollapsed: false,
   instagramFormat: "story_9_16",
   creativeFormDraft: {
     objective: "",
@@ -171,6 +172,7 @@ function saveViewState() {
     pubmedMode: state.pubmedMode,
     pubmedResultLimit: state.pubmedResultLimit,
     webSearchMode: state.webSearchMode,
+    agentSummaryCollapsed: state.agentSummaryCollapsed,
     instagramFormat: state.instagramFormat,
     creativeFormDraft: state.creativeFormDraft,
   });
@@ -202,6 +204,7 @@ function hydratePersistentState() {
   state.pubmedMode = Boolean(reconciled.view.pubmedMode);
   state.pubmedResultLimit = Number(reconciled.view.pubmedResultLimit) > 0 ? Number(reconciled.view.pubmedResultLimit) : 5;
   state.webSearchMode = Boolean(reconciled.view.webSearchMode);
+  state.agentSummaryCollapsed = Boolean(reconciled.view.agentSummaryCollapsed);
   state.instagramFormat = reconciled.view.instagramFormat || "story_9_16";
   state.creativeFormDraft = {
     objective: reconciled.view.creativeFormDraft?.objective || "",
@@ -1324,6 +1327,10 @@ function initialize() {
     onSearchChats: handleSearchChats,
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleWebSearchMode: handleToggleWebSearchMode,
+    onToggleAgentSummary: () => {
+      state.agentSummaryCollapsed = !state.agentSummaryCollapsed;
+      persistAndRender();
+    },
     onChangePubMedResultLimit: handleChangePubMedResultLimit,
     onClearAttachments: () => {
       resetAttachments();
