@@ -53,10 +53,6 @@ import {
 } from "./audio.js";
 import { processFiles } from "./fileProcessor.js";
 import {
-  analyzeSpreadsheetsWithE2B,
-  buildAdvancedAnalysisMarkdown,
-} from "./e2b.js";
-import {
   formatCepSummary,
   formatCnpjSummary,
   inferBrasilLookupType,
@@ -90,13 +86,6 @@ import {
 } from "./storage.js";
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
-import {
-  getLimitStatus,
-  getUsageSnapshot,
-  incrementUsageCounter,
-  isLimitReached,
-  normalizeUsageLimits,
-} from "./usageTracker.js";
 
 let bootSettingsFallbacks = [];
 
@@ -132,7 +121,6 @@ const state = {
     variationCount: "3",
   },
   isLoading: false,
-  isAdvancedAnalysisLoading: false,
   isListening: false,
   isVoiceProcessing: false,
   speakingMessageId: null,
@@ -179,7 +167,6 @@ function loadSettings() {
     writeStorageJson(localStorage, STORAGE_KEYS.settings, normalized.settings);
   }
 
-  normalized.settings.usageLimits = normalizeUsageLimits(normalized.settings.usageLimits);
   return normalized.settings;
 }
 
@@ -337,11 +324,7 @@ function getActiveAgent() {
 }
 
 function getActiveSettings() {
-  const settings = getEffectiveAgentSettings(state.settings, getActiveAgent());
-  return {
-    ...settings,
-    usageLimits: normalizeUsageLimits(settings.usageLimits),
-  };
+  return getEffectiveAgentSettings(state.settings, getActiveAgent());
 }
 
 function getSelectedBrand() {
@@ -395,7 +378,6 @@ function render() {
     refreshFromStorage();
     state.activeAgent = getActiveAgent();
     state.effectiveSettings = getActiveSettings();
-    state.usageSnapshot = getUsageSnapshot();
     renderApp(state);
     window.scrollTo(0, 0);
   } catch (error) {
@@ -422,14 +404,17 @@ function persistAndRender() {
   render();
 }
 
-function mapMessagesForPayload(messages = []) {
-  return messages.map((message) => ({
+function buildTextPayload(userMessage) {
+  const activeAgent = getActiveAgent();
+  const activeChat = getActiveChat();
+  const history = (activeChat?.messages || []).map((message) => ({
     role: message.role,
     content:
       message.meta?.kind === "image"
         ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
         : message.content,
   }));
+<<<<<<< HEAD
 }
 
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
@@ -461,6 +446,8 @@ function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
+=======
+>>>>>>> parent of e19e45d (3.8)
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -475,7 +462,13 @@ function buildTextPayload(userMessage) {
 function buildTextPayloadWithReference(userMessage, referenceContext) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
-  const history = compactHistoryForPayload(activeChat?.messages || []);
+  const history = (activeChat?.messages || []).map((message) => ({
+    role: message.role,
+    content:
+      message.meta?.kind === "image"
+        ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
+        : message.content,
+  }));
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -521,17 +514,11 @@ function getActiveTextProviderLabel() {
 }
 
 function canUseWebSearch() {
-  return true;
+  return getActiveSettings().textProvider !== "deepseek";
 }
 
 function resetAttachments() {
   state.pendingAttachmentContext = null;
-}
-
-function hasTabularAttachments() {
-  return Boolean(
-    state.pendingAttachmentContext?.runtimeFiles?.some((file) => ["csv", "xls", "xlsx"].includes(file.extension)),
-  );
 }
 
 function addWebSearchMessage(chatId, searchResult) {
@@ -551,32 +538,9 @@ function addWebSearchMessage(chatId, searchResult) {
 }
 
 async function resolveWebSearchForMessage(message) {
-  const settings = getActiveSettings();
   return runWebSearchQuery({
     messages: buildTextPayload(message),
-    settings,
-    canUseProvider: (provider) => {
-      if (provider === "tavily") {
-        return !isLimitReached("webSearch.tavily", settings.usageLimits.tavilyDailyLimit);
-      }
-      if (provider === "brave") {
-        return !isLimitReached("webSearch.brave", settings.usageLimits.braveDailyLimit);
-      }
-      return true;
-    },
-    onProviderUsed: (provider) => {
-      incrementUsageCounter(`webSearch.${provider}`);
-      if (provider === "duckduckgo") {
-        showToast("Usando DuckDuckGo para economizar creditos.", "info");
-        return;
-      }
-
-      const limitKey = provider === "tavily" ? "tavilyDailyLimit" : "braveDailyLimit";
-      const status = getLimitStatus(`webSearch.${provider}`, settings.usageLimits[limitKey]);
-      if (status.warning) {
-        showToast(`Limite gratuito de ${provider} quase atingido hoje.`, "info");
-      }
-    },
+    settings: getActiveSettings(),
   });
 }
 
@@ -654,7 +618,21 @@ async function handleSendMessage(rawMessage) {
           },
         });
       } else if (state.webSearchMode) {
-        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
+        if (!canUseWebSearch()) {
+          addMessage(activeChat.id, {
+            role: "assistant",
+            content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para usar a internet aqui no chat.",
+            meta: {
+              kind: "text",
+              provider: "local",
+              sourceType: "web-search",
+              webSearch: true,
+              failed: true,
+            },
+          });
+        } else {
+          addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
+        }
       } else {
         addMessage(activeChat.id, {
           role: "assistant",
@@ -809,6 +787,22 @@ async function handleSendMessage(rawMessage) {
         });
       }
     } else {
+      if (state.webSearchMode && !canUseWebSearch()) {
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para continuar.",
+          meta: {
+            kind: "text",
+            provider: "local",
+            sourceType: "web-search",
+            webSearch: true,
+            failed: true,
+          },
+        });
+        resetAttachments();
+        return;
+      }
+
       if (state.webSearchMode) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
       } else {
@@ -1110,23 +1104,10 @@ function handleSaveSettings(formValues) {
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
     groqKey: formValues.groqKey?.trim() || "",
     falKey: formValues.falKey?.trim() || "",
-    tavilyKey: formValues.tavilyKey?.trim() || "",
-    braveSearchKey: formValues.braveSearchKey?.trim() || "",
-    e2bApiKey: formValues.e2bApiKey?.trim() || "",
     openAIKey: formValues.openAIKey?.trim() || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
-    audioTranscribeProvider: formValues.audioTranscribeProvider || getDefaultSettings().audioTranscribeProvider,
-    groqTranscribeModel: formValues.groqTranscribeModel?.trim() || getDefaultSettings().groqTranscribeModel,
-    usageLimits: normalizeUsageLimits({
-      tavilyDailyLimit: formValues.tavilyDailyLimit,
-      braveDailyLimit: formValues.braveDailyLimit,
-      groqTranscriptionDailyLimit: formValues.groqTranscriptionDailyLimit,
-      e2bDailyLimit: formValues.e2bDailyLimit,
-      maxHistoryMessages: formValues.maxHistoryMessages,
-      tokenWarningLimit: formValues.tokenWarningLimit,
-    }),
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
@@ -1333,84 +1314,6 @@ async function handleAttachFiles(fileList) {
   }
 }
 
-async function handleRunAdvancedAnalysis() {
-  if (state.isAdvancedAnalysisLoading || state.isLoading) {
-    return;
-  }
-
-  if (!state.settings.e2bApiKey) {
-    showToast("Adicione sua chave da E2B nas configurações para usar a análise avançada.", "error");
-    return;
-  }
-
-  if (!hasTabularAttachments()) {
-    showToast("Anexe um CSV ou Excel antes de iniciar a análise avançada.", "error");
-    return;
-  }
-
-  const usageLimits = normalizeUsageLimits(state.settings.usageLimits);
-  if (isLimitReached("e2b.run", usageLimits.e2bDailyLimit)) {
-    showToast("Limite diário de E2B atingido. Ajuste o limite ou tente novamente amanhã.", "error");
-    return;
-  }
-
-  const proceed = window.confirm("A análise avançada enviará os arquivos tabulares anexados para o sandbox E2B por alguns minutos. Continuar?");
-  if (!proceed) {
-    return;
-  }
-
-  const activeChat = getActiveChat();
-  if (!activeChat) {
-    showToast("Nenhuma conversa ativa disponível.", "error");
-    return;
-  }
-
-  const requestPrompt = String(state.draftMessage || "").trim();
-  state.isAdvancedAnalysisLoading = true;
-  persistAndRender();
-
-  try {
-    const result = await analyzeSpreadsheetsWithE2B({
-      files: state.pendingAttachmentContext.runtimeFiles,
-      prompt: requestPrompt,
-      settings: getActiveSettings(),
-    });
-
-    incrementUsageCounter("e2b.run");
-
-    addMessage(activeChat.id, {
-      role: "assistant",
-      content: buildAdvancedAnalysisMarkdown(result),
-      meta: {
-        kind: "text",
-        provider: "E2B",
-        sourceType: "advanced-analysis",
-      },
-    });
-
-    if (result.chart?.url) {
-      addMessage(activeChat.id, {
-        role: "assistant",
-        content: result.chart.title || "Gráfico da análise avançada",
-        meta: {
-          kind: "image",
-          imageUrl: result.chart.url,
-          provider: "E2B",
-          sourceType: "advanced-analysis",
-        },
-      });
-    }
-
-    showToast("Análise avançada concluída.", "success");
-  } catch (error) {
-    addAssistantErrorMessage(activeChat.id, error);
-    showToast(error.message || "Falha na análise avançada.", "error");
-  } finally {
-    state.isAdvancedAnalysisLoading = false;
-    persistAndRender();
-  }
-}
-
 function handleCopyMessage(messageId) {
   const chat = getActiveChat();
   const message = chat?.messages.find((item) => item.id === messageId);
@@ -1571,16 +1474,6 @@ const voiceController = createVoiceController({
   isMediaRecorderSupported,
   getMicrophoneStream,
   getSettings: () => state.settings,
-  canUseRecordedTranscription: (settings) => {
-    if (!settings.groqKey) return Boolean(settings.openAIKey);
-    const limits = normalizeUsageLimits(settings.usageLimits);
-    return !isLimitReached("transcription.groq", limits.groqTranscriptionDailyLimit);
-  },
-  onRecordedTranscription: (settings) => {
-    if (settings.groqKey) {
-      incrementUsageCounter("transcription.groq");
-    }
-  },
 });
 
 function initialize() {
@@ -1648,7 +1541,6 @@ function initialize() {
       resetAttachments();
       persistAndRender();
     },
-    onRunAdvancedAnalysis: handleRunAdvancedAnalysis,
     onSendMessage: handleSendMessage,
     onSaveSettings: handleSaveSettings,
     onSaveChatRename: handleSaveChatRename,

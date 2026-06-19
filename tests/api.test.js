@@ -3,11 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildDuckDuckGoSearchUrl,
-  buildBraveSearchUrl,
-  buildTavilySearchBody,
   normalizeDuckDuckGoResults,
-  normalizeBraveResults,
-  normalizeTavilyResults,
   buildOpenRouterRequestBody,
   buildGroqRequestBody,
   getDefaultSettings,
@@ -15,7 +11,6 @@ import {
   runWebSearchQuery,
   searchDuckDuckGoFallback,
   sendTextMessage,
-  transcribeAudio,
 } from "../js/api.js";
 
 test("buildGroqRequestBody enables browser search when web search mode is active", () => {
@@ -113,26 +108,6 @@ test("normalizeDuckDuckGoResults maps abstract and related topics", () => {
   assert.equal(results.length, 3);
   assert.equal(results[0].title, "OpenAI");
   assert.equal(results[2].title, "GPT");
-});
-
-test("normalizes Tavily and Brave search results to the shared citation shape", () => {
-  assert.deepEqual(buildTavilySearchBody("ia hoje").max_results, 5);
-  assert.match(buildBraveSearchUrl("ia hoje"), /q=ia\+hoje/);
-
-  const tavily = normalizeTavilyResults({
-    results: [{ title: "Tavily result", url: "https://example.com/a", content: "Trecho A" }],
-  });
-  const brave = normalizeBraveResults({
-    web: { results: [{ title: "Brave result", url: "https://example.com/b", description: "Trecho B" }] },
-  });
-
-  assert.deepEqual(tavily[0], {
-    title: "Tavily result",
-    url: "https://example.com/a",
-    snippet: "Trecho A",
-    provider: "Tavily",
-  });
-  assert.equal(brave[0].provider, "Brave");
 });
 
 test("sendTextMessage rejects web search on direct deepseek", async () => {
@@ -268,34 +243,30 @@ test("searchDuckDuckGoFallback returns normalized fallback payload", async () =>
   }
 });
 
-test("runWebSearchQuery uses DuckDuckGo sources when paid providers are unavailable", async () => {
+test("runWebSearchQuery falls back to DuckDuckGo when premium web search fails", async () => {
   const originalFetch = global.fetch;
-  const originalWindow = global.window;
   let calls = 0;
   global.window = { location: { href: "http://localhost:4173" } };
 
-  global.fetch = async (url) => {
+  global.fetch = async () => {
     calls += 1;
     if (calls === 1) {
       return {
-        ok: true,
+        ok: false,
         async json() {
-          return {
-            Heading: "OpenAI",
-            AbstractText: "Resumo principal",
-            AbstractURL: "https://duckduckgo.com/OpenAI",
-            RelatedTopics: [],
-          };
+          return { error: { message: "premium indisponivel" } };
         },
       };
     }
 
-    assert.equal(url, "https://api.groq.com/openai/v1/chat/completions");
     return {
       ok: true,
       async json() {
         return {
-          choices: [{ message: { content: "Resposta baseada nas fontes." } }],
+          Heading: "OpenAI",
+          AbstractText: "Resumo principal",
+          AbstractURL: "https://duckduckgo.com/OpenAI",
+          RelatedTopics: [],
         };
       },
     };
@@ -306,48 +277,16 @@ test("runWebSearchQuery uses DuckDuckGo sources when paid providers are unavaila
       messages: [{ role: "user", content: "novidades openai" }],
       settings: {
         ...getDefaultSettings(),
-        textProvider: "groq",
-        groqKey: "gsk-test",
+        textProvider: "openrouter",
+        openRouterKey: "sk-or-test",
       },
     });
 
     assert.equal(result.provider, "DuckDuckGo");
     assert.equal(result.isFallback, true);
-    assert.match(result.content, /Resposta baseada nas fontes/);
-    assert.match(result.content, /Fontes consultadas/);
+    assert.ok(result.error instanceof Error);
   } finally {
     global.fetch = originalFetch;
-    global.window = originalWindow;
-  }
-});
-
-test("transcribeAudio tries Groq before optional OpenAI fallback", async () => {
-  const originalFetch = global.fetch;
-  const calls = [];
-
-  global.fetch = async (url) => {
-    calls.push(url);
-    return {
-      ok: true,
-      async json() {
-        return { text: "texto transcrito" };
-      },
-    };
-  };
-
-  try {
-    const text = await transcribeAudio({
-      audioBlob: new Blob(["audio"], { type: "audio/webm" }),
-      settings: {
-        ...getDefaultSettings(),
-        groqKey: "gsk-test",
-        openAIKey: "",
-      },
-    });
-
-    assert.equal(text, "texto transcrito");
-    assert.deepEqual(calls, ["https://api.groq.com/openai/v1/audio/transcriptions"]);
-  } finally {
-    global.fetch = originalFetch;
+    delete global.window;
   }
 });

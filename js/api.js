@@ -1,17 +1,12 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
-const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
-const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
-const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "openrouter";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_IMAGE_MODEL = "fal-ai/flux/schnell";
-const DEFAULT_GROQ_TRANSCRIBE_MODEL = "whisper-large-v3-turbo";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_OPENAI_TTS_VOICE = "coral";
@@ -232,19 +227,6 @@ export function getDefaultSettings() {
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
     globalSystemPrompt: "",
-    tavilyKey: "",
-    braveSearchKey: "",
-    e2bApiKey: "",
-    audioTranscribeProvider: "groq",
-    groqTranscribeModel: DEFAULT_GROQ_TRANSCRIBE_MODEL,
-    usageLimits: {
-      tavilyDailyLimit: 30,
-      braveDailyLimit: 25,
-      groqTranscriptionDailyLimit: 20,
-      e2bDailyLimit: 5,
-      maxHistoryMessages: 12,
-      tokenWarningLimit: 12000,
-    },
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
     openAITtsModel: DEFAULT_OPENAI_TTS_MODEL,
     openAITtsVoice: DEFAULT_OPENAI_TTS_VOICE,
@@ -293,49 +275,6 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
 function getLatestUserQuery(messages = []) {
   const latestUserMessage = [...messages].reverse().find((message) => message?.role === "user");
   return String(latestUserMessage?.content || "").trim();
-}
-
-function getDailyCacheKey(query, date = new Date()) {
-  return `${date.toISOString().slice(0, 10)}::${query.trim().toLowerCase().replace(/\s+/g, " ")}`;
-}
-
-function readWebSearchCache() {
-  try {
-    return JSON.parse(globalThis.localStorage?.getItem(WEB_SEARCH_CACHE_KEY) || "{}") || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeWebSearchCache(cache) {
-  try {
-    globalThis.localStorage?.setItem(WEB_SEARCH_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Cache e apenas economia; falhas de armazenamento nao devem quebrar o chat.
-  }
-}
-
-function getCachedWebSearch(query) {
-  const cache = readWebSearchCache();
-  return cache[getDailyCacheKey(query)] || null;
-}
-
-function setCachedWebSearch(query, result) {
-  const cache = readWebSearchCache();
-  const today = new Date().toISOString().slice(0, 10);
-  const compactCache = Object.fromEntries(
-    Object.entries(cache).filter(([key]) => key.startsWith(`${today}::`)),
-  );
-  compactCache[getDailyCacheKey(query)] = {
-    content: result.content,
-    provider: result.provider,
-    sourceType: result.sourceType || "web-search",
-    webSearch: true,
-    isFallback: Boolean(result.isFallback),
-    citations: result.citations || [],
-    fromCache: true,
-  };
-  writeWebSearchCache(compactCache);
 }
 
 function normalizeAssistantContent(content) {
@@ -441,7 +380,6 @@ export function normalizeDuckDuckGoResults(data = {}) {
       title: data?.Heading || "Resposta direta",
       url: data.AbstractURL,
       snippet: data.AbstractText,
-      provider: "DuckDuckGo",
     });
   }
 
@@ -452,53 +390,9 @@ export function normalizeDuckDuckGoResults(data = {}) {
       title: topic.Text.split(" - ")[0] || "Resultado relacionado",
       url: topic.FirstURL,
       snippet: topic.Text,
-      provider: "DuckDuckGo",
     }));
 
   return [...results, ...topics];
-}
-
-export function buildTavilySearchBody(query, maxResults = 5) {
-  return {
-    query,
-    search_depth: "basic",
-    include_answer: false,
-    include_raw_content: false,
-    max_results: maxResults,
-  };
-}
-
-export function normalizeTavilyResults(data = {}) {
-  return (Array.isArray(data?.results) ? data.results : [])
-    .filter((result) => result?.url && (result?.content || result?.title))
-    .slice(0, 5)
-    .map((result) => ({
-      title: result.title || result.url,
-      url: result.url,
-      snippet: result.content || result.snippet || "",
-      provider: "Tavily",
-    }));
-}
-
-export function buildBraveSearchUrl(query, count = 5) {
-  const url = new URL(BRAVE_SEARCH_URL);
-  url.searchParams.set("q", query);
-  url.searchParams.set("count", String(count));
-  url.searchParams.set("safesearch", "moderate");
-  url.searchParams.set("text_decorations", "false");
-  return url.toString();
-}
-
-export function normalizeBraveResults(data = {}) {
-  return (Array.isArray(data?.web?.results) ? data.web.results : [])
-    .filter((result) => result?.url && (result?.description || result?.title))
-    .slice(0, 5)
-    .map((result) => ({
-      title: result.title || result.url,
-      url: result.url,
-      snippet: result.description || result.extra_snippets?.join(" ") || "",
-      provider: "Brave",
-    }));
 }
 
 function buildDuckDuckGoSummary(query, results = []) {
@@ -551,173 +445,43 @@ export async function searchDuckDuckGoFallback(query) {
   };
 }
 
-async function searchTavily(query, settings) {
-  if (!settings?.tavilyKey) {
-    throw new Error("Tavily sem chave configurada.");
-  }
-
-  let response;
-  try {
-    response = await fetch(TAVILY_SEARCH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.tavilyKey}`,
-      },
-      body: JSON.stringify(buildTavilySearchBody(query)),
-    });
-  } catch {
-    throw new Error("Nao foi possivel conectar a Tavily.");
-  }
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao consultar a Tavily."));
-  }
-
-  const results = normalizeTavilyResults(data);
-  if (!results.length) {
-    throw new Error("A Tavily nao retornou resultados suficientes.");
-  }
-
-  return {
-    provider: "Tavily",
-    citations: results,
-    raw: data,
-  };
-}
-
-async function searchBrave(query, settings) {
-  if (!settings?.braveSearchKey) {
-    throw new Error("Brave Search sem chave configurada.");
-  }
-
-  let response;
-  try {
-    response = await fetch(buildBraveSearchUrl(query), {
-      headers: {
-        Accept: "application/json",
-        "X-Subscription-Token": settings.braveSearchKey,
-      },
-    });
-  } catch {
-    throw new Error("Nao foi possivel conectar ao Brave Search.");
-  }
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao consultar o Brave Search."));
-  }
-
-  const results = normalizeBraveResults(data);
-  if (!results.length) {
-    throw new Error("O Brave Search nao retornou resultados suficientes.");
-  }
-
-  return {
-    provider: "Brave",
-    citations: results,
-    raw: data,
-  };
-}
-
-function buildWebSearchContext(query, provider, citations = []) {
-  const lines = [
-    `Busca web economica para: ${query}`,
-    `Provedor usado: ${provider}`,
-    "",
-    "Use as fontes abaixo para responder em portugues do Brasil e cite links relevantes:",
-  ];
-
-  citations.forEach((result, index) => {
-    lines.push(`${index + 1}. ${result.title}`);
-    lines.push(result.snippet);
-    lines.push(result.url);
-    lines.push("");
-  });
-
-  return lines.join("\n").trim();
-}
-
-export async function collectWebSearchSources({
-  query,
-  settings,
-  canUseProvider = () => true,
-  onProviderUsed = () => {},
-} = {}) {
-  if (!query?.trim()) {
-    throw new Error("Digite uma pergunta valida para usar a Busca Web.");
-  }
-
-  const cached = getCachedWebSearch(query);
-  if (cached) {
-    return cached;
-  }
-
-  const errors = [];
-  const providers = [
-    ["tavily", () => searchTavily(query, settings)],
-    ["brave", () => searchBrave(query, settings)],
-    ["duckduckgo", () => searchDuckDuckGoFallback(query)],
-  ];
-
-  for (const [providerKey, search] of providers) {
-    if (!canUseProvider(providerKey)) {
-      errors.push(new Error(`${providerKey} pulado por limite de uso.`));
-      continue;
-    }
-
-    try {
-      const result = await search();
-      onProviderUsed(providerKey);
-      if (providerKey === "duckduckgo") {
-        setCachedWebSearch(query, result);
-        return result;
-      }
-
-      const normalizedResult = {
-        content: buildWebSearchContext(query, result.provider, result.citations),
-        provider: result.provider,
-        sourceType: "web-search",
-        webSearch: true,
-        isFallback: false,
-        citations: result.citations,
-        raw: result.raw,
-      };
-      setCachedWebSearch(query, normalizedResult);
-      return normalizedResult;
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-
-  throw errors[errors.length - 1] || new Error("Nao foi possivel concluir a busca web.");
-}
-
-export async function runWebSearchQuery({ messages, settings, ...options }) {
+export async function runWebSearchQuery({ messages, settings }) {
   const query = getLatestUserQuery(messages);
   if (!query) {
     throw new Error("Digite uma pergunta valida para usar a Busca Web.");
   }
 
-  const sources = await collectWebSearchSources({ query, settings, ...options });
-  const reply = await sendTextMessage({
-    messages: [
-      ...messages,
-      {
-        role: "user",
-        content: `Use a referencia abaixo para responder com base nas fontes consultadas:\n\n${sources.content}`,
-      },
-    ],
-    settings,
-    webSearchMode: false,
-  });
+  if (settings.textProvider === "deepseek") {
+    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
+  }
 
-  return {
-    ...sources,
-    content: `${reply.content}\n\nFontes consultadas:\n${sources.citations.map((item, index) => `${index + 1}. ${item.title}\n${item.url}`).join("\n")}`,
-    answerProvider: getTextProviderDisplayName(settings.textProvider),
-  };
+  try {
+    const reply = await sendTextMessage({
+      messages,
+      settings,
+      webSearchMode: true,
+    });
+
+    return {
+      content: reply.content,
+      provider: getTextProviderDisplayName(settings.textProvider),
+      sourceType: "web-search",
+      webSearch: true,
+      isFallback: false,
+      citations: [],
+      raw: reply.raw,
+    };
+  } catch (error) {
+    if (!["groq", "openrouter"].includes(settings.textProvider)) {
+      throw error;
+    }
+
+    const fallback = await searchDuckDuckGoFallback(query);
+    return {
+      ...fallback,
+      error,
+    };
+  }
 }
 
 async function chatFetch(url, headers, body) {
@@ -1060,46 +824,20 @@ export async function generateImage({ prompt, settings }) {
   };
 }
 
-function buildAudioFormData(audioBlob, model) {
+export async function transcribeAudio({ audioBlob, settings }) {
+  if (!settings.openAIKey) {
+    throw new Error("Adicione sua chave da OpenAI nas configurações de áudio.");
+  }
+
   const file = new File([audioBlob], "femic-gpt-voice.webm", {
     type: audioBlob.type || "audio/webm",
   });
   const form = new FormData();
   form.append("file", file);
-  form.append("model", model);
+  form.append("model", settings.openAITranscribeModel || DEFAULT_OPENAI_TRANSCRIBE_MODEL);
   form.append("language", "pt");
   form.append("response_format", "json");
-  return form;
-}
 
-async function transcribeWithGroq(audioBlob, settings) {
-  let response;
-  try {
-    response = await fetch(GROQ_TRANSCRIPTION_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${settings.groqKey}`,
-      },
-      body: buildAudioFormData(audioBlob, settings.groqTranscribeModel || DEFAULT_GROQ_TRANSCRIBE_MODEL),
-    });
-  } catch {
-    throw new Error("Nao foi possivel conectar a Groq para transcrever o audio.");
-  }
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao transcrever o audio pela Groq."));
-  }
-
-  const text = data?.text?.trim();
-  if (!text) {
-    throw new Error("A transcricao da Groq veio vazia. Tente falar novamente.");
-  }
-
-  return { text, provider: "Groq" };
-}
-
-async function transcribeWithOpenAI(audioBlob, settings) {
   let response;
   try {
     response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -1107,7 +845,7 @@ async function transcribeWithOpenAI(audioBlob, settings) {
       headers: {
         Authorization: `Bearer ${settings.openAIKey}`,
       },
-      body: buildAudioFormData(audioBlob, settings.openAITranscribeModel || DEFAULT_OPENAI_TRANSCRIBE_MODEL),
+      body: form,
     });
   } catch {
     throw new Error("Não foi possível conectar à OpenAI para transcrever o áudio.");
@@ -1123,36 +861,7 @@ async function transcribeWithOpenAI(audioBlob, settings) {
     throw new Error("A transcrição veio vazia. Tente falar novamente.");
   }
 
-  return { text, provider: "OpenAI" };
-}
-
-export async function transcribeAudio({ audioBlob, settings }) {
-  const providers = [];
-  if ((settings.audioTranscribeProvider || "groq") === "openai") {
-    providers.push("openai", "groq");
-  } else {
-    providers.push("groq", "openai");
-  }
-
-  const errors = [];
-  for (const provider of providers) {
-    try {
-      if (provider === "groq" && settings.groqKey) {
-        return (await transcribeWithGroq(audioBlob, settings)).text;
-      }
-      if (provider === "openai" && settings.openAIKey) {
-        return (await transcribeWithOpenAI(audioBlob, settings)).text;
-      }
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-
-  if (!settings.groqKey && !settings.openAIKey) {
-    throw new Error("Configure a chave da Groq para usar o fallback de microfone quando o ditado nativo falhar.");
-  }
-
-  throw errors[errors.length - 1] || new Error("Falha ao transcrever audio.");
+  return text;
 }
 
 export async function generateSpeechAudio({ text, settings }) {
