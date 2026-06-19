@@ -396,7 +396,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
       message.meta?.kind === "image"
         ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
         : message.content,
-  });
+  }));
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
