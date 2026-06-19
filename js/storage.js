@@ -163,6 +163,10 @@ export function reconcileAppData({
       pubmedMode: Boolean(nextView.pubmedMode),
       pubmedResultLimit: Number(nextView.pubmedResultLimit) > 0 ? Number(nextView.pubmedResultLimit) : 5,
       webSearchMode: Boolean(nextView.webSearchMode),
+      modelGuidanceCollapsed:
+        typeof nextView.modelGuidanceCollapsed === "boolean"
+          ? nextView.modelGuidanceCollapsed
+          : false,
       agentSummaryCollapsed:
         typeof nextView.agentSummaryCollapsed === "boolean"
           ? nextView.agentSummaryCollapsed

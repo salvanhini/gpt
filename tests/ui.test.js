@@ -25,7 +25,7 @@ test("shouldAutoScroll returns false when the user is reading older messages", (
   );
 });
 
-test("renderApp includes compact sidebar brand, active chat header and model guidance", () => {
+test("renderApp includes help entry, compact web toggle and collapsible model guidance", () => {
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
   const previousMarked = globalThis.marked;
@@ -89,6 +89,7 @@ test("renderApp includes compact sidebar brand, active chat header and model gui
         deepSeekModel: "deepseek-v4-flash",
         groqModel: "openai/gpt-oss-20b",
         openAIKey: "",
+        globalSystemPrompt: "",
       },
       modelOptions: [
         {
@@ -113,6 +114,7 @@ test("renderApp includes compact sidebar brand, active chat header and model gui
       pubmedMode: false,
       pubmedResultLimit: 5,
       webSearchMode: false,
+      modelGuidanceCollapsed: false,
       agentSummaryCollapsed: true,
       draftMessage: "",
       isVoiceProcessing: false,
@@ -125,6 +127,7 @@ test("renderApp includes compact sidebar brand, active chat header and model gui
         brandForm: false,
         agentForm: false,
         renameChat: false,
+        help: false,
       },
       modalPayload: {},
       speakingMessageId: null,
@@ -140,7 +143,9 @@ test("renderApp includes compact sidebar brand, active chat header and model gui
 
     assert.match(app.innerHTML, /sidebar-brand-panel-compact/);
     assert.match(app.innerHTML, /active-chat-header/);
-    assert.match(app.innerHTML, /Nome definido por voc/);
+    assert.match(app.innerHTML, /Ajuda/);
+    assert.match(app.innerHTML, /Busca web/);
+    assert.match(app.innerHTML, /ocultar detalhes/i);
     assert.match(app.innerHTML, /model-guidance/);
     assert.match(app.innerHTML, /Qwen 3\.7 Plus/);
   } finally {

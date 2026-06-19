@@ -181,12 +181,28 @@ function renderQuickModelOptions(state) {
 
 function renderModelGuidance(state) {
   const details = getActiveModelDetails(state);
+  const isCollapsed = Boolean(state.modelGuidanceCollapsed);
 
   return `
-    <div class="model-guidance mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-      <span class="font-semibold text-slate-700">${escapeHtml(details.providerLabel)} · ${escapeHtml(details.label)}</span>
-      ${details.badges.map((badge) => `<span class="model-guidance-badge">${escapeHtml(badge)}</span>`).join("")}
-      <span class="model-guidance-text">${escapeHtml(details.helperText)}</span>
+    <div class="model-guidance mt-2 rounded-xl border border-slate-200/80 bg-slate-50/70 px-2.5 py-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="min-w-0 text-[10px] font-semibold text-slate-700">${escapeHtml(details.providerLabel)} · ${escapeHtml(details.label)}</div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 shadow-sm"
+          data-action="toggle-model-guidance"
+          title="${isCollapsed ? "Mostrar detalhes do modelo" : "Ocultar detalhes do modelo"}"
+        >
+          <span>${isCollapsed ? "▾" : "▴"}</span>
+          <span>${isCollapsed ? "Mostrar detalhes" : "Ocultar detalhes"}</span>
+        </button>
+      </div>
+      ${isCollapsed
+        ? ""
+        : `<div class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+            ${details.badges.map((badge) => `<span class="model-guidance-badge">${escapeHtml(badge)}</span>`).join("")}
+            <span class="model-guidance-text">${escapeHtml(details.helperText)}</span>
+          </div>`}
     </div>
   `;
 }
@@ -281,8 +297,8 @@ function renderChatCard(chat, state) {
       <div class="flex items-start gap-1.5">
         <div class="mt-0.5 shrink-0">
           ${chat.category
-            ? `<span class="category-selector inline-flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
-            : `<span class="category-selector inline-flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[6px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
+            ? `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-white/90 shadow-sm" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
+            : `<span class="category-selector inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 bg-white text-[8px] text-slate-400 shadow-sm hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
           }
         </div>
         <div class="min-w-0 flex-1">
@@ -303,14 +319,14 @@ function renderChatCard(chat, state) {
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="chat-rename-btn inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[8px] text-slate-400 opacity-100 hover:bg-slate-100 hover:text-femic-cyan"
+                class="chat-rename-btn inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border border-slate-200/80 bg-white text-[8px] text-slate-500 opacity-100 shadow-sm hover:border-sky-200 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
                 title="Renomear conversa"
               >✎</button>
               <button
                 type="button"
-                class="danger-mini inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-md text-[7.5px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                class="danger-mini inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border border-slate-200/80 bg-white text-[7.5px] text-slate-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                 data-action="delete-chat"
                 data-chat-id="${chat.id}"
                 title="Excluir conversa"
@@ -420,16 +436,17 @@ function renderWebSearchControls(state) {
   }
 
   return `
-    <div class="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2.5">
+    <div class="inline-flex items-center gap-1.5">
       <button
         type="button"
-        class="control-btn inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm ${state.webSearchMode ? "border-amber-300 bg-white text-amber-900" : "border-slate-200 bg-white/75 text-slate-600"}"
+        class="control-btn inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold shadow-sm ${state.webSearchMode ? "border-amber-300 bg-amber-50 text-amber-900" : "border-slate-200 bg-white/75 text-slate-600"}"
         data-action="toggle-web-search-mode"
+        title="${state.webSearchMode ? "Busca web premium ativa quando disponível" : "Ativar busca web quando precisar de informação atual"}"
       >
         <span>🌐</span>
-        <span>${state.webSearchMode ? "Busca Web ativa" : "Ativar Busca Web"}</span>
+        <span>${state.webSearchMode ? "Web ativa" : "Busca web"}</span>
       </button>
-      <div class="text-[11px] text-slate-500">Usa busca premium com Groq ou OpenRouter e pode cair para Busca leve DuckDuckGo se a rota principal falhar.</div>
+      <span class="text-[10px] leading-4 text-slate-500">usa web premium e fallback leve</span>
     </div>
   `;
 }
@@ -1142,14 +1159,25 @@ function renderSettingsModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Prompt global do sistema</div>
+              <div class="text-xs text-slate-500">Aplica regras gerais para todos os agentes sem apagar o estilo próprio de cada um.</div>
+            </div>
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-700">Instrução global</span>
+              <textarea class="modal-textarea min-h-[96px]" name="globalSystemPrompt" placeholder="Ex.: Responda sempre em português do Brasil, com clareza, objetividade e foco em ações práticas.">${escapeHtml(settings.globalSystemPrompt || "")}</textarea>
+            </label>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+            <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Backup</div>
-              <div class="text-xs text-slate-500">Exportar ou importar conversas, agentes, marcas e configurações.</div>
+              <div class="text-xs text-slate-500">Exporta ou importa conversas, agentes, marcas, preferências e também as chaves de API para não precisar redigitar tudo.</div>
             </div>
             <div class="flex flex-wrap gap-3">
-              <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white shadow-soft" data-action="export-data">⬇ Exportar backup</button>
+              <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white shadow-soft" data-action="export-data">⬇ Exportar configurações + backup</button>
               <label class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-white/80 cursor-pointer">
                 <input id="import-input" type="file" accept=".json" class="hidden" data-action="import-data" />
-                ⬆ Importar backup
+                ⬆ Importar configurações + backup
               </label>
             </div>
           </section>
@@ -1193,6 +1221,41 @@ function renderRenameChatModal(state) {
             <button type="submit" class="rounded-full bg-femic-navy px-5 py-2.5 font-semibold text-white shadow-soft">Salvar nome</button>
           </div>
         </form>
+      </div>
+    </div>
+  `;
+}
+
+function renderHelpModal(state) {
+  if (!state.modals.help) {
+    return "";
+  }
+
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="help">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel" data-modal-surface="help">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Ajuda rápida</h3>
+            <p class="mt-1 text-sm text-slate-500">Resumo das funções principais e de como o sistema decide cada modo.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="help">✕</button>
+        </div>
+        <div class="grid gap-3 md:grid-cols-2">
+          ${[
+            ["Agentes", "Cada agente muda o foco da resposta. O prompt global orienta o comportamento geral, e o prompt do agente completa esse papel."],
+            ["Modelos", "Modelos rápidos servem para fluxo diário. Modelos de qualidade ou raciocínio funcionam melhor quando a tarefa pede mais profundidade."],
+            ["Busca Web", "A busca web premium funciona com Groq ou OpenRouter quando estiver ativa. Se a rota principal falhar, o sistema pode cair para uma busca leve."],
+            ["Categorias", "As categorias ajudam a separar conversas por contexto. O marcador no card permite organizar sem sair da lista lateral."],
+            ["Anexos e voz", "Você pode anexar arquivos para enriquecer contexto e usar voz quando o navegador ou a configuração de áudio permitir."],
+            ["Backup e APIs", "Exportar e importar inclui também preferências e chaves de API, então você consegue restaurar tudo sem redigitar."],
+          ].map(([title, body]) => `
+            <section class="rounded-xl border border-slate-200 bg-white/80 p-3">
+              <div class="text-sm font-semibold text-slate-900">${title}</div>
+              <p class="mt-1 text-xs leading-5 text-slate-500">${body}</p>
+            </section>
+          `).join("")}
+        </div>
       </div>
     </div>
   `;
@@ -1421,6 +1484,9 @@ export function renderApp(state) {
           <button type="button" class="sidebar-icon-action" data-action="toggle-board-view" title="Board de conversas">
             <span>📋</span>
           </button>
+          <button type="button" class="sidebar-icon-action" data-action="open-help" title="Ajuda e tutorial">
+            <span>?</span>
+          </button>
           <button type="button" class="sidebar-icon-action" data-action="open-settings" title="Configurações">
             <span>⚙</span>
           </button>
@@ -1467,7 +1533,7 @@ export function renderApp(state) {
 
           <footer class="composer-dock shrink-0 pt-2">
             <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
-              ${instagramMode ? renderInstagramCreativePanel(state) : `${renderWebSearchControls(state)}${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
+              ${instagramMode ? renderInstagramCreativePanel(state) : `${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
                   ${instagramMode
@@ -1497,6 +1563,7 @@ export function renderApp(state) {
                         <span>${state.imageMode ? "🖼️" : "✍️"}</span>
                         <span>${state.imageMode ? "Imagem" : "Texto"}</span>
                       </button>`}
+                      ${instagramMode ? "" : renderWebSearchControls(state)}
                     </div>
                     <div class="flex items-center gap-1">
                       ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex h-8 w-8 items-center justify-center rounded-full border ${state.isListening ? "border-rose-300 bg-rose-50 text-rose-600" : "border-slate-200 bg-white/70 text-slate-500"} ${state.speechRecognitionSupported === false && !canRecordFallback ? "opacity-60" : ""} shadow-sm" data-action="toggle-voice" title="${voiceTitle}">
@@ -1518,11 +1585,12 @@ export function renderApp(state) {
     </div>
     ${renderSettingsModal(state)}
     ${renderRenameChatModal(state)}
+    ${renderHelpModal(state)}
     ${renderBrandModal(state)}
     ${renderAgentModal(state)}
   `;
 
-  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat);
+  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help);
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
@@ -1553,6 +1621,7 @@ export function bindUIHandlers(handlers) {
     if (action === "select-chat") handlers.onSelectChat(target.dataset.chatId);
     if (action === "delete-chat") handlers.onDeleteChat(target.dataset.chatId);
     if (action === "create-chat") handlers.onCreateChat();
+    if (action === "open-help") handlers.onOpenHelp();
     if (action === "open-settings") handlers.onOpenSettings();
     if (action === "open-agent-modal") handlers.onOpenAgentModal();
     if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
@@ -1575,6 +1644,7 @@ export function bindUIHandlers(handlers) {
     if (action === "toggle-board-view") handlers.onToggleBoardView();
     if (action === "toggle-pubmed-mode") handlers.onTogglePubMedMode();
     if (action === "toggle-web-search-mode") handlers.onToggleWebSearchMode();
+    if (action === "toggle-model-guidance") handlers.onToggleModelGuidance();
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);

@@ -238,3 +238,19 @@ test("reconcileAppData preserves web search mode in view state", () => {
 
   assert.equal(reconciled.view.webSearchMode, true);
 });
+
+test("reconcileAppData preserves model guidance collapsed state in view", () => {
+  const reconciled = reconcileAppData({
+    agents: [{ id: "agent-a", name: "A" }],
+    chats: [createChat("agent-a", "a1")],
+    view: {
+      activeAgentId: "agent-a",
+      activeChatId: "chat-a1",
+      modelGuidanceCollapsed: true,
+    },
+    defaultAgents: createDefaultAgents,
+    createChat: (agentId) => createChat(agentId, "fallback"),
+  });
+
+  assert.equal(reconciled.view.modelGuidanceCollapsed, true);
+});

@@ -174,6 +174,7 @@ export function getDefaultSettings() {
     groqModel: DEFAULT_GROQ_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
+    globalSystemPrompt: "",
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
     openAITtsModel: DEFAULT_OPENAI_TTS_MODEL,
     openAITtsVoice: DEFAULT_OPENAI_TTS_VOICE,

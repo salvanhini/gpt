@@ -69,6 +69,7 @@ import {
   buildPubMedContext,
   lookupPubMedArticles,
 } from "./pubmed.js";
+import { buildChatMessages } from "./messagePayload.js";
 import {
   applyParsedBackup,
   buildBackupPayload,
@@ -104,6 +105,7 @@ const state = {
   pubmedMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
+  modelGuidanceCollapsed: false,
   agentSummaryCollapsed: true,
   instagramFormat: "story_9_16",
   creativeFormDraft: {
@@ -126,6 +128,7 @@ const state = {
     agentForm: false,
     brandForm: false,
     renameChat: false,
+    help: false,
   },
   modalPayload: {},
   draftMessage: "",
@@ -184,6 +187,7 @@ function saveViewState() {
     pubmedMode: state.pubmedMode,
     pubmedResultLimit: state.pubmedResultLimit,
     webSearchMode: state.webSearchMode,
+    modelGuidanceCollapsed: state.modelGuidanceCollapsed,
     agentSummaryCollapsed: state.agentSummaryCollapsed,
     instagramFormat: state.instagramFormat,
     creativeFormDraft: state.creativeFormDraft,
@@ -216,6 +220,7 @@ function hydratePersistentState() {
   state.pubmedMode = Boolean(reconciled.view.pubmedMode);
   state.pubmedResultLimit = Number(reconciled.view.pubmedResultLimit) > 0 ? Number(reconciled.view.pubmedResultLimit) : 5;
   state.webSearchMode = Boolean(reconciled.view.webSearchMode);
+  state.modelGuidanceCollapsed = Boolean(reconciled.view.modelGuidanceCollapsed);
   state.agentSummaryCollapsed = Boolean(reconciled.view.agentSummaryCollapsed);
   state.instagramFormat = reconciled.view.instagramFormat || "story_9_16";
   state.creativeFormDraft = {
@@ -251,6 +256,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   state.modals.agentForm = false;
   state.modals.brandForm = false;
   state.modals.renameChat = false;
+  state.modals.help = false;
   state.mobileSidebarOpen = false;
   state.recordedAudioChunks = [];
   if (!keepDraft) {
@@ -372,41 +378,34 @@ function buildTextPayload(userMessage) {
         : message.content,
   }));
 
-  const payload = [
-    {
-      role: "system",
-      content: activeAgent.systemPrompt,
-    },
-    ...history,
-  ];
-
-  if (state.pendingAttachmentContext?.combinedContext) {
-    payload.push({
-      role: "user",
-      content: `Use o contexto abaixo apenas como referência complementar para responder melhor:\n\n${state.pendingAttachmentContext.combinedContext}`,
-    });
-  }
-
-  payload.push({
-    role: "user",
-    content: userMessage,
+  return buildChatMessages({
+    globalSystemPrompt: state.settings.globalSystemPrompt || "",
+    agentSystemPrompt: activeAgent?.systemPrompt || "",
+    history,
+    attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
+    userMessage,
   });
-
-  return payload;
 }
 
 function buildTextPayloadWithReference(userMessage, referenceContext) {
-  const payload = buildTextPayload(userMessage);
-  if (!referenceContext?.trim()) {
-    return payload;
-  }
-
-  payload.splice(payload.length - 1, 0, {
-    role: "user",
-    content: `Use a referencia abaixo para responder com base nas fontes consultadas:\n\n${referenceContext}`,
+  const activeAgent = getActiveAgent();
+  const activeChat = getActiveChat();
+  const history = (activeChat?.messages || []).map((message) => ({
+    role: message.role,
+    content:
+      message.meta?.kind === "image"
+        ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
+        : message.content,
   });
 
-  return payload;
+  return buildChatMessages({
+    globalSystemPrompt: state.settings.globalSystemPrompt || "",
+    agentSystemPrompt: activeAgent?.systemPrompt || "",
+    history,
+    attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
+    referenceContext,
+    userMessage,
+  });
 }
 
 function buildInstagramPayload() {
@@ -982,6 +981,11 @@ function handleToggleWebSearchMode() {
   persistAndRender();
 }
 
+function handleToggleModelGuidance() {
+  state.modelGuidanceCollapsed = !state.modelGuidanceCollapsed;
+  persistAndRender();
+}
+
 function handleChangePubMedResultLimit(value) {
   const parsed = Number(value);
   state.pubmedResultLimit = parsed > 0 ? parsed : 5;
@@ -1003,6 +1007,7 @@ function handleSaveSettings(formValues) {
     openAIKey: formValues.openAIKey?.trim() || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
+    globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
@@ -1349,6 +1354,7 @@ function initialize() {
     onOpenSettings: () => {
       setModal("settings", true);
     },
+    onOpenHelp: () => setModal("help", true),
     onOpenAgentModal: () => setModal("agentForm", true),
     onOpenBrandModal: handleOpenBrandModal,
     onCloseModal: (name) => setModal(name, false),
@@ -1373,6 +1379,7 @@ function initialize() {
     onSearchChats: handleSearchChats,
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleWebSearchMode: handleToggleWebSearchMode,
+    onToggleModelGuidance: handleToggleModelGuidance,
     onToggleAgentSummary: () => {
       state.agentSummaryCollapsed = !state.agentSummaryCollapsed;
       persistAndRender();

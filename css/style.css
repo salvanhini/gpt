@@ -250,6 +250,11 @@ button {
   transition: all 0.15s ease;
 }
 
+.category-selector:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
 .chat-rename-btn {
   transition: opacity 0.15s ease, background-color 0.15s ease;
 }
@@ -371,7 +376,7 @@ button {
 
 .sidebar-section-agents {
   flex: 0 0 auto;
-  max-height: 126px;
+  max-height: 148px;
 }
 
 .sidebar-section-chats {
@@ -387,7 +392,7 @@ button {
 }
 
 .sidebar-agents-scroll {
-  max-height: 62px;
+  max-height: 84px;
 }
 
 .sidebar-chats-scroll {
@@ -403,7 +408,7 @@ button {
   width: auto;
   min-width: 0;
   max-width: none;
-  min-height: 2.78rem;
+  min-height: 2.92rem;
   padding: 0.34rem 0.42rem 0.38rem;
   border-radius: 0.82rem;
   box-shadow:
@@ -412,11 +417,11 @@ button {
 }
 
 .chat-card-compact .chat-rename-btn {
-  opacity: 0.42;
+  opacity: 0.88;
 }
 
 .chat-card-compact .danger-mini {
-  opacity: 0.45;
+  opacity: 0.86;
 }
 
 .chat-card-compact:hover .danger-mini,

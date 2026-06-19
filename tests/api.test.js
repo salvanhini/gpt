@@ -81,6 +81,12 @@ test("getModelSelectionDetails returns guidance badges for the active provider/m
   assert.ok(details.badges.includes("Equilibrado"));
 });
 
+test("getDefaultSettings includes a global system prompt field", () => {
+  const settings = getDefaultSettings();
+
+  assert.equal(settings.globalSystemPrompt, "");
+});
+
 test("buildDuckDuckGoSearchUrl encodes the query and default params", () => {
   const url = buildDuckDuckGoSearchUrl("noticias de ia");
   assert.match(url, /q=noticias\+de\+ia/);
