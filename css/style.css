@@ -408,20 +408,29 @@ button {
   width: auto;
   min-width: 0;
   max-width: none;
-  min-height: 2.92rem;
-  padding: 0.34rem 0.42rem 0.38rem;
+  min-height: 3.28rem;
+  padding: 0.46rem 0.5rem 0.5rem;
   border-radius: 0.82rem;
   box-shadow:
     0 8px 18px rgba(15, 23, 42, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
+.chat-card-compact .chat-rename-btn,
+.chat-card-compact .danger-mini {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.5rem;
+}
+
 .chat-card-compact .chat-rename-btn {
   opacity: 0.88;
+  font-size: 0.72rem;
 }
 
 .chat-card-compact .danger-mini {
   opacity: 0.86;
+  font-size: 0.68rem;
 }
 
 .chat-card-compact:hover .danger-mini,
@@ -523,7 +532,7 @@ button {
 .chat-timeline {
   width: min(100%, 1200px);
   margin-inline: auto;
-  padding-top: 1.25rem;
+  padding-top: 0.35rem;
 }
 
 .composer-panel {
@@ -598,8 +607,8 @@ button {
 }
 
 .message-enter .markdown-body {
-  font-size: 0.88rem;
-  line-height: 1.42;
+  font-size: 0.92rem;
+  line-height: 1.58;
 }
 
 .message-enter .markdown-body p,
@@ -608,7 +617,7 @@ button {
 .message-enter .markdown-body blockquote,
 .message-enter .markdown-body table,
 .message-enter .markdown-body pre {
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.72rem;
 }
 
 .message-enter .markdown-body > :last-child {
@@ -654,7 +663,8 @@ button {
 
 .markdown-body {
   color: var(--femic-text);
-  line-height: 1.7;
+  font-size: 0.92rem;
+  line-height: 1.58;
 }
 
 .markdown-body > :first-child {
@@ -675,7 +685,7 @@ button {
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4 {
-  margin: 0 0 0.95rem;
+  margin: 0 0 0.72rem;
 }
 
 .markdown-body ul,
@@ -1190,7 +1200,8 @@ button {
   }
 
   .message-enter .markdown-body {
-    font-size: 0.86rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
     overflow-wrap: anywhere;
   }
 
@@ -1279,8 +1290,8 @@ button {
   }
 
   .chat-card-compact {
-    min-height: 2.72rem;
-    padding: 0.32rem 0.4rem;
+    min-height: 3.08rem;
+    padding: 0.42rem 0.48rem;
   }
 
   .sidebar-section-chats .category-filter {

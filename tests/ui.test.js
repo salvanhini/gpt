@@ -142,7 +142,8 @@ test("renderApp includes help entry, compact web toggle and collapsible model gu
     });
 
     assert.match(app.innerHTML, /sidebar-brand-panel-compact/);
-    assert.match(app.innerHTML, /active-chat-header/);
+    assert.match(app.innerHTML, /agent-summary-panel/);
+    assert.doesNotMatch(app.innerHTML, /active-chat-header/);
     assert.match(app.innerHTML, /Ajuda/);
     assert.match(app.innerHTML, /Busca web/);
     assert.match(app.innerHTML, /ocultar detalhes/i);
