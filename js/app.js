@@ -860,6 +860,7 @@ async function handleSendMessage(rawMessage) {
     showToast(buildUserErrorMessage(error, "Erro ao enviar mensagem."), "error");
   } finally {
     state.isLoading = false;
+    saveChats(state.chats);
     refreshFromStorage();
     persistAndRender();
   }
