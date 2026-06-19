@@ -1448,3 +1448,23 @@ button {
     max-width: 100%;
   }
 }
+
+/* Area de leitura maior: compacta composer quando ha mensagens */
+.chat-workspace.has-messages .composer-dock {
+  padding-top: 0.25rem;
+}
+
+.chat-workspace.has-messages .composer-panel {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.chat-workspace.has-messages #composer-input {
+  min-height: 36px;
+}
+
+.chat-workspace.has-messages .agent-summary-panel {
+  margin-bottom: 0.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
