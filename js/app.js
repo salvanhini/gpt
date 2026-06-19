@@ -404,24 +404,19 @@ function persistAndRender() {
   render();
 }
 
-function buildTextPayload(userMessage) {
-  const activeAgent = getActiveAgent();
-  const activeChat = getActiveChat();
-  const history = (activeChat?.messages || []).map((message) => ({
-    role: message.role,
-    content:
-      message.meta?.kind === "image"
-        ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
-        : message.content,
-  }));
-<<<<<<< HEAD
-<<<<<<< HEAD
-}
-
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
   const maxHistoryMessages = Math.max(4, Number(settings.usageLimits?.maxHistoryMessages) || 12);
+
+  const mapear = (msg) => ({
+    role: msg.role,
+    content:
+      msg.meta?.kind === "image"
+        ? `[imagem gerada anteriormente]\nPrompt: ${msg.content}\nURL: ${msg.meta.imageUrl}`
+        : msg.content,
+  });
+
   if (messages.length <= maxHistoryMessages) {
-    return mapMessagesForPayload(messages);
+    return messages.map(mapear);
   }
 
   const oldMessages = messages.slice(0, -maxHistoryMessages);
@@ -439,7 +434,7 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
       role: "system",
       content: `Resumo compacto do historico anterior para economizar tokens:\n${summary}`,
     },
-    ...mapMessagesForPayload(recentMessages),
+    ...recentMessages.map(mapear),
   ];
 }
 
@@ -447,10 +442,6 @@ function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
-=======
->>>>>>> parent of e19e45d (3.8)
-=======
->>>>>>> parent of e19e45d (3.8)
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -465,13 +456,7 @@ function buildTextPayload(userMessage) {
 function buildTextPayloadWithReference(userMessage, referenceContext) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
-  const history = (activeChat?.messages || []).map((message) => ({
-    role: message.role,
-    content:
-      message.meta?.kind === "image"
-        ? `[imagem gerada anteriormente]\nPrompt: ${message.content}\nURL: ${message.meta.imageUrl}`
-        : message.content,
-  }));
+  const history = compactHistoryForPayload(activeChat?.messages || []);
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
