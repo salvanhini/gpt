@@ -382,6 +382,9 @@ function renderAttachmentChips(state) {
     return "";
   }
 
+  const hasTabularFiles = (state.pendingAttachmentContext?.runtimeFiles || []).some((file) => ["csv", "xls", "xlsx"].includes(file.extension));
+  const analysisDisabled = !state.settings?.e2bApiKey || state.isAdvancedAnalysisLoading;
+
   return `
     <div class="mb-3 flex flex-wrap gap-2">
       ${files
@@ -402,6 +405,17 @@ function renderAttachmentChips(state) {
       >
         Limpar anexos
       </button>
+      ${hasTabularFiles ? `
+        <button
+          type="button"
+          data-action="run-advanced-analysis"
+          class="composer-chip inline-flex items-center gap-2 rounded-full border ${analysisDisabled ? "border-emerald-100 bg-emerald-50/70 text-emerald-400" : "border-emerald-200 bg-emerald-50 text-emerald-800"} px-3 py-1.5 text-xs font-semibold"
+          title="${state.settings?.e2bApiKey ? "Executar analise avancada com Python no E2B" : "Configure a chave da E2B para usar a analise avancada"}"
+        >
+          <span>${state.isAdvancedAnalysisLoading ? "…" : "🧪"}</span>
+          <span>${state.isAdvancedAnalysisLoading ? "Analisando" : "Análise avançada"}</span>
+        </button>
+      ` : ""}
     </div>
   `;
 }
@@ -448,7 +462,7 @@ function renderWebSearchControls(state) {
         <span>🌐</span>
         <span>${state.webSearchMode ? "Web ativa" : "Busca web"}</span>
       </button>
-      <span class="text-[10px] leading-4 text-slate-500">usa web premium e fallback leve</span>
+      <span class="text-[10px] leading-4 text-slate-500">Tavily, Brave e DuckDuckGo economico</span>
     </div>
   `;
 }
@@ -771,7 +785,7 @@ function renderMessage(message, state) {
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
   const sourceBadge = message.meta?.sourceType && message.meta?.provider !== "fal.ai"
-    ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType === "web-search" ? "Busca Web" : message.meta.sourceType)}</span>`
+    ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType === "web-search" ? "Busca Web" : message.meta.sourceType === "advanced-analysis" ? "Análise avançada" : message.meta.sourceType)}</span>`
     : "";
   const fallbackBadge = message.meta?.webSearch
     ? `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${message.meta.isFallback ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}">${message.meta.isFallback ? "Busca leve" : "Busca premium"}</span>`
@@ -1049,6 +1063,15 @@ function renderSettingsModal(state) {
   }
 
   const settings = state.settings;
+  const usage = state.usageSnapshot || { daily: {}, monthly: {} };
+  const limits = settings.usageLimits || {};
+  const usageRows = [
+    ["Busca Tavily", usage.daily?.["webSearch.tavily"] || 0, limits.tavilyDailyLimit || 30],
+    ["Busca Brave", usage.daily?.["webSearch.brave"] || 0, limits.braveDailyLimit || 25],
+    ["Busca DuckDuckGo", usage.daily?.["webSearch.duckduckgo"] || 0, "Livre"],
+    ["Transcricao Groq", usage.daily?.["transcription.groq"] || 0, limits.groqTranscriptionDailyLimit || 20],
+    ["E2B", usage.daily?.["e2b.run"] || 0, limits.e2bDailyLimit || 5],
+  ];
   return `
     <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="settings">
       <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel" data-modal-surface="settings">
@@ -1086,7 +1109,7 @@ function renderSettingsModal(state) {
             <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
               <div class="mb-2">
                 <div class="text-sm font-semibold text-slate-900">Groq</div>
-                <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
+                <div class="text-xs text-slate-500">Chave para modelos rapidos e Whisper fallback.</div>
               </div>
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
@@ -1094,6 +1117,27 @@ function renderSettingsModal(state) {
               </label>
             </section>
           </div>
+
+          <section class="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+            <div class="mb-3">
+              <div class="text-sm font-semibold text-slate-900">Busca web economica</div>
+              <div class="text-xs text-slate-500">Ordem padrao: Tavily, Brave Search e DuckDuckGo gratuito quando limites ou chaves faltarem.</div>
+            </div>
+            <div class="grid gap-3 lg:grid-cols-3">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave Tavily</span>
+                <input class="modal-input" name="tavilyKey" type="password" value="${escapeHtml(settings.tavilyKey || "")}" placeholder="tvly-..." />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave Brave Search</span>
+                <input class="modal-input" name="braveSearchKey" type="password" value="${escapeHtml(settings.braveSearchKey || "")}" placeholder="BSA..." />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave E2B</span>
+                <input class="modal-input" name="e2bApiKey" type="password" value="${escapeHtml(settings.e2bApiKey || "")}" placeholder="e2b_..." />
+              </label>
+            </div>
+          </section>
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
@@ -1132,12 +1176,23 @@ function renderSettingsModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
-              <div class="text-sm font-semibold text-slate-900">Audio (OpenAI)</div>
-              <div class="text-xs text-slate-500">Fallback para microfone e leitura quando o navegador nao tem voz nativa.</div>
+              <div class="text-sm font-semibold text-slate-900">Audio economico</div>
+              <div class="text-xs text-slate-500">Entrada: navegador/Chrome primeiro, Groq Whisper se falhar. OpenAI fica opcional para voz falada por API.</div>
             </div>
             <div class="grid gap-3 lg:grid-cols-4">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Fallback de transcricao</span>
+                <select class="modal-input appearance-none" name="audioTranscribeProvider">
+                  <option value="groq" ${(settings.audioTranscribeProvider || "groq") === "groq" ? "selected" : ""}>Groq Whisper primeiro</option>
+                  <option value="openai" ${settings.audioTranscribeProvider === "openai" ? "selected" : ""}>OpenAI primeiro</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Modelo Groq Whisper</span>
+                <input class="modal-input" name="groqTranscribeModel" type="text" value="${escapeHtml(settings.groqTranscribeModel || "whisper-large-v3-turbo")}" />
+              </label>
               <label class="block lg:col-span-2">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave OpenAI opcional</span>
                 <input class="modal-input" name="openAIKey" type="password" value="${escapeHtml(settings.openAIKey || "")}" placeholder="sk-..." />
               </label>
               <label class="block">
@@ -1155,6 +1210,47 @@ function renderSettingsModal(state) {
               <label class="block lg:col-span-2">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Modelo de fala</span>
                 <input class="modal-input" name="openAITtsModel" type="text" value="${escapeHtml(settings.openAITtsModel || "gpt-4o-mini-tts")}" />
+              </label>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+            <div class="mb-3">
+              <div class="text-sm font-semibold text-slate-900">Uso e limites gratuitos</div>
+              <div class="text-xs text-slate-500">Contadores locais do navegador. Ao bater limite, o app tenta fallback mais barato antes de gastar mais.</div>
+            </div>
+            <div class="grid gap-2 lg:grid-cols-5">
+              ${usageRows.map(([label, used, limit]) => `
+                <div class="rounded-xl border border-white/80 bg-white/75 p-2">
+                  <div class="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">${escapeHtml(label)}</div>
+                  <div class="mt-1 text-sm font-bold text-slate-900">${escapeHtml(String(used))}<span class="text-xs font-medium text-slate-400"> / ${escapeHtml(String(limit))}</span></div>
+                </div>
+              `).join("")}
+            </div>
+            <div class="mt-3 grid gap-3 lg:grid-cols-3">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Tavily por dia</span>
+                <input class="modal-input" name="tavilyDailyLimit" type="number" min="0" value="${escapeHtml(String(limits.tavilyDailyLimit || 30))}" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Brave por dia</span>
+                <input class="modal-input" name="braveDailyLimit" type="number" min="0" value="${escapeHtml(String(limits.braveDailyLimit || 25))}" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Groq Whisper por dia</span>
+                <input class="modal-input" name="groqTranscriptionDailyLimit" type="number" min="0" value="${escapeHtml(String(limits.groqTranscriptionDailyLimit || 20))}" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">E2B por dia</span>
+                <input class="modal-input" name="e2bDailyLimit" type="number" min="0" value="${escapeHtml(String(limits.e2bDailyLimit || 5))}" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Mensagens no historico</span>
+                <input class="modal-input" name="maxHistoryMessages" type="number" min="4" value="${escapeHtml(String(limits.maxHistoryMessages || 12))}" />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Aviso de tokens</span>
+                <input class="modal-input" name="tokenWarningLimit" type="number" min="0" value="${escapeHtml(String(limits.tokenWarningLimit || 12000))}" />
               </label>
             </div>
           </section>
@@ -1550,12 +1646,14 @@ export function renderApp(state) {
   const brasilMode = isBrasilAgent(state);
   const activeChat = state.chats.find((item) => item.id === state.activeChatId);
   const hasMessages = Boolean(activeChat?.messages?.length);
+  const lastAssistant = [...(activeChat?.messages || [])].reverse().find((message) => message.role === "assistant");
+  const readingMode = Boolean(lastAssistant && String(lastAssistant.content || "").length > 1200);
   const chats = getVisibleChats(state);
-  const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openAIKey);
+  const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.groqKey || state.settings.openAIKey);
   const voiceTitle = state.isVoiceProcessing
     ? "Transcrevendo audio"
     : state.speechRecognitionSupported === false && !canRecordFallback
-      ? "Use Chrome/Edge no computador ou configure Audio (OpenAI) para usar o microfone"
+      ? "Use Chrome/Edge no computador ou configure Groq para usar o microfone"
       : state.isListening
       ? "Parar ditado"
       : "Ditado por voz";
@@ -1636,7 +1734,7 @@ export function renderApp(state) {
         ${state.viewMode === "board"
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
-        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
+        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages" : ""} ${readingMode ? "reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${renderActiveAgentSummary(state)}
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
@@ -1747,6 +1845,7 @@ export function bindUIHandlers(handlers) {
     if (action === "speak-message") handlers.onSpeakMessage(target.dataset.messageId);
     if (action === "copy-message") handlers.onCopyMessage(target.dataset.messageId);
     if (action === "clear-attachments") handlers.onClearAttachments();
+    if (action === "run-advanced-analysis") handlers.onRunAdvancedAnalysis();
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
     if (action === "toggle-agent-summary") handlers.onToggleAgentSummary();

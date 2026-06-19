@@ -172,13 +172,22 @@ export async function processFile(file) {
 export async function processFiles(fileList) {
   const files = Array.from(fileList || []);
   const processed = [];
+  const runtimeFiles = [];
 
   for (const file of files) {
     processed.push(await processFile(file));
+    runtimeFiles.push({
+      name: file.name,
+      extension: getExtension(file.name),
+      type: file.type || "",
+      size: file.size || 0,
+      bytes: await readAsArrayBuffer(file),
+    });
   }
 
   return {
     files: processed,
     combinedContext: buildCombinedContext(processed),
+    runtimeFiles,
   };
 }

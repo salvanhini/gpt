@@ -611,6 +611,65 @@ button {
   display: none;
 }
 
+.chat-workspace.reading-mode {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.chat-workspace.reading-mode .agent-summary-panel {
+  margin-bottom: 0.25rem !important;
+  padding-block: 0.36rem !important;
+}
+
+.chat-workspace.reading-mode .chat-timeline {
+  width: min(100%, 1320px);
+  padding-bottom: 0.25rem !important;
+}
+
+.chat-workspace.reading-mode .message-bubble {
+  max-width: min(96%, 1180px);
+}
+
+.chat-workspace.reading-mode .message-enter.items-end .message-bubble {
+  max-width: min(48%, 520px);
+}
+
+.chat-workspace.reading-mode .composer-dock {
+  padding-top: 0.28rem !important;
+}
+
+.chat-workspace.reading-mode .composer-panel {
+  padding: 0.42rem 0.55rem !important;
+  border-radius: 0.9rem;
+}
+
+.chat-workspace.reading-mode .pubmed-controls {
+  margin-bottom: 0.32rem !important;
+  padding: 0.34rem 0.45rem !important;
+}
+
+.chat-workspace.reading-mode .attachment-chip {
+  padding-block: 0.22rem !important;
+  font-size: 0.68rem !important;
+}
+
+.chat-workspace.reading-mode #composer-input {
+  min-height: 2.15rem;
+  max-height: 4.2rem;
+  padding-block: 0.48rem !important;
+  font-size: 0.84rem;
+}
+
+.chat-workspace.reading-mode .composer-panel:not(:focus-within) .model-guidance {
+  display: none;
+}
+
+.chat-workspace.reading-mode .control-btn,
+.chat-workspace.reading-mode .quick-model-wrap {
+  transform: scale(0.96);
+  transform-origin: left center;
+}
+
 .instagram-workspace .composer-dock {
   min-height: 0;
 }
@@ -1214,6 +1273,11 @@ button {
   .chat-timeline {
     width: 100%;
     padding-right: 0 !important;
+  }
+
+  .chat-workspace.reading-mode .message-bubble,
+  .chat-workspace.reading-mode .message-enter.items-end .message-bubble {
+    max-width: 100%;
   }
 
   .composer-panel {
