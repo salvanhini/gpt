@@ -1,5 +1,5 @@
 function escapeHtml(value = "") {
-  return value
+  return (value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -752,6 +752,7 @@ function renderMessage(message, state) {
 
   const alignment = isUser ? "items-end" : "items-start";
   const label = isUser ? "Você" : "FEMIC GPT";
+  const showTypingDots = message.role === "assistant" && !message.content && state.isLoading;
   const content = message.meta?.kind === "image"
     ? `
       <div class="image-preview p-3">
@@ -780,7 +781,9 @@ function renderMessage(message, state) {
         </a>
       </div>
     `
-    : `<div class="markdown-body">${renderMarkdown(message.content)}</div>`;
+    : showTypingDots
+      ? `<div class="typing-dots text-slate-500"><span>●</span> <span>●</span> <span>●</span></div>`
+      : `<div class="markdown-body">${renderMarkdown(message.content)}</div>`;
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
@@ -1739,7 +1742,6 @@ export function renderApp(state) {
 
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
-            ${state.isLoading ? renderTyping() : ""}
             <div class="timeline-end-spacer" aria-hidden="true"></div>
           </section>
 

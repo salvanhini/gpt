@@ -795,6 +795,168 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
   };
 }
 
+// --- Streaming de respostas (efeito maquina de escrever) ---
+
+function getProviderUrl(provider) {
+  if (provider === "deepseek") return DEEPSEEK_URL;
+  if (provider === "groq") return GROQ_URL;
+  return OPENROUTER_URL;
+}
+
+function getProviderHeaders(provider, settings) {
+  const base = { "Content-Type": "application/json" };
+
+  if (provider === "deepseek") {
+    if (!settings.deepSeekKey) throw new Error("Adicione sua chave da DeepSeek nas configuracoes.");
+    return { ...base, Authorization: `Bearer ${settings.deepSeekKey}` };
+  }
+
+  if (provider === "groq") {
+    if (!settings.groqKey) throw new Error("Adicione sua chave da Groq nas configuracoes.");
+    return { ...base, Authorization: `Bearer ${settings.groqKey}` };
+  }
+
+  if (!settings.openRouterKey) throw new Error("Adicione sua chave da OpenRouter nas configuracoes.");
+  return {
+    ...base,
+    Authorization: `Bearer ${settings.openRouterKey}`,
+    "HTTP-Referer": globalThis.location?.href || "",
+    "X-Title": "FEMIC GPT",
+  };
+}
+
+function getProviderBody(provider, { messages, settings, webSearchMode }) {
+  if (provider === "deepseek") {
+    return {
+      model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
+      messages,
+    };
+  }
+
+  if (provider === "groq") {
+    return buildGroqRequestBody({ messages, settings, webSearchMode });
+  }
+
+  return buildOpenRouterRequestBody({ messages, settings, webSearchMode });
+}
+
+async function readStream(response, onChunk) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n");
+    buffer = parts.pop() || "";
+
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line || !line.startsWith("data:")) continue;
+
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") continue;
+
+      try {
+        const json = JSON.parse(payload);
+        const delta = json.choices?.[0]?.delta?.content || "";
+        if (delta) {
+          full += delta;
+          onChunk?.(full);
+        }
+      } catch {
+        // Linhas parciais ou mal formatadas nao interrompem o fluxo
+      }
+    }
+  }
+
+  // Processar resto do buffer apos o fim do stream
+  if (buffer.trim()) {
+    const line = buffer.trim();
+    if (line.startsWith("data:")) {
+      const payload = line.slice(5).trim();
+      if (payload !== "[DONE]") {
+        try {
+          const json = JSON.parse(payload);
+          const delta = json.choices?.[0]?.delta?.content || "";
+          if (delta) full += delta;
+          onChunk?.(full);
+        } catch { /* ignorar */ }
+      }
+    }
+  }
+
+  return full;
+}
+
+export async function streamTextMessage({
+  messages,
+  settings,
+  webSearchMode = false,
+  onChunk = () => {},
+  signal,
+} = {}) {
+  const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
+
+  if (provider === "deepseek" && webSearchMode) {
+    throw new Error("Busca Web nao esta disponivel no DeepSeek direto.");
+  }
+
+  const url = getProviderUrl(provider);
+  const headers = getProviderHeaders(provider, settings);
+  const body = getProviderBody(provider, { messages, settings, webSearchMode });
+
+  const controller = new AbortController();
+  const watchdog = setTimeout(() => controller.abort(), 60000);
+
+  if (signal) {
+    signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...body, stream: true }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(watchdog);
+    if (err.name === "AbortError") {
+      throw new Error("A API demorou muito para responder. Tente novamente.");
+    }
+    throw new Error("Sem conexao com a API. Verifique internet e chave configurada.");
+  }
+
+  clearTimeout(watchdog);
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 429) {
+      throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
+    }
+    if (response.status === 401) {
+      throw new Error("Chave de API invalida. Verifique nas configuracoes.");
+    }
+    throw new Error(extractErrorMessage(data, "Falha na API."));
+  }
+
+  try {
+    const content = await readStream(response, onChunk);
+    return { content, streamed: true };
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("A geracao da resposta foi interrompida.");
+    }
+    throw err;
+  }
+}
+
 export async function generateImage({ prompt, settings }) {
   if (!settings.falKey) {
     throw new Error("Adicione sua chave da fal.ai nas configurações.");

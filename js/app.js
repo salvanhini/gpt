@@ -41,6 +41,7 @@ import {
   runWebSearchQuery,
   sendTextMessage,
   transcribeAudio,
+  streamTextMessage,
 } from "./api.js";
 import {
   getSpeechSynthesis,
@@ -300,6 +301,14 @@ function loadImportedSettings(rawSettings) {
 function buildUserErrorMessage(error, fallback) {
   const message = error?.message || fallback;
   return message?.trim() ? message : fallback;
+}
+
+function autoScrollChat() {
+  const panel = globalThis.document?.getElementById("messages-panel");
+  if (!panel) return;
+  if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 48) {
+    panel.scrollTop = panel.scrollHeight;
+  }
 }
 
 function addAssistantErrorMessage(chatId, error) {
@@ -605,21 +614,21 @@ async function handleSendMessage(rawMessage) {
     ? null
     : buildTextPayload(message);
   state.isLoading = true;
-  addMessage(activeChat.id, {
-    role: "user",
-    content: message,
-    meta: {
-      kind: "text",
-      attachments: state.pendingAttachmentContext?.files || [],
-      instagramFormat: instagramPayload?.format.id || null,
-      brandId: instagramPayload?.brand.id || null,
-    },
-  });
-
-  state.draftMessage = "";
-  persistAndRender();
 
   try {
+    addMessage(activeChat.id, {
+      role: "user",
+      content: message,
+      meta: {
+        kind: "text",
+        attachments: state.pendingAttachmentContext?.files || [],
+        instagramFormat: instagramPayload?.format.id || null,
+        brandId: instagramPayload?.brand.id || null,
+      },
+    });
+
+    state.draftMessage = "";
+    persistAndRender();
     if (isBrasilAgent) {
       const inferred = inferBrasilLookupType(message);
       if (inferred.type === "cep") {
@@ -805,20 +814,43 @@ async function handleSendMessage(rawMessage) {
       if (state.webSearchMode) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
       } else {
-        const reply = await sendTextMessage({
-          messages: textPayload,
-          settings: getActiveSettings(),
-          webSearchMode: false,
-        });
-
+        // Streaming: adiciona mensagem vazia e preenche conforme os chunks chegam
         addMessage(activeChat.id, {
           role: "assistant",
-          content: reply.content,
+          content: "",
           meta: {
             kind: "text",
             provider: getActiveTextProviderLabel(),
           },
         });
+        persistAndRender();
+        autoScrollChat();
+
+        try {
+          await streamTextMessage({
+            messages: textPayload,
+            settings: getActiveSettings(),
+            webSearchMode: false,
+            onChunk: (partial) => {
+              const chat = getActiveChat();
+              if (!chat?.messages?.length) return;
+              const last = chat.messages[chat.messages.length - 1];
+              if (last.role === "assistant") {
+                last.content = partial;
+                persistAndRender();
+                autoScrollChat();
+              }
+            },
+          });
+        } catch (streamError) {
+          const chat = getActiveChat();
+          const last = chat?.messages?.[chat.messages.length - 1];
+          if (last?.role === "assistant" && !last.content) {
+            last.content = buildUserErrorMessage(streamError, "Erro ao gerar resposta.");
+            last.meta = { ...last.meta, failed: true };
+          }
+          showToast(buildUserErrorMessage(streamError, "Erro ao enviar mensagem."), "error");
+        }
       }
     }
 
