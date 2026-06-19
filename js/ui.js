@@ -244,8 +244,8 @@ function renderChatCard(chat, state) {
       <div class="flex items-start gap-1.5">
         <div class="mt-0.5 shrink-0">
           ${chat.category
-            ? `<span class="category-selector inline-flex h-3 w-3 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
-            : `<span class="category-selector inline-flex h-3 w-3 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[7px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
+            ? `<span class="category-selector inline-flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full" style="background:${cat.color}" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Categoria: ${escapeHtml(cat.label)} (clique para alterar)"></span>`
+            : `<span class="category-selector inline-flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-dashed border-slate-300 text-[6px] text-slate-400 hover:border-femic-cyan hover:text-femic-cyan" data-action="toggle-category-picker" data-chat-id="${chat.id}" title="Definir categoria">+</span>`
           }
         </div>
         <div class="min-w-0 flex-1">
@@ -256,8 +256,8 @@ function renderChatCard(chat, state) {
               data-action="select-chat"
               data-chat-id="${chat.id}"
             >
-              <div class="truncate text-[10.5px] font-semibold leading-4 text-slate-800">${escapeHtml(chat.title)}</div>
-              <div class="mt-0.5 flex items-center gap-1 text-[9px] leading-4 text-slate-500">
+              <div class="truncate text-[10px] font-semibold leading-[0.9rem] text-slate-800">${escapeHtml(chat.title)}</div>
+              <div class="mt-0.5 flex items-center gap-1 text-[8.5px] leading-3 text-slate-500">
                 <span>${formatRelativeDay(chat.updatedAt)}</span>
               </div>
             </button>
@@ -266,14 +266,14 @@ function renderChatCard(chat, state) {
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="chat-rename-btn inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[7.5px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
+                class="chat-rename-btn inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-md text-[7px] text-slate-400 opacity-0 hover:bg-slate-100 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
                 title="Renomear conversa"
               >✎</button>
               <button
                 type="button"
-                class="danger-mini inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[8px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                class="danger-mini inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-md text-[7.5px] text-slate-500 hover:bg-rose-50 hover:text-rose-600"
                 data-action="delete-chat"
                 data-chat-id="${chat.id}"
                 title="Excluir conversa"
@@ -1309,7 +1309,6 @@ export function renderApp(state) {
           <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
             ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
           </div>
-          ${state.sidebarCollapsed || !activeAgent ? "" : `<div class="agent-inline-meta mt-2 rounded-xl border border-white/10 bg-white/8 px-2.5 py-2"><div class="flex items-center justify-between gap-2"><div class="min-w-0"><div class="truncate text-[11px] font-semibold text-white">${escapeHtml(activeAgent.name)}</div><div class="truncate text-[9px] text-white/55">${escapeHtml(activeAgent.description || "Agente ativo")}</div></div><div class="flex items-center gap-1">${state.agents.length > 1 ? `<button type="button" class="danger-mini inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/12" data-action="edit-agent" data-agent-id="${activeAgent.id}" title="Editar agente">✎</button>${activeAgent.isDefault ? "" : `<button type="button" class="danger-mini inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] text-white hover:bg-white/12" data-action="delete-agent" data-agent-id="${activeAgent.id}" title="Excluir agente">✕</button>`}` : ""}</div></div></div>`}
         </section>
 
         <section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
