@@ -1619,6 +1619,18 @@ function initialize() {
     onSetChatCategory: handleSetChatCategory,
     onSetMessageCategory: handleSetMessageCategory,
     onRenameChat: handleRenameChat,
+    onClearChat: () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa ja esta vazia.", "info");
+        return;
+      }
+      chat.messages = [];
+      chat.titleMode = "auto";
+      saveChats(state.chats);
+      persistAndRender();
+      showToast("Historico da conversa limpo.", "success");
+    },
     onToggleCategoryPicker: handleToggleCategoryPicker,
     onToggleMessageCategoryPicker: handleToggleMessageCategoryPicker,
     onFilterByCategory: handleFilterByCategory,

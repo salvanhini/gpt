@@ -364,6 +364,12 @@ function renderActiveChatHeader(state) {
             data-chat-id="${chat.id}"
             title="Renomear conversa"
           >✎</button>
+          <button
+            type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-rose-200 hover:text-rose-500"
+            data-action="clear-chat"
+            title="Limpar historico da conversa"
+          >🗑️</button>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
           <span>${chat.titleMode === "manual" ? "Nome definido por você" : "Nome automático"}</span>
@@ -1854,6 +1860,7 @@ export function bindUIHandlers(handlers) {
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
     if (action === "set-message-category") handlers.onSetMessageCategory(target.dataset.messageId, target.dataset.category);
     if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);
+    if (action === "clear-chat") handlers.onClearChat();
     if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
     if (action === "toggle-message-category-picker") handlers.onToggleMessageCategoryPicker(target.dataset.messageId);
     if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);

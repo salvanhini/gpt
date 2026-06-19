@@ -16,6 +16,58 @@ const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_OPENAI_TTS_VOICE = "coral";
 
+// Configuracao do proxy backend (futuro)
+const BACKEND_PROXY = {
+  enabled: false,
+  baseUrl: "",
+};
+
+// Resolve o endpoint e headers conforme o modo (direto vs proxy)
+function resolveEndpoint(provider, settings, bodyObject) {
+  if (BACKEND_PROXY.enabled) {
+    return {
+      url: `${BACKEND_PROXY.baseUrl.replace(/\/+$/, "")}/chat/completions`,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, ...bodyObject }),
+    };
+  }
+
+  // Modo direto (padrao) — envia para a API do provedor com a chave
+  const providerNames = {
+    openrouter: "OpenRouter",
+    deepseek: "DeepSeek",
+    groq: "Groq",
+  };
+  const label = providerNames[provider] || "API";
+
+  const endpointMap = {
+    openrouter: { url: OPENROUTER_URL, key: settings.openRouterKey },
+    deepseek: { url: DEEPSEEK_URL, key: settings.deepSeekKey },
+    groq: { url: GROQ_URL, key: settings.groqKey },
+  };
+
+  const endpoint = endpointMap[provider];
+  if (!endpoint?.key) {
+    throw new Error(`Adicione sua chave da ${label} nas configuracoes.`);
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${endpoint.key}`,
+  };
+
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = globalThis.location?.href || "";
+    headers["X-Title"] = "FEMIC GPT";
+  }
+
+  return {
+    url: endpoint.url,
+    headers,
+    body: JSON.stringify(bodyObject),
+  };
+}
+
 export const OPENROUTER_MODELS = [
   {
     value: "qwen/qwen3.7-plus",
@@ -668,85 +720,80 @@ export async function runWebSearchQuery({ messages, settings, ...options }) {
   };
 }
 
+async function chatFetch(url, headers, body) {
+  const controller = new AbortController();
+  const watchdog = setTimeout(() => controller.abort(), 30000);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(watchdog);
+    if (err.name === "AbortError") throw new Error("A API demorou muito para responder. Tente novamente.");
+    throw new Error("Sem conexao com a API. Verifique internet.");
+  }
+
+  clearTimeout(watchdog);
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
+    if (response.status === 401) throw new Error("Chave de API invalida. Verifique nas configuracoes.");
+    throw new Error(extractErrorMessage(data, "Falha na API."));
+  }
+
+  return data;
+}
+
 export async function sendTextMessage({ messages, settings, webSearchMode = false }) {
+  // Cache: verifica resposta repetida antes de chamar a API
+  const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
+  const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
+  if (chaveCache) {
+    const cached = lerCache(chaveCache);
+    if (cached) return { content: cached, fromCache: true };
+  }
+
+  let resultado;
+
   if (settings.textProvider === "deepseek") {
     if (webSearchMode) {
       throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
     }
-    return sendDeepSeekMessage({ messages, settings });
+    resultado = await sendDeepSeekMessage({ messages, settings });
+  } else if (settings.textProvider === "groq") {
+    resultado = await sendGroqMessage({ messages, settings, webSearchMode });
+  } else {
+    const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode });
+    const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
+    const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
+
+    const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
+    if (!content) {
+      throw new Error("A resposta da OpenRouter veio vazia.");
+    }
+
+    resultado = { content, raw: data };
   }
 
-  if (settings.textProvider === "groq") {
-    return sendGroqMessage({ messages, settings, webSearchMode });
-  }
-
-  if (!settings.openRouterKey) {
-    throw new Error("Adicione sua chave da OpenRouter nas configurações.");
-  }
-
-  let response;
-  try {
-    response = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.openRouterKey}`,
-        "HTTP-Referer": window.location.href,
-        "X-Title": "FEMIC GPT",
-      },
-      body: JSON.stringify(buildOpenRouterRequestBody({ messages, settings, webSearchMode })),
-    });
-  } catch {
-    throw new Error("Não foi possível conectar à OpenRouter. Verifique internet, chave e o modelo selecionado.");
-  }
-
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      extractErrorMessage(data, "Falha ao consultar a OpenRouter."),
-    );
-  }
-
-  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
-  if (!content) {
-    throw new Error("A resposta da OpenRouter veio vazia.");
-  }
-
-  return {
-    content,
-    raw: data,
-  };
+  if (chaveCache) salvarCache(chaveCache, resultado.content);
+  return resultado;
 }
 
 async function sendDeepSeekMessage({ messages, settings }) {
-  if (!settings.deepSeekKey) {
-    throw new Error("Adicione sua chave da DeepSeek nas configurações.");
-  }
-
-  let response;
-  try {
-    response = await fetch(DEEPSEEK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.deepSeekKey}`,
-      },
-      body: JSON.stringify({
-        model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
-        messages,
-        stream: false,
-      }),
-    });
-  } catch {
-    throw new Error("Não foi possível conectar à DeepSeek. Verifique internet, chave e modelo selecionado.");
-  }
-
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao consultar a DeepSeek."));
-  }
+  const bodyObj = {
+    model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
+    messages,
+    stream: false,
+  };
+  const endpoint = resolveEndpoint("deepseek", settings, bodyObj);
+  const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 
   const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
   if (!content) {
@@ -760,29 +807,9 @@ async function sendDeepSeekMessage({ messages, settings }) {
 }
 
 async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
-  if (!settings.groqKey) {
-    throw new Error("Adicione sua chave da Groq nas configuracoes.");
-  }
-
-  let response;
-  try {
-    response = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.groqKey}`,
-      },
-      body: JSON.stringify(buildGroqRequestBody({ messages, settings, webSearchMode })),
-    });
-  } catch {
-    throw new Error("Nao foi possivel conectar a Groq. Verifique internet, chave e modelo selecionado.");
-  }
-
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao consultar a Groq."));
-  }
+  const bodyObj = buildGroqRequestBody({ messages, settings, webSearchMode });
+  const endpoint = resolveEndpoint("groq", settings, bodyObj);
+  const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 
   const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
   if (!content) {
@@ -795,35 +822,49 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
   };
 }
 
+// --- Cache local de respostas (expira em 24h) ---
+
+const CHAT_CACHE_KEY = "femicgpt:chat-cache";
+const CHAT_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function calcularHash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+
+function getChaveCache(mensagens, modelo) {
+  const ultima = [...mensagens].reverse().find((m) => m?.role === "user");
+  if (!ultima?.content) return null;
+  const texto = typeof ultima.content === "string" ? ultima.content.trim() : "";
+  if (!texto) return null;
+  return `chat::${modelo}::${calcularHash(texto.toLowerCase())}`;
+}
+
+function lerCache(resposta) {
+  try {
+    const dados = JSON.parse(localStorage.getItem(CHAT_CACHE_KEY) || "{}");
+    const entrada = dados[resposta];
+    if (entrada && Date.now() - entrada.ts < CHAT_CACHE_TTL) {
+      return entrada.conteudo;
+    }
+    if (entrada) delete dados[resposta];
+  } catch { /* ignorar */ }
+  return null;
+}
+
+function salvarCache(chave, conteudo) {
+  try {
+    const dados = JSON.parse(localStorage.getItem(CHAT_CACHE_KEY) || "{}");
+    dados[chave] = { conteudo, ts: Date.now() };
+    localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(dados));
+  } catch { /* cache nao deve quebrar o chat */ }
+}
+
 // --- Streaming de respostas (efeito maquina de escrever) ---
-
-function getProviderUrl(provider) {
-  if (provider === "deepseek") return DEEPSEEK_URL;
-  if (provider === "groq") return GROQ_URL;
-  return OPENROUTER_URL;
-}
-
-function getProviderHeaders(provider, settings) {
-  const base = { "Content-Type": "application/json" };
-
-  if (provider === "deepseek") {
-    if (!settings.deepSeekKey) throw new Error("Adicione sua chave da DeepSeek nas configuracoes.");
-    return { ...base, Authorization: `Bearer ${settings.deepSeekKey}` };
-  }
-
-  if (provider === "groq") {
-    if (!settings.groqKey) throw new Error("Adicione sua chave da Groq nas configuracoes.");
-    return { ...base, Authorization: `Bearer ${settings.groqKey}` };
-  }
-
-  if (!settings.openRouterKey) throw new Error("Adicione sua chave da OpenRouter nas configuracoes.");
-  return {
-    ...base,
-    Authorization: `Bearer ${settings.openRouterKey}`,
-    "HTTP-Referer": globalThis.location?.href || "",
-    "X-Title": "FEMIC GPT",
-  };
-}
 
 function getProviderBody(provider, { messages, settings, webSearchMode }) {
   if (provider === "deepseek") {
@@ -906,9 +947,19 @@ export async function streamTextMessage({
     throw new Error("Busca Web nao esta disponivel no DeepSeek direto.");
   }
 
-  const url = getProviderUrl(provider);
-  const headers = getProviderHeaders(provider, settings);
-  const body = getProviderBody(provider, { messages, settings, webSearchMode });
+  // Cache: verifica se ja temos esta resposta
+  const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
+  const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
+  if (chaveCache) {
+    const cached = lerCache(chaveCache);
+    if (cached) {
+      onChunk(cached);
+      return { content: cached, streamed: false, fromCache: true };
+    }
+  }
+
+  const rawBody = getProviderBody(provider, { messages, settings, webSearchMode });
+  const { url, headers, body } = resolveEndpoint(provider, settings, { ...rawBody, stream: true });
 
   const controller = new AbortController();
   const watchdog = setTimeout(() => controller.abort(), 60000);
@@ -922,7 +973,7 @@ export async function streamTextMessage({
     response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ ...body, stream: true }),
+      body,
       signal: controller.signal,
     });
   } catch (err) {
@@ -948,6 +999,8 @@ export async function streamTextMessage({
 
   try {
     const content = await readStream(response, onChunk);
+    // Salva no cache apos sucesso
+    if (chaveCache) salvarCache(chaveCache, content);
     return { content, streamed: true };
   } catch (err) {
     if (err.name === "AbortError") {
