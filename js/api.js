@@ -881,11 +881,15 @@ function getProviderBody(provider, { messages, settings, webSearchMode }) {
   return buildOpenRouterRequestBody({ messages, settings, webSearchMode });
 }
 
-async function readStream(response, onChunk) {
+async function readStream(response, onChunk, signal) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let full = "";
   let buffer = "";
+
+  if (signal) {
+    signal.addEventListener("abort", () => reader.cancel(), { once: true });
+  }
 
   while (true) {
     const { done, value } = await reader.read();
@@ -984,9 +988,8 @@ export async function streamTextMessage({
     throw new Error("Sem conexao com a API. Verifique internet e chave configurada.");
   }
 
-  clearTimeout(watchdog);
-
   if (!response.ok) {
+    clearTimeout(watchdog);
     const data = await response.json().catch(() => null);
     if (response.status === 429) {
       throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
@@ -998,11 +1001,12 @@ export async function streamTextMessage({
   }
 
   try {
-    const content = await readStream(response, onChunk);
-    // Salva no cache apos sucesso
+    const content = await readStream(response, onChunk, controller.signal);
+    clearTimeout(watchdog);
     if (chaveCache) salvarCache(chaveCache, content);
     return { content, streamed: true };
   } catch (err) {
+    clearTimeout(watchdog);
     if (err.name === "AbortError") {
       throw new Error("A geracao da resposta foi interrompida.");
     }

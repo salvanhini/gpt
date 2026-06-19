@@ -448,8 +448,6 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
     })
     .join("\n");
 
-  showToast("Resumo automatico aplicado para reduzir tokens.", "info");
-
   return [
     {
       role: "system",
