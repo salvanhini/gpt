@@ -448,6 +448,8 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
     })
     .join("\n");
 
+  showToast("Resumo automatico aplicado para reduzir tokens.", "info");
+
   return [
     {
       role: "system",
@@ -858,7 +860,6 @@ async function handleSendMessage(rawMessage) {
     showToast(buildUserErrorMessage(error, "Erro ao enviar mensagem."), "error");
   } finally {
     state.isLoading = false;
-    saveChats(state.chats);
     refreshFromStorage();
     persistAndRender();
   }
