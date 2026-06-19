@@ -456,7 +456,6 @@ function renderWebSearchControls(state) {
         <span>🌐</span>
         <span>${state.webSearchMode ? "Web ativa" : "Busca web"}</span>
       </button>
-      <span class="text-[10px] leading-4 text-slate-500">usa web premium e fallback leve</span>
     </div>
   `;
 }

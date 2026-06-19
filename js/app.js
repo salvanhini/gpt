@@ -595,6 +595,7 @@ async function handleSendMessage(rawMessage) {
     ? null
     : buildTextPayload(message);
   state.isLoading = true;
+  let modeloOriginal;
 
   try {
     addMessage(activeChat.id, {
@@ -823,7 +824,6 @@ async function handleSendMessage(rawMessage) {
       }
 
       // Modo automatico: classifica a pergunta para rotear modelo e web search
-      let modeloOriginal;
       if (state.smartMode && !isBrasilAgent) {
         const classe = smartClassify(message);
         if (classe.webSearch && !state.webSearchMode) {
@@ -1151,7 +1151,6 @@ function handleToggleWebSearchMode() {
 
 function handleToggleSmartMode() {
   state.smartMode = !state.smartMode;
-  showToast(state.smartMode ? "Modo automatico ativado: modelo e busca web sao escolhidos conforme a pergunta." : "Modo automatico desativado.", "info");
   persistAndRender();
 }
 
