@@ -835,6 +835,7 @@ async function handleSendMessage(rawMessage) {
               const last = chat.messages[chat.messages.length - 1];
               if (last.role === "assistant") {
                 last.content = partial;
+                saveChats(state.chats);
                 persistAndRender();
                 autoScrollChat();
               }
