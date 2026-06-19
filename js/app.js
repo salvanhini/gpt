@@ -101,7 +101,7 @@ const state = {
   pubmedMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
-  agentSummaryCollapsed: false,
+  agentSummaryCollapsed: true,
   instagramFormat: "story_9_16",
   creativeFormDraft: {
     objective: "",

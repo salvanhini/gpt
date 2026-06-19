@@ -385,16 +385,26 @@ function renderActiveAgentSummary(state) {
     <section class="agent-summary-panel ${isCollapsed ? "is-collapsed" : ""} mb-3 rounded-[1.45rem] border border-white/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(240,248,255,0.92))] px-4 py-3 shadow-soft">
       <div class="agent-summary-header flex ${isCollapsed ? "items-center justify-between gap-3" : "flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"}">
         <div class="min-w-0 flex-1">
-          <div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-femic-navy">
-            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sm">${escapeHtml(agent.emoji || "🤖")}</span>
-            <span>${escapeHtml(guide.badge)}</span>
-          </div>
-          <div class="${isCollapsed ? "mt-2" : "mt-3"} flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
-            <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
-            ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web hibrida</span>` : ""}
-            ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
-          </div>
+          ${isCollapsed
+            ? `<div class="flex min-w-0 items-center gap-2.5">
+                <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-100 bg-white text-[0.95rem] shadow-sm">${escapeHtml(agent.emoji || "🤖")}</span>
+                <div class="min-w-0 flex items-center gap-1.5">
+                  <h2 class="truncate text-sm font-semibold tracking-tight text-slate-900">${escapeHtml(agent.name)}</h2>
+                  ${state.webSearchMode ? `<span class="inline-flex h-2 w-2 shrink-0 rounded-full bg-amber-400" title="Busca Web ativa"></span>` : ""}
+                  ${isScienceAgent(state) && state.pubmedMode ? `<span class="inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-400" title="PubMed ativa"></span>` : ""}
+                </div>
+              </div>`
+            : `<div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-femic-navy">
+                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sm">${escapeHtml(agent.emoji || "🤖")}</span>
+                <span>${escapeHtml(guide.badge)}</span>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
+                <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
+                ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web hibrida</span>` : ""}
+                ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
+              </div>`
+          }
           ${isCollapsed ? "" : `<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>`}
         </div>
         <div class="agent-summary-actions flex shrink-0 ${isCollapsed ? "items-center" : "items-start"} gap-2 lg:justify-end">
@@ -403,7 +413,7 @@ function renderActiveAgentSummary(state) {
           </div>`}
           <button
             type="button"
-            class="agent-summary-toggle inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/90 bg-white/90 text-sm text-slate-500 shadow-sm"
+            class="agent-summary-toggle inline-flex ${isCollapsed ? "h-7 w-7 text-[11px]" : "h-9 w-9 text-sm"} items-center justify-center rounded-full border border-slate-200/90 bg-white/90 text-slate-500 shadow-sm"
             data-action="toggle-agent-summary"
             title="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"
             aria-label="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"

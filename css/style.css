@@ -426,14 +426,25 @@ button {
 }
 
 .agent-summary-panel.is-collapsed {
-  padding-top: 0.9rem;
-  padding-bottom: 0.9rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(244, 249, 255, 0.94));
+  border-color: rgba(255, 255, 255, 0.86);
+  border-radius: 1.1rem;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .agent-summary-panel.is-collapsed .agent-summary-header {
   align-items: center;
+}
+
+.agent-summary-panel.is-collapsed h2 {
+  line-height: 1.1;
 }
 
 .agent-summary-toggle {
@@ -460,8 +471,8 @@ button {
 
 @media (max-width: 768px) {
   .agent-summary-panel.is-collapsed {
-    padding-left: 0.9rem;
-    padding-right: 0.9rem;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
   }
 
   .agent-summary-panel.is-collapsed .agent-summary-actions {
