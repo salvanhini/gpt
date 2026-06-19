@@ -79,7 +79,15 @@ test("renderApp includes help entry, compact web toggle and collapsible model gu
           updatedAt: "2026-06-19T10:00:00.000Z",
           createdAt: "2026-06-19T10:00:00.000Z",
           category: "trabalho",
-          messages: [],
+          messages: [
+            {
+              id: "msg-1",
+              role: "assistant",
+              content: "Resposta longa para leitura.",
+              createdAt: "2026-06-19T10:01:00.000Z",
+              meta: { kind: "text" },
+            },
+          ],
         },
       ],
       agents: [{ id: "agent-general", name: "Assistente Geral", emoji: "✨" }],
@@ -142,6 +150,7 @@ test("renderApp includes help entry, compact web toggle and collapsible model gu
     });
 
     assert.match(app.innerHTML, /sidebar-brand-panel-compact/);
+    assert.match(app.innerHTML, /has-messages/);
     assert.match(app.innerHTML, /agent-summary-panel/);
     assert.doesNotMatch(app.innerHTML, /active-chat-header/);
     assert.match(app.innerHTML, /Ajuda/);
