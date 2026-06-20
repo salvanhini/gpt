@@ -40,6 +40,7 @@ export function createChat(agentId) {
     updatedAt: new Date().toISOString(),
     category: "",
     summary: "",
+    pinned: false,
     messages: [],
   };
 }

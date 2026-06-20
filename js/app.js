@@ -19,6 +19,12 @@ import {
   updateBrand,
 } from "./brands.js";
 import {
+  archiveConversations,
+  getAllArchived,
+  restoreConversation,
+  deleteArchived,
+} from "./archiveStorage.js";
+import {
   addMessage,
   createChat,
   getChatsByAgent,
@@ -140,6 +146,8 @@ const state = {
   draftMessage: "",
   mobileSidebarOpen: false,
   sidebarCollapsed: false,
+  archivedChats: [],
+  showArchived: false,
   recognition: null,
   mediaRecorder: null,
   mediaStream: null,
@@ -860,7 +868,7 @@ async function handleSendMessage(rawMessage) {
         autoScrollChat();
 
         try {
-          await streamTextMessage({
+          const streamResult = await streamTextMessage({
             messages: textPayload,
             settings: getActiveSettings(),
             webSearchMode: false,
@@ -876,6 +884,17 @@ async function handleSendMessage(rawMessage) {
               }
             },
           });
+          // Armazena info de cached tokens no meta da mensagem
+          const chat = getActiveChat();
+          const lastMsg = chat?.messages?.[chat.messages.length - 1];
+          if (lastMsg?.role === "assistant" && streamResult) {
+            lastMsg.meta = {
+              ...lastMsg.meta,
+              cachedTokens: streamResult.cachedTokens || 0,
+              promptTokens: streamResult.promptTokens || 0,
+              completionTokens: streamResult.completionTokens || 0,
+            };
+          }
         } catch (streamError) {
           const chat = getActiveChat();
           const last = chat?.messages?.[chat.messages.length - 1];
@@ -908,6 +927,7 @@ async function handleSendMessage(rawMessage) {
     refreshFromStorage();
     persistAndRender();
     incrementUsage("textMessages");
+    pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
 
     // Atualiza resumo acumulativo se houver mensagens demais
     const chat = getActiveChat();
@@ -1151,7 +1171,58 @@ function handleToggleWebSearchMode() {
 
 function handleToggleSmartMode() {
   state.smartMode = !state.smartMode;
+  showToast(state.smartMode ? "Modo automático ativado" : "Modo automático desativado");
   persistAndRender();
+}
+
+function handleTogglePinChat(chatId) {
+  const chat = state.chats.find((c) => c.id === chatId);
+  if (!chat) return;
+  chat.pinned = !chat.pinned;
+  saveChats(state.chats);
+  showToast(chat.pinned ? "Conversa fixada" : "Conversa desafixada");
+  persistAndRender();
+}
+
+async function handleToggleShowArchived() {
+  state.showArchived = !state.showArchived;
+  if (state.showArchived) {
+    try {
+      state.archivedChats = await getAllArchived();
+    } catch (err) {
+      console.error("[FEMIC GPT] Erro ao carregar arquivadas:", err);
+      state.archivedChats = [];
+    }
+  }
+  persistAndRender();
+}
+
+async function handleRestoreArchived(chatId) {
+  try {
+    const chat = await restoreConversation(chatId);
+    if (chat) {
+      state.chats.push(chat);
+      saveChats(state.chats);
+      state.archivedChats = state.archivedChats.filter((c) => c.id !== chatId);
+      showToast("Conversa restaurada com sucesso!");
+      persistAndRender();
+    }
+  } catch (err) {
+    console.error("[FEMIC GPT] Erro ao restaurar:", err);
+    showToast("Erro ao restaurar conversa.", "error");
+  }
+}
+
+async function handleDeleteArchived(chatId) {
+  try {
+    await deleteArchived(chatId);
+    state.archivedChats = state.archivedChats.filter((c) => c.id !== chatId);
+    showToast("Conversa arquivada excluída permanentemente.");
+    persistAndRender();
+  } catch (err) {
+    console.error("[FEMIC GPT] Erro ao excluir arquivada:", err);
+    showToast("Erro ao excluir conversa arquivada.", "error");
+  }
 }
 
 function handleToggleModelGuidance() {
@@ -1559,11 +1630,53 @@ const voiceController = createVoiceController({
   getSettings: () => state.settings,
 });
 
+const MAX_CHATS = 50;
+const MAX_MESSAGES_PER_CHAT = 200;
+
+async function pruneStorage() {
+  let changed = false;
+
+  // Poda de mensagens por conversa
+  for (const chat of state.chats) {
+    if (chat.messages && chat.messages.length > MAX_MESSAGES_PER_CHAT) {
+      const excess = chat.messages.length - MAX_MESSAGES_PER_CHAT;
+      chat.messages = chat.messages.slice(excess);
+      changed = true;
+    }
+  }
+
+  // Poda de conversas (mantem fixadas, arquiva antes de remover)
+  if (state.chats.length > MAX_CHATS) {
+    const sorted = [...state.chats].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return new Date(a.updatedAt) - new Date(b.updatedAt);
+    });
+    const toArchive = sorted.slice(0, state.chats.length - MAX_CHATS);
+    if (toArchive.length > 0) {
+      try {
+        await archiveConversations(toArchive);
+      } catch (err) {
+        console.error("[FEMIC GPT] Erro ao arquivar conversas:", err);
+      }
+      const removedIds = new Set(toArchive.map((c) => c.id));
+      state.chats = state.chats.filter((c) => !removedIds.has(c.id));
+      changed = true;
+      showToast(`${toArchive.length} conversa(s) antiga(s) arquivada(s) automaticamente.`, "info");
+    }
+  }
+
+  if (changed) {
+    saveChats(state.chats);
+  }
+}
+
 function initialize() {
   try {
     ensureSeedData();
     syncActivePointers();
     voiceController.syncSpeechVoice();
+    pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);
   }
@@ -1615,6 +1728,10 @@ function initialize() {
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleWebSearchMode: handleToggleWebSearchMode,
     onToggleSmartMode: handleToggleSmartMode,
+    onTogglePinChat: handleTogglePinChat,
+    onToggleShowArchived: handleToggleShowArchived,
+    onRestoreArchived: handleRestoreArchived,
+    onDeleteArchived: handleDeleteArchived,
     onToggleModelGuidance: handleToggleModelGuidance,
     onToggleAgentSummary: () => {
       state.agentSummaryCollapsed = !state.agentSummaryCollapsed;

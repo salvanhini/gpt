@@ -321,6 +321,13 @@ function renderChatCard(chat, state) {
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
+                class="inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border ${chat.pinned ? "border-amber-300 bg-amber-50 text-amber-600" : "border-slate-200/80 bg-white text-slate-500"} shadow-sm hover:border-amber-200 hover:text-amber-500"
+                data-action="toggle-pin-chat"
+                data-chat-id="${chat.id}"
+                title="${chat.pinned ? "Desafixar conversa" : "Fixar conversa"}"
+              >📌</button>
+              <button
+                type="button"
                 class="chat-rename-btn inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border border-slate-200/80 bg-white text-[8px] text-slate-500 opacity-100 shadow-sm hover:border-sky-200 hover:text-femic-cyan"
                 data-action="rename-chat"
                 data-chat-id="${chat.id}"
@@ -376,7 +383,10 @@ function renderActiveChatHeader(state) {
           <span>•</span>
           <span>${formatRelativeDay(chat.updatedAt)} às ${formatTime(chat.updatedAt)}</span>
           <span>•</span>
-          <span class="text-slate-400">💬 ${chat.messages.length} msgs · ~${Math.ceil((chat.messages || []).reduce((t, m) => t + (m.content || "").length, 0) * 0.25)} tokens</span>
+          <span class="text-slate-400">💬 ${chat.messages.length} msgs · ~${Math.ceil((chat.messages || []).reduce((t, m) => t + (m.content || "").length, 0) * 0.25)} tokens${(() => {
+            const totalCached = (chat.messages || []).reduce((t, m) => t + (m.meta?.cachedTokens || 0), 0);
+            return totalCached > 0 ? ` <span class="text-emerald-600">(${totalCached} cached)</span>` : "";
+          })()}</span>
         </div>
       </div>
       ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
@@ -952,7 +962,11 @@ function getChatPreview(chat) {
 }
 
 function getBoardCards(state) {
-  let chats = [...state.chats].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  let chats = [...state.chats].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.updatedAt) - new Date(a.updatedAt);
+  });
   if (state.activeCategory) {
     chats = chats.filter((c) => c.category === state.activeCategory);
   }
@@ -978,10 +992,23 @@ function renderBoardCard(chat, state) {
       <div class="p-4">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0 flex-1">
-            <div class="truncate text-sm font-semibold text-slate-900">${escapeHtml(chat.title)}</div>
+            <div class="flex items-center gap-1.5">
+              ${chat.pinned ? `<span class="text-amber-500" title="Fixada">📌</span>` : ""}
+              <div class="truncate text-sm font-semibold text-slate-900">${escapeHtml(chat.title)}</div>
+            </div>
             <div class="mt-1 text-xs font-medium text-slate-400">${formatRelativeDay(chat.updatedAt)} · ${formatTime(chat.updatedAt)}</div>
           </div>
-          ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${chat.pinned ? "text-amber-500" : "text-slate-400"} hover:bg-amber-50 hover:text-amber-500"
+              data-action="toggle-pin-chat"
+              data-chat-id="${chat.id}"
+              title="${chat.pinned ? "Desafixar" : "Fixar"}"
+              onclick="event.stopPropagation()"
+            >📌</button>
+            ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
+          </div>
         </div>
         ${preview ? `<div class="mt-3 line-clamp-2 text-xs leading-relaxed text-slate-500">${escapeHtml(preview)}</div>` : `<div class="mt-3 text-xs leading-relaxed text-slate-400">Conversa vazia pronta para receber novas ideias.</div>`}
         <div class="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
@@ -1047,6 +1074,47 @@ function renderBoardView(state) {
             ? `<div class="board-grid grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${cards.map((chat) => renderBoardCard(chat, state)).join("")}</div>`
             : `<div class="mx-auto flex max-w-md flex-col items-center justify-center rounded-[1.5rem] border border-white/80 bg-white/80 px-6 py-14 text-center shadow-soft"><div class="mb-3 text-4xl">📭</div><p class="text-lg font-semibold text-slate-700">Nenhuma conversa encontrada</p><p class="mt-1 text-sm leading-6 text-slate-400">${state.boardSearchQuery ? "Tente outro termo de busca." : "Nenhuma conversa nesta categoria."}</p></div>`
           }
+          <div class="mt-6 border-t border-slate-200 pt-4">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+              data-action="toggle-show-archived"
+            >
+              <span>🗄️</span>
+              <span>${state.showArchived ? "Ocultar arquivadas" : "Conversas arquivadas"}</span>
+              ${state.archivedChats.length > 0 ? `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">${state.archivedChats.length}</span>` : ""}
+            </button>
+            ${state.showArchived ? `
+              <div class="mt-3 grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+                ${state.archivedChats.length === 0 ? `<p class="text-xs text-slate-400">Nenhuma conversa arquivada.</p>` : ""}
+                ${state.archivedChats.map((chat) => `
+                  <div class="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-xs font-semibold text-slate-700">${escapeHtml(chat.title)}</div>
+                        <div class="mt-0.5 text-[10px] text-slate-400">Arquivada em ${formatRelativeDay(chat.archivedAt)}</div>
+                        ${chat.summary ? `<div class="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-400">${escapeHtml(chat.summary).slice(0, 120)}...</div>` : ""}
+                      </div>
+                    </div>
+                    <div class="mt-2 flex items-center gap-1.5 border-t border-slate-100 pt-2">
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                        data-action="restore-archived"
+                        data-chat-id="${chat.id}"
+                      >↩ Restaurar</button>
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                        data-action="delete-archived"
+                        data-chat-id="${chat.id}"
+                      >🗑 Excluir</button>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            ` : ""}
+          </div>
         </div>
       </div>
     </div>
@@ -1227,6 +1295,15 @@ function renderSettingsModal(state) {
                 <span class="mb-1 block text-xs font-medium text-slate-700">Alerta de tokens</span>
                 <input class="modal-input" name="tokenWarningLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tokenWarningLimit ?? 12000))}" />
               </label>
+            </div>
+            <div class="mt-3 rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
+              <div class="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+                <span>⚡</span>
+                <span>Prompt Caching ativo</span>
+              </div>
+              <div class="mt-1 text-[11px] leading-relaxed text-emerald-700">
+                O sistema usa cache de prompt para economizar tokens. DeepSeek e Groq fazem cache automatico de prefixos identicos (50-90% de desconto). OpenRouter usa response cache para requests identicas (zero custo).
+              </div>
             </div>
           </section>
 
@@ -1806,6 +1883,10 @@ export function bindUIHandlers(handlers) {
     if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
     if (action === "close-modal") handlers.onCloseModal(target.dataset.modal);
     if (action === "toggle-image-mode") handlers.onToggleImageMode();
+    if (action === "toggle-pin-chat") handlers.onTogglePinChat(target.dataset.chatId);
+    if (action === "toggle-show-archived") handlers.onToggleShowArchived();
+    if (action === "restore-archived") handlers.onRestoreArchived(target.dataset.chatId);
+    if (action === "delete-archived") handlers.onDeleteArchived(target.dataset.chatId);
     if (action === "toggle-smart-mode") handlers.onToggleSmartMode();
     if (action === "toggle-voice") handlers.onToggleVoice();
     if (action === "speak-message") handlers.onSpeakMessage(target.dataset.messageId);

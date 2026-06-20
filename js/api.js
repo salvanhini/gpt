@@ -57,6 +57,7 @@ function resolveEndpoint(provider, settings, bodyObject) {
   if (provider === "openrouter") {
     headers["HTTP-Referer"] = globalThis.location?.href || "";
     headers["X-Title"] = "FEMIC GPT";
+    headers["X-OpenRouter-Cache"] = "true";
   }
 
   return {
@@ -777,7 +778,15 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
       throw new Error("A resposta da OpenRouter veio vazia.");
     }
 
-    resultado = { content, raw: data };
+    const usage = data?.usage;
+    const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+    resultado = {
+      content,
+      raw: data,
+      cachedTokens,
+      promptTokens: usage?.prompt_tokens || 0,
+      completionTokens: usage?.completion_tokens || 0,
+    };
   }
 
   if (chaveCache) salvarCache(chaveCache, resultado.content);
@@ -798,9 +807,15 @@ async function sendDeepSeekMessage({ messages, settings }) {
     throw new Error("A resposta da DeepSeek veio vazia.");
   }
 
+  const usage = data?.usage;
+  const cachedTokens = usage?.prompt_cache_hit_tokens || 0;
+
   return {
     content,
     raw: data,
+    cachedTokens,
+    promptTokens: usage?.prompt_tokens || 0,
+    completionTokens: usage?.completion_tokens || 0,
   };
 }
 
@@ -814,9 +829,15 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
     throw new Error("A resposta da Groq veio vazia.");
   }
 
+  const usage = data?.usage;
+  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+
   return {
     content,
     raw: data,
+    cachedTokens,
+    promptTokens: usage?.prompt_tokens || 0,
+    completionTokens: usage?.completion_tokens || 0,
   };
 }
 
@@ -884,6 +905,7 @@ async function readStream(response, onChunk, signal) {
   const decoder = new TextDecoder();
   let full = "";
   let buffer = "";
+  let usageData = null;
 
   if (signal) {
     signal.addEventListener("abort", () => reader.cancel(), { once: true });
@@ -911,6 +933,9 @@ async function readStream(response, onChunk, signal) {
           full += delta;
           onChunk?.(full);
         }
+        if (json.usage) {
+          usageData = json.usage;
+        }
       } catch {
         // Linhas parciais ou mal formatadas nao interrompem o fluxo
       }
@@ -927,13 +952,14 @@ async function readStream(response, onChunk, signal) {
           const json = JSON.parse(payload);
           const delta = json.choices?.[0]?.delta?.content || "";
           if (delta) full += delta;
+          if (json.usage) usageData = json.usage;
           onChunk?.(full);
         } catch { /* ignorar */ }
       }
     }
   }
 
-  return full;
+  return { content: full, usage: usageData };
 }
 
 export async function streamTextMessage({
@@ -961,7 +987,7 @@ export async function streamTextMessage({
   }
 
   const rawBody = getProviderBody(provider, { messages, settings, webSearchMode });
-  const { url, headers, body } = resolveEndpoint(provider, settings, { ...rawBody, stream: true });
+  const { url, headers, body } = resolveEndpoint(provider, settings, { ...rawBody, stream: true, stream_options: { include_usage: true } });
 
   const controller = new AbortController();
   const watchdog = setTimeout(() => controller.abort(), 60000);
@@ -999,11 +1025,22 @@ export async function streamTextMessage({
   }
 
   try {
-    const content = await readStream(response, onChunk, controller.signal);
+    const { content, usage } = await readStream(response, onChunk, controller.signal);
     clearTimeout(watchdog);
     // Salva no cache apos sucesso
     if (chaveCache) salvarCache(chaveCache, content);
-    return { content, streamed: true };
+
+    const cachedTokens = usage?.prompt_tokens_details?.cached_tokens
+      || usage?.prompt_cache_hit_tokens
+      || 0;
+
+    return {
+      content,
+      streamed: true,
+      cachedTokens,
+      promptTokens: usage?.prompt_tokens || 0,
+      completionTokens: usage?.completion_tokens || 0,
+    };
   } catch (err) {
     clearTimeout(watchdog);
     if (err.name === "AbortError") {
