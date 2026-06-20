@@ -405,6 +405,9 @@ function refreshFromStorage() {
 function setModal(name, open, payload = {}) {
   state.modals[name] = open;
   state.modalPayload = open ? payload : {};
+  if (open) {
+    state.mobileSidebarOpen = false;
+  }
   render();
 }
 
