@@ -299,21 +299,6 @@ export function getTextProviderDisplayName(provider) {
   return "OpenRouter";
 }
 
-export function getModelSelectionDetails(settings = {}) {
-  const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
-  const model = findModelByProvider(provider, settings);
-
-  return {
-    provider,
-    providerLabel: getTextProviderDisplayName(provider),
-    value: model?.value || "",
-    label: model?.label || "Modelo padrao",
-    description: model?.description || "Modelo configurado para uso geral.",
-    helperText: model?.helperText || "Modelo pronto para conversa geral.",
-    badges: Array.isArray(model?.badges) ? model.badges : [],
-  };
-}
-
 export function hasTextProviderKey(settings, provider = settings?.textProvider) {
   if (provider === "deepseek") {
     return Boolean(settings?.deepSeekKey);
@@ -328,6 +313,21 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
   }
 
   return Boolean(settings?.openRouterKey);
+}
+
+export function getModelSelectionDetails(settings = {}) {
+  const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
+  const model = findModelByProvider(provider, settings);
+
+  return {
+    provider,
+    providerLabel: getTextProviderDisplayName(provider),
+    value: model?.value || "",
+    label: model?.label || "Modelo padrao",
+    description: model?.description || "Modelo configurado para uso geral.",
+    helperText: model?.helperText || "Modelo pronto para conversa geral.",
+    badges: Array.isArray(model?.badges) ? model.badges : [],
+  };
 }
 
 function getLatestUserQuery(messages = []) {
@@ -671,7 +671,7 @@ function buildWebSearchContext(query, provider, citations) {
   return lines.join("\n").trim();
 }
 
-export async function collectWebSearchSources({ query, settings }) {
+async function collectWebSearchSources({ query, settings }) {
   if (!query?.trim()) {
     throw new Error("Digite uma pergunta valida para usar a Busca Web.");
   }
@@ -960,180 +960,6 @@ function salvarCache(chave, conteudo) {
     dados[chave] = { conteudo, ts: Date.now() };
     localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(dados));
   } catch { /* cache nao deve quebrar o chat */ }
-}
-
-// --- Streaming de respostas (efeito maquina de escrever) ---
-
-function getProviderBody(provider, { messages, settings, webSearchMode }) {
-  if (provider === "deepseek") {
-    return {
-      model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
-      messages,
-    };
-  }
-
-  if (provider === "groq") {
-    return buildGroqRequestBody({ messages, settings, webSearchMode });
-  }
-
-  if (provider === "qwen") {
-    return {
-      model: settings.qwenModel || DEFAULT_QWEN_MODEL,
-      messages,
-    };
-  }
-
-  return buildOpenRouterRequestBody({ messages, settings, webSearchMode });
-}
-
-async function readStream(response, onChunk, signal) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let full = "";
-  let buffer = "";
-  let usageData = null;
-
-  if (signal) {
-    signal.addEventListener("abort", () => reader.cancel(), { once: true });
-  }
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n");
-    buffer = parts.pop() || "";
-
-    for (const part of parts) {
-      const line = part.trim();
-      if (!line || !line.startsWith("data:")) continue;
-
-      const payload = line.slice(5).trim();
-      if (payload === "[DONE]") continue;
-
-      try {
-        const json = JSON.parse(payload);
-        const delta = json.choices?.[0]?.delta?.content || "";
-        if (delta) {
-          full += delta;
-          onChunk?.(full);
-        }
-        if (json.usage) {
-          usageData = json.usage;
-        }
-      } catch {
-        // Linhas parciais ou mal formatadas nao interrompem o fluxo
-      }
-    }
-  }
-
-  // Processar resto do buffer apos o fim do stream
-  if (buffer.trim()) {
-    const line = buffer.trim();
-    if (line.startsWith("data:")) {
-      const payload = line.slice(5).trim();
-      if (payload !== "[DONE]") {
-        try {
-          const json = JSON.parse(payload);
-          const delta = json.choices?.[0]?.delta?.content || "";
-          if (delta) full += delta;
-          if (json.usage) usageData = json.usage;
-          onChunk?.(full);
-        } catch { /* ignorar */ }
-      }
-    }
-  }
-
-  return { content: full, usage: usageData };
-}
-
-export async function streamTextMessage({
-  messages,
-  settings,
-  webSearchMode = false,
-  onChunk = () => {},
-  signal,
-} = {}) {
-  const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
-
-  if (provider === "deepseek" && webSearchMode) {
-    throw new Error("Busca Web nao esta disponivel no DeepSeek direto.");
-  }
-
-  // Cache: verifica se ja temos esta resposta
-  const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
-  const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
-  if (chaveCache) {
-    const cached = lerCache(chaveCache);
-    if (cached) {
-      onChunk(cached);
-      return { content: cached, streamed: false, fromCache: true };
-    }
-  }
-
-  const rawBody = getProviderBody(provider, { messages, settings, webSearchMode });
-  const { url, headers, body } = resolveEndpoint(provider, settings, { ...rawBody, stream: true, stream_options: { include_usage: true } });
-
-  const controller = new AbortController();
-  const watchdog = setTimeout(() => controller.abort(), 60000);
-
-  if (signal) {
-    signal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-
-  let response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(watchdog);
-    if (err.name === "AbortError") {
-      throw new Error("A API demorou muito para responder. Tente novamente.");
-    }
-    throw new Error("Sem conexao com a API. Verifique internet e chave configurada.");
-  }
-
-  if (!response.ok) {
-    clearTimeout(watchdog);
-    const data = await response.json().catch(() => null);
-    if (response.status === 429) {
-      throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
-    }
-    if (response.status === 401) {
-      throw new Error("Chave de API invalida. Verifique nas configuracoes.");
-    }
-    throw new Error(extractErrorMessage(data, "Falha na API."));
-  }
-
-  try {
-    const { content, usage } = await readStream(response, onChunk, controller.signal);
-    clearTimeout(watchdog);
-    // Salva no cache apos sucesso
-    if (chaveCache) salvarCache(chaveCache, content);
-
-    const cachedTokens = usage?.prompt_tokens_details?.cached_tokens
-      || usage?.prompt_cache_hit_tokens
-      || 0;
-
-    return {
-      content,
-      streamed: true,
-      cachedTokens,
-      promptTokens: usage?.prompt_tokens || 0,
-      completionTokens: usage?.completion_tokens || 0,
-    };
-  } catch (err) {
-    clearTimeout(watchdog);
-    if (err.name === "AbortError") {
-      throw new Error("A geracao da resposta foi interrompida.");
-    }
-    throw err;
-  }
 }
 
 export async function generateImage({ prompt, settings }) {

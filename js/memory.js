@@ -70,7 +70,7 @@ export function buildMemoryContext() {
   return lines.join("\n");
 }
 
-export function extractFactsFromMessages(messages) {
+function extractFactsFromMessages(messages) {
   const facts = [];
   const userMessages = messages.filter((m) => m.role === "user");
 

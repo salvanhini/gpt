@@ -8,7 +8,7 @@ export const STORAGE_KEYS = {
 
 export const BACKUP_SCHEMA_VERSION = 2;
 
-export function safeParseJson(value, fallback = null) {
+function safeParseJson(value, fallback = null) {
   try {
     return value ? JSON.parse(value) : fallback;
   } catch {
@@ -93,7 +93,7 @@ export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, d
   };
 }
 
-export function normalizeAgents(rawAgents) {
+function normalizeAgents(rawAgents) {
   if (!Array.isArray(rawAgents)) {
     return [];
   }
@@ -101,7 +101,7 @@ export function normalizeAgents(rawAgents) {
   return rawAgents.filter((agent) => agent && typeof agent.id === "string");
 }
 
-export function normalizeChats(rawChats, validAgentIds) {
+function normalizeChats(rawChats, validAgentIds) {
   if (!Array.isArray(rawChats)) {
     return [];
   }

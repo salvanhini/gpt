@@ -2244,11 +2244,3 @@ export function showToast(message, type = "info") {
     element.remove();
   }, 3800);
 }
-
-export function openModal(name) {
-  return name;
-}
-
-export function closeModal(name) {
-  return name;
-}

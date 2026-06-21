@@ -68,7 +68,7 @@ export function getAllUsage() {
   };
 }
 
-export function getLimits() {
+function getLimits() {
   return { ...LIMITES_PADRAO };
 }
 
@@ -93,8 +93,4 @@ export function checkLimit(servico) {
     mensalMaximo: limite.mensal,
     percentual: pct,
   };
-}
-
-export function resetUsage() {
-  escrever({});
 }

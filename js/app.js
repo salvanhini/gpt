@@ -48,7 +48,6 @@ import {
   runWebSearchQuery,
   sendTextMessage,
   transcribeAudio,
-  streamTextMessage,
 } from "./api.js";
 import {
   getSpeechSynthesis,
@@ -93,10 +92,10 @@ import {
 } from "./storage.js";
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
-import { checkLimit, incrementUsage, getDailyUsage, getMonthlyUsage, getAllUsage } from "./usageTracker.js";
-import { trackCost, getDailyCost, getMonthlyCost, getConversationCost, formatCost } from "./costTracker.js";
-import { getMemoryFacts, addMemoryFact, removeMemoryFact, clearMemory, buildMemoryContext, autoExtractAndStore } from "./memory.js";
-import { executePython, isPyodideReady } from "./codeInterpreter.js";
+import { incrementUsage } from "./usageTracker.js";
+import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
+import { getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
+import { executePython } from "./codeInterpreter.js";
 
 let bootSettingsFallbacks = [];
 
@@ -283,7 +282,7 @@ function resetTransientState({ keepDraft = false } = {}) {
   state.modals.help = false;
   state.mobileSidebarOpen = false;
   state.recordedAudioChunks = [];
-  state.  modals.memory = false;
+  state.modals.memory = false;
   state.modals.codeInterpreter = false;
   if (!keepDraft) {
     state.draftMessage = "";
@@ -311,19 +310,6 @@ function loadImportedSettings(rawSettings) {
 function buildUserErrorMessage(error, fallback) {
   const message = error?.message || fallback;
   return message?.trim() ? message : fallback;
-}
-
-function autoScrollChat() {
-  const panel = globalThis.document?.getElementById("messages-panel");
-  if (!panel) return;
-  if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 48) {
-    panel.scrollTop = panel.scrollHeight;
-  }
-}
-
-function estimarTokens(chat) {
-  if (!chat?.messages?.length) return 0;
-  return chat.messages.reduce((t, m) => t + Math.ceil((m.content || "").length * 0.25), 0);
 }
 
 function smartClassify(message) {
@@ -875,58 +861,25 @@ async function handleSendMessage(rawMessage) {
       if (state.webSearchMode) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
       } else {
-        // Streaming: adiciona mensagem vazia e preenche conforme os chunks chegam
+        const sendResult = await sendTextMessage({
+          messages: textPayload,
+          settings: getActiveSettings(),
+          webSearchMode: false,
+        });
         addMessage(activeChat.id, {
           role: "assistant",
-          content: "",
+          content: sendResult.content,
           meta: {
             kind: "text",
             provider: getActiveTextProviderLabel(),
+            cachedTokens: sendResult.cachedTokens || 0,
+            promptTokens: sendResult.promptTokens || 0,
+            completionTokens: sendResult.completionTokens || 0,
+            model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "",
           },
         });
-        persistAndRender();
-        autoScrollChat();
-
-        try {
-          const streamResult = await streamTextMessage({
-            messages: textPayload,
-            settings: getActiveSettings(),
-            webSearchMode: false,
-            onChunk: (partial) => {
-              const chat = getActiveChat();
-              if (!chat?.messages?.length) return;
-              const last = chat.messages[chat.messages.length - 1];
-              if (last.role === "assistant") {
-                last.content = partial;
-                saveChats(state.chats);
-                persistAndRender();
-                autoScrollChat();
-              }
-            },
-          });
-          // Armazena info de cached tokens no meta da mensagem
-          const chat = getActiveChat();
-          const lastMsg = chat?.messages?.[chat.messages.length - 1];
-          if (lastMsg?.role === "assistant" && streamResult) {
-            lastMsg.meta = {
-              ...lastMsg.meta,
-              cachedTokens: streamResult.cachedTokens || 0,
-              promptTokens: streamResult.promptTokens || 0,
-              completionTokens: streamResult.completionTokens || 0,
-              model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "",
-            };
-            if (lastMsg.meta.promptTokens && lastMsg.meta.completionTokens) {
-              trackCost(lastMsg.meta.model, lastMsg.meta.promptTokens, lastMsg.meta.completionTokens);
-            }
-          }
-        } catch (streamError) {
-          const chat = getActiveChat();
-          const last = chat?.messages?.[chat.messages.length - 1];
-          if (last?.role === "assistant" && !last.content) {
-            last.content = buildUserErrorMessage(streamError, "Erro ao gerar resposta.");
-            last.meta = { ...last.meta, failed: true };
-          }
-          showToast(buildUserErrorMessage(streamError, "Erro ao enviar mensagem."), "error");
+        if (sendResult.promptTokens && sendResult.completionTokens) {
+          trackCost(getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "", sendResult.promptTokens, sendResult.completionTokens);
         }
       }
     }

@@ -47,17 +47,11 @@ function getMonthKey() {
   return new Date().toISOString().slice(0, 7);
 }
 
-export function calculateCost(model, promptTokens, completionTokens) {
+function calculateCost(model, promptTokens, completionTokens) {
   const prices = MODEL_PRICES[model] || { input: 0, output: 0 };
   const inputCost = (promptTokens / 1_000_000) * prices.input;
   const outputCost = (completionTokens / 1_000_000) * prices.output;
   return inputCost + outputCost;
-}
-
-export function formatCost(cost) {
-  if (cost === 0) return "$0.00";
-  if (cost < 0.01) return "<$0.01";
-  return `$${cost.toFixed(2)}`;
 }
 
 export function trackCost(model, promptTokens, completionTokens) {
@@ -105,8 +99,4 @@ export function getConversationCost(messages) {
     }
   }
   return total;
-}
-
-export function getModelPriceInfo(model) {
-  return MODEL_PRICES[model] || null;
 }
