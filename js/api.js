@@ -1106,19 +1106,19 @@ async function generateImageReplicate({ prompt, settings }) {
 
   let createResponse;
   try {
-    createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+    createResponse = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${settings.replicateKey}`,
       },
       body: JSON.stringify({
-        version: model,
         input: {
           prompt,
           width: dims.width,
           height: dims.height,
           num_outputs: 1,
+          num_inference_steps: 4,
         },
       }),
     });
