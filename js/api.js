@@ -1,14 +1,16 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
 const TAVILY_URL = "https://api.tavily.com/search";
 const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
 const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
-const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
-const DEFAULT_TEXT_PROVIDER = "openrouter";
+const DEFAULT_TEXT_MODEL = "qwen-plus";
+const DEFAULT_TEXT_PROVIDER = "groq";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+const DEFAULT_QWEN_MODEL = "qwen-plus";
 const DEFAULT_IMAGE_MODEL = "fal-ai/flux/schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
@@ -35,6 +37,7 @@ function resolveEndpoint(provider, settings, bodyObject) {
     openrouter: "OpenRouter",
     deepseek: "DeepSeek",
     groq: "Groq",
+    qwen: "Qwen DashScope",
   };
   const label = providerNames[provider] || "API";
 
@@ -42,6 +45,7 @@ function resolveEndpoint(provider, settings, bodyObject) {
     openrouter: { url: OPENROUTER_URL, key: settings.openRouterKey },
     deepseek: { url: DEEPSEEK_URL, key: settings.deepSeekKey },
     groq: { url: GROQ_URL, key: settings.groqKey },
+    qwen: { url: QWEN_URL, key: settings.qwenKey },
   };
 
   const endpoint = endpointMap[provider];
@@ -149,6 +153,30 @@ export const GROQ_MODELS = [
   },
 ];
 
+export const QWEN_MODELS = [
+  {
+    value: "qwen-plus",
+    label: "Qwen Plus",
+    description: "Modelo principal do Qwen para raciocinio e uso geral, 128K contexto.",
+    badges: ["Qualidade", "Raciocinio", "Texto", "Multimodal"],
+    helperText: "Melhor para tarefas complexas que exigem analise profunda e raciocinio avancado.",
+  },
+  {
+    value: "qwen-max",
+    label: "Qwen Max",
+    description: "Modelo flagship do Qwen, mais capacidade e qualidade de resposta.",
+    badges: ["Qualidade", "Texto", "Multimodal"],
+    helperText: "Escolha para tarefas que precisam da maxima qualidade e consistencia.",
+  },
+  {
+    value: "qwen-flash",
+    label: "Qwen Flash",
+    description: "Modelo rapido e economico do Qwen para uso geral.",
+    badges: ["Rapido", "Economico", "Texto"],
+    helperText: "Ideal para respostas rapidas e tarefas simples do dia a dia.",
+  },
+];
+
 function findModelByProvider(provider, settings = {}) {
   if (provider === "deepseek") {
     return DEEPSEEK_MODELS.find((model) => model.value === settings.deepSeekModel) || null;
@@ -156,6 +184,10 @@ function findModelByProvider(provider, settings = {}) {
 
   if (provider === "groq") {
     return GROQ_MODELS.find((model) => model.value === settings.groqModel) || null;
+  }
+
+  if (provider === "qwen") {
+    return QWEN_MODELS.find((model) => model.value === settings.qwenModel) || null;
   }
 
   return OPENROUTER_MODELS.find((model) => model.value === settings.textModel) || null;
@@ -223,14 +255,18 @@ export function getDefaultSettings() {
     openRouterKey: "",
     deepSeekKey: "",
     groqKey: "",
+    qwenKey: "",
     falKey: "",
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
     deepSeekModel: DEFAULT_DEEPSEEK_MODEL,
     groqModel: DEFAULT_GROQ_MODEL,
+    qwenModel: DEFAULT_QWEN_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
     globalSystemPrompt: "",
+    openRouterEnabled: true,
+    deepSeekEnabled: true,
     tavilyKey: "",
     braveSearchKey: "",
     usageLimits: {
@@ -254,6 +290,10 @@ export function getTextProviderDisplayName(provider) {
 
   if (provider === "groq") {
     return "Groq";
+  }
+
+  if (provider === "qwen") {
+    return "Qwen";
   }
 
   return "OpenRouter";
@@ -281,6 +321,10 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
 
   if (provider === "groq") {
     return Boolean(settings?.groqKey);
+  }
+
+  if (provider === "qwen") {
+    return Boolean(settings?.qwenKey);
   }
 
   return Boolean(settings?.openRouterKey);
@@ -676,6 +720,10 @@ export async function runWebSearchQuery({ messages, settings }) {
     throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
   }
 
+  if (settings.textProvider === "qwen") {
+    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Qwen DashScope continua apenas no chat normal.");
+  }
+
   try {
     const reply = await sendTextMessage({
       messages,
@@ -768,6 +816,11 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
     resultado = await sendDeepSeekMessage({ messages, settings });
   } else if (settings.textProvider === "groq") {
     resultado = await sendGroqMessage({ messages, settings, webSearchMode });
+  } else if (settings.textProvider === "qwen") {
+    if (webSearchMode) {
+      throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Qwen DashScope continua apenas no chat normal.");
+    }
+    resultado = await sendQwenMessage({ messages, settings });
   } else {
     const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode });
     const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
@@ -841,6 +894,32 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
   };
 }
 
+async function sendQwenMessage({ messages, settings }) {
+  const bodyObj = {
+    model: settings.qwenModel || DEFAULT_QWEN_MODEL,
+    messages,
+    stream: false,
+  };
+  const endpoint = resolveEndpoint("qwen", settings, bodyObj);
+  const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
+
+  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
+  if (!content) {
+    throw new Error("A resposta do Qwen DashScope veio vazia.");
+  }
+
+  const usage = data?.usage;
+  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+
+  return {
+    content,
+    raw: data,
+    cachedTokens,
+    promptTokens: usage?.prompt_tokens || 0,
+    completionTokens: usage?.completion_tokens || 0,
+  };
+}
+
 // --- Cache local de respostas (expira em 24h) ---
 
 const CHAT_CACHE_KEY = "femicgpt:chat-cache";
@@ -895,6 +974,13 @@ function getProviderBody(provider, { messages, settings, webSearchMode }) {
 
   if (provider === "groq") {
     return buildGroqRequestBody({ messages, settings, webSearchMode });
+  }
+
+  if (provider === "qwen") {
+    return {
+      model: settings.qwenModel || DEFAULT_QWEN_MODEL,
+      messages,
+    };
   }
 
   return buildOpenRouterRequestBody({ messages, settings, webSearchMode });

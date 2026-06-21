@@ -101,6 +101,10 @@ function getProviderLabel(state) {
     return (settings.groqModel || "").split("/").pop() || "Groq";
   }
 
+  if (settings.textProvider === "qwen") {
+    return settings.qwenModel || "Qwen";
+  }
+
   return (settings.textModel || "").split("/").pop() || "OpenRouter";
 }
 
@@ -111,6 +115,10 @@ function getQuickModelValue(state) {
 
   if (state.settings.textProvider === "groq") {
     return `groq::${state.settings.groqModel}`;
+  }
+
+  if (state.settings.textProvider === "qwen") {
+    return `qwen::${state.settings.qwenModel}`;
   }
 
   return `openrouter::${state.settings.textModel}`;
@@ -124,18 +132,22 @@ function getActiveModelDetails(state) {
       ? state.deepSeekModelOptions || []
       : provider === "groq"
         ? state.groqModelOptions || []
-        : state.modelOptions || [];
+        : provider === "qwen"
+          ? state.qwenModelOptions || []
+          : state.modelOptions || [];
   const selectedValue =
     provider === "deepseek"
       ? settings.deepSeekModel
       : provider === "groq"
         ? settings.groqModel
-        : settings.textModel;
+        : provider === "qwen"
+          ? settings.qwenModel
+          : settings.textModel;
   const model = collection.find((item) => item.value === selectedValue) || collection[0] || null;
 
   return {
     providerLabel:
-      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : "OpenRouter",
+      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : provider === "qwen" ? "Qwen" : "OpenRouter",
     label: model?.label || "Modelo padrão",
     helperText: model?.helperText || model?.description || "Modelo pronto para uso geral.",
     badges: Array.isArray(model?.badges) ? model.badges : [],
@@ -156,20 +168,21 @@ function getInstagramFormatById(state, formatId) {
 
 function renderQuickModelOptions(state) {
   const current = getQuickModelValue(state);
-  const openRouter = (state.modelOptions || []).map(
+  const settings = state.settings || {};
+  const openRouter = settings.openRouterEnabled !== false ? (state.modelOptions || []).map(
     (model) => `
       <option value="openrouter::${escapeHtml(model.value)}" ${current === `openrouter::${model.value}` ? "selected" : ""}>
         OpenRouter · ${escapeHtml(model.label)}
       </option>
     `,
-  );
-  const deepSeek = (state.deepSeekModelOptions || []).map(
+  ) : [];
+  const deepSeek = settings.deepSeekEnabled !== false ? (state.deepSeekModelOptions || []).map(
     (model) => `
       <option value="deepseek::${escapeHtml(model.value)}" ${current === `deepseek::${model.value}` ? "selected" : ""}>
         DeepSeek · ${escapeHtml(model.label)}
       </option>
     `,
-  );
+  ) : [];
   const groq = (state.groqModelOptions || []).map(
     (model) => `
       <option value="groq::${escapeHtml(model.value)}" ${current === `groq::${model.value}` ? "selected" : ""}>
@@ -177,8 +190,15 @@ function renderQuickModelOptions(state) {
       </option>
     `,
   );
+  const qwen = (state.qwenModelOptions || []).map(
+    (model) => `
+      <option value="qwen::${escapeHtml(model.value)}" ${current === `qwen::${model.value}` ? "selected" : ""}>
+        Qwen · ${escapeHtml(model.label)}
+      </option>
+    `,
+  );
 
-  return [...openRouter, ...deepSeek, ...groq].join("");
+  return [...openRouter, ...deepSeek, ...groq, ...qwen].join("");
 }
 
 function renderModelGuidance(state) {
@@ -359,6 +379,9 @@ function renderActiveChatHeader(state) {
   }
 
   const category = getCategoryById(chat.category);
+  const dailyCost = state.dailyCost || 0;
+  const monthlyCost = state.monthlyCost || 0;
+
   return `
     <section class="active-chat-header mb-3 flex items-center justify-between gap-3 rounded-[1.2rem] border border-white/70 bg-white/88 px-4 py-3 shadow-sm">
       <div class="min-w-0">
@@ -387,6 +410,8 @@ function renderActiveChatHeader(state) {
             const totalCached = (chat.messages || []).reduce((t, m) => t + (m.meta?.cachedTokens || 0), 0);
             return totalCached > 0 ? ` <span class="text-emerald-600">(${totalCached} cached)</span>` : "";
           })()}</span>
+          ${dailyCost > 0 ? `<span class="text-slate-400">•</span><span class="text-slate-400">💰 Hoje: ${escapeHtml(formatCost(dailyCost))}</span>` : ""}
+          ${monthlyCost > 0 ? `<span class="text-slate-400">· Mês: ${escapeHtml(formatCost(monthlyCost))}</span>` : ""}
         </div>
       </div>
       ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
@@ -1138,26 +1163,38 @@ function renderSettingsModal(state) {
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="settings">✕</button>
         </div>
         <form data-form="settings" class="space-y-3">
-          <div class="grid gap-3 lg:grid-cols-3">
+          <div class="grid gap-3 lg:grid-cols-2">
             <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2">
-                <div class="text-sm font-semibold text-slate-900">OpenRouter</div>
-                <div class="text-xs text-slate-500">Chave para modelos OpenRouter.</div>
+              <div class="mb-2 flex items-center justify-between">
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">OpenRouter</div>
+                  <div class="text-xs text-slate-500">Chave para modelos OpenRouter.</div>
+                </div>
+                <label class="relative inline-flex cursor-pointer items-center gap-1">
+                  <input type="checkbox" name="openRouterEnabled" class="peer sr-only" ${settings.openRouterEnabled !== false ? "checked" : ""} />
+                  <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                </label>
               </div>
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="openRouterKey" type="password" value="${escapeHtml(settings.openRouterKey || "")}" placeholder="sk-or-v1-..." />
+                <input class="modal-input" name="openRouterKey" type="password" value="${escapeHtml(settings.openRouterKey || "")}" placeholder="sk-or-v1-..." ${settings.openRouterEnabled === false ? "disabled" : ""} />
               </label>
             </section>
 
             <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2">
-                <div class="text-sm font-semibold text-slate-900">DeepSeek direta</div>
-                <div class="text-xs text-slate-500">Chave para modelos DeepSeek direto.</div>
+              <div class="mb-2 flex items-center justify-between">
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">DeepSeek direta</div>
+                  <div class="text-xs text-slate-500">Chave para modelos DeepSeek direto.</div>
+                </div>
+                <label class="relative inline-flex cursor-pointer items-center gap-1">
+                  <input type="checkbox" name="deepSeekEnabled" class="peer sr-only" ${settings.deepSeekEnabled !== false ? "checked" : ""} />
+                  <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                </label>
               </div>
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." />
+                <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." ${settings.deepSeekEnabled === false ? "disabled" : ""} />
               </label>
             </section>
 
@@ -1169,6 +1206,17 @@ function renderSettingsModal(state) {
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
                 <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." />
+              </label>
+            </section>
+
+            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+              <div class="mb-2">
+                <div class="text-sm font-semibold text-slate-900">Qwen DashScope</div>
+                <div class="text-xs text-slate-500">Chave para modelos Qwen direto (multimodal).</div>
+              </div>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                <input class="modal-input" name="qwenKey" type="password" value="${escapeHtml(settings.qwenKey || "")}" placeholder="sk-..." />
               </label>
             </section>
           </div>
@@ -1269,6 +1317,16 @@ function renderSettingsModal(state) {
             <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Uso e Limites</div>
               <div class="text-xs text-slate-600">Limites diarios para economizar uso das APIs. Quando atingir 80% aparece um aviso; em 100% o serviço e bloqueado ate o proximo dia.</div>
+            </div>
+            <div class="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Hoje</div>
+                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCost(state.dailyCost || 0))}</div>
+              </div>
+              <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
+                <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Mensal</div>
+                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCost(state.monthlyCost || 0))}</div>
+              </div>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label class="block">
@@ -1394,6 +1452,87 @@ function renderHelpModal(state) {
               <p class="mt-1 text-xs leading-5 text-slate-500">${body}</p>
             </section>
           `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMemoryModal(state) {
+  if (!state.modals.memory) {
+    return "";
+  }
+
+  const facts = state.memoryFacts || [];
+
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="memory">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel" data-modal-surface="memory">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">🧠 Memoria Persistente</h3>
+            <p class="mt-1 text-sm text-slate-500">Fatos que o sistema lembra sobre voce entre conversas.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="memory">✕</button>
+        </div>
+        <div class="space-y-3">
+          ${facts.length === 0
+            ? `<div class="rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-sm text-slate-400">Nenhum fato registrado ainda. O sistema extrai automaticamente informacoes como nome, profissao e localizacao das suas conversas.</div>`
+            : facts.map((fact) => `
+              <div class="flex items-start justify-between gap-2 rounded-xl border border-slate-200 bg-white/80 p-3">
+                <div class="min-w-0 flex-1">
+                  <div class="text-sm text-slate-700">${escapeHtml(fact.text)}</div>
+                  <div class="mt-1 text-[10px] text-slate-400">${escapeHtml(fact.source)} · ${escapeHtml(new Date(fact.createdAt).toLocaleDateString("pt-BR"))}</div>
+                </div>
+                <button type="button" class="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50" data-action="remove-memory-fact" data-fact-id="${escapeHtml(fact.id)}">Remover</button>
+              </div>
+            `).join("")
+          }
+        </div>
+        <div class="mt-4 flex justify-end gap-3">
+          <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="memory">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCodeInterpreterModal(state) {
+  if (!state.modals.codeInterpreter) {
+    return "";
+  }
+
+  const output = state.codeInterpreterOutput || "";
+
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="codeInterpreter">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-3xl" data-modal-surface="codeInterpreter">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">🐍 Interpretador Python</h3>
+            <p class="mt-1 text-sm text-slate-500">Execute codigo Python diretamente no navegador via Pyodide (WebAssembly).</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="codeInterpreter">✕</button>
+        </div>
+        <div class="space-y-3">
+          <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Codigo Python</span>
+            <textarea
+              id="code-interpreter-input"
+              class="modal-textarea min-h-[160px] font-mono text-sm"
+              placeholder="print('Ola mundo!')"
+            >${escapeHtml(state.codeInterpreterDraft || "")}</textarea>
+          </label>
+          <div class="flex justify-end gap-3">
+            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="codeInterpreter">Fechar</button>
+            <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white shadow-soft" data-action="execute-code">▶ Executar</button>
+          </div>
+          ${output ? `
+            <div class="mt-3">
+              <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Saida</div>
+              <pre class="mt-2 max-h-[300px] overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-3 text-sm text-green-400 font-mono">${escapeHtml(output)}</pre>
+            </div>
+          ` : ""}
         </div>
       </div>
     </div>
@@ -1610,6 +1749,7 @@ function renderAgentModal(state) {
                     <option value="openrouter" ${editing.textProvider === "openrouter" ? "selected" : ""}>OpenRouter</option>
                     <option value="deepseek" ${editing.textProvider === "deepseek" ? "selected" : ""}>DeepSeek</option>
                     <option value="groq" ${editing.textProvider === "groq" ? "selected" : ""}>Groq</option>
+                    <option value="qwen" ${editing.textProvider === "qwen" ? "selected" : ""}>Qwen DashScope</option>
                   </select>
                 </label>
                 <label class="block">
@@ -1631,6 +1771,13 @@ function renderAgentModal(state) {
                   <select class="modal-input" name="groqModel">
                     <option value="">Modelo global</option>
                     ${renderModelOptions(state.groqModelOptions, editing.groqModel)}
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Qwen DashScope</span>
+                  <select class="modal-input" name="qwenModel">
+                    <option value="">Modelo global</option>
+                    ${renderModelOptions(state.qwenModelOptions, editing.qwenModel)}
                   </select>
                 </label>
               </div>
@@ -1736,6 +1883,12 @@ export function renderApp(state) {
           <button type="button" class="sidebar-icon-action" data-action="toggle-board-view" title="Board de conversas">
             <span>📋</span>
           </button>
+          <button type="button" class="sidebar-icon-action" data-action="open-memory" title="Memoria persistente">
+            <span>🧠</span>
+          </button>
+          <button type="button" class="sidebar-icon-action" data-action="open-code-interpreter" title="Interpretador Python">
+            <span>🐍</span>
+          </button>
           <button type="button" class="sidebar-icon-action" data-action="open-help" title="Ajuda e tutorial">
             <span>?</span>
           </button>
@@ -1805,7 +1958,7 @@ export function renderApp(state) {
                       </label>`}
                       ${state.imageMode && !instagramMode ? renderImageSizeSelector(state) : ""}
                       ${instagramMode ? "" : `<label class="control-btn inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm">
-                        <input id="file-input" type="file" class="hidden" multiple accept=".pdf,.xlsx,.xls,.csv,.xml,.jpg,.jpeg,.png" data-action="attach-files" />
+                        <input id="file-input" type="file" class="hidden" multiple accept=".pdf,.xlsx,.xls,.csv,.xml,.txt,.docx,.jpg,.jpeg,.png" data-action="attach-files" />
                         <span>📎</span>
                         <span>Anexar</span>
                       </label>`}
@@ -1840,6 +1993,8 @@ export function renderApp(state) {
     ${renderSettingsModal(state)}
     ${renderRenameChatModal(state)}
     ${renderHelpModal(state)}
+    ${renderMemoryModal(state)}
+    ${renderCodeInterpreterModal(state)}
     ${renderBrandModal(state)}
     ${renderAgentModal(state)}
   `;
@@ -1879,6 +2034,8 @@ export function bindUIHandlers(handlers) {
     if (action === "create-chat") handlers.onCreateChat();
     if (action === "open-help") handlers.onOpenHelp();
     if (action === "open-settings") handlers.onOpenSettings();
+    if (action === "open-memory") handlers.onOpenMemory();
+    if (action === "open-code-interpreter") handlers.onOpenCodeInterpreter();
     if (action === "open-agent-modal") handlers.onOpenAgentModal();
     if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
     if (action === "close-modal") handlers.onCloseModal(target.dataset.modal);
@@ -1912,6 +2069,13 @@ export function bindUIHandlers(handlers) {
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
     if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
     if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);
+    if (action === "remove-memory-fact") handlers.onRemoveMemoryFact(target.dataset.factId);
+    if (action === "execute-code") {
+      const textarea = document.getElementById("code-interpreter-input");
+      if (textarea) {
+        handlers.onExecuteCode(textarea.value);
+      }
+    }
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {

@@ -76,6 +76,20 @@ async function readCsv(file) {
   return readAsText(file);
 }
 
+async function readTxt(file) {
+  return readAsText(file);
+}
+
+async function readDocx(file) {
+  if (!globalThis.mammoth) {
+    throw new Error("Biblioteca mammoth.js nao carregada.");
+  }
+
+  const arrayBuffer = await readAsArrayBuffer(file);
+  const result = await globalThis.mammoth.extractRawText({ arrayBuffer });
+  return result.value || "";
+}
+
 async function readImage(file) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -129,6 +143,10 @@ export async function processFile(file) {
       content = await readCsv(file);
     } else if (extension === "xml") {
       content = await readXml(file);
+    } else if (extension === "txt") {
+      content = await readTxt(file);
+    } else if (extension === "docx") {
+      content = await readDocx(file);
     } else if (["jpg", "jpeg", "png"].includes(extension)) {
       const imageInfo = await readImage(file);
       const sizeKb = (file.size / 1024).toFixed(1);

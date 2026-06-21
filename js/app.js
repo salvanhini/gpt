@@ -41,6 +41,7 @@ import {
   getDefaultSettings,
   getTextProviderDisplayName,
   GROQ_MODELS,
+  QWEN_MODELS,
   hasTextProviderKey,
   IMAGE_SIZE_OPTIONS,
   OPENROUTER_MODELS,
@@ -93,6 +94,9 @@ import {
 import { bindUIHandlers, renderApp, showToast } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { checkLimit, incrementUsage, getDailyUsage, getMonthlyUsage, getAllUsage } from "./usageTracker.js";
+import { trackCost, getDailyCost, getMonthlyCost, getConversationCost, formatCost } from "./costTracker.js";
+import { getMemoryFacts, addMemoryFact, removeMemoryFact, clearMemory, buildMemoryContext, autoExtractAndStore } from "./memory.js";
+import { executePython, isPyodideReady } from "./codeInterpreter.js";
 
 let bootSettingsFallbacks = [];
 
@@ -141,6 +145,8 @@ const state = {
     brandForm: false,
     renameChat: false,
     help: false,
+    memory: false,
+    codeInterpreter: false,
   },
   modalPayload: {},
   draftMessage: "",
@@ -158,6 +164,7 @@ const state = {
   modelOptions: OPENROUTER_MODELS,
   deepSeekModelOptions: DEEPSEEK_MODELS,
   groqModelOptions: GROQ_MODELS,
+  qwenModelOptions: QWEN_MODELS,
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
@@ -169,6 +176,7 @@ function loadSettings() {
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
+    QWEN_MODELS,
   );
 
   bootSettingsFallbacks = normalized.fallbacks;
@@ -275,6 +283,8 @@ function resetTransientState({ keepDraft = false } = {}) {
   state.modals.help = false;
   state.mobileSidebarOpen = false;
   state.recordedAudioChunks = [];
+  state.  modals.memory = false;
+  state.modals.codeInterpreter = false;
   if (!keepDraft) {
     state.draftMessage = "";
   }
@@ -287,6 +297,7 @@ function loadImportedSettings(rawSettings) {
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
+    QWEN_MODELS,
   );
 
   state.settingsFallbacks = normalized.fallbacks;
@@ -416,6 +427,9 @@ function render() {
     refreshFromStorage();
     state.activeAgent = getActiveAgent();
     state.effectiveSettings = getActiveSettings();
+    state.dailyCost = getDailyCost();
+    state.monthlyCost = getMonthlyCost();
+    state.memoryFacts = getMemoryFacts();
     renderApp(state);
     window.scrollTo(0, 0);
   } catch (error) {
@@ -484,6 +498,7 @@ function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
+  const memoryContext = buildMemoryContext();
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -491,6 +506,7 @@ function buildTextPayload(userMessage) {
     responseStyle: activeAgent?.responseStyle || "",
     history,
     attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
+    referenceContext: memoryContext,
     userMessage,
   });
 }
@@ -544,7 +560,8 @@ function getActiveTextProviderLabel() {
 }
 
 function canUseWebSearch() {
-  return getActiveSettings().textProvider !== "deepseek";
+  const provider = getActiveSettings().textProvider;
+  return provider !== "deepseek" && provider !== "qwen";
 }
 
 function resetAttachments() {
@@ -896,7 +913,11 @@ async function handleSendMessage(rawMessage) {
               cachedTokens: streamResult.cachedTokens || 0,
               promptTokens: streamResult.promptTokens || 0,
               completionTokens: streamResult.completionTokens || 0,
+              model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "",
             };
+            if (lastMsg.meta.promptTokens && lastMsg.meta.completionTokens) {
+              trackCost(lastMsg.meta.model, lastMsg.meta.promptTokens, lastMsg.meta.completionTokens);
+            }
           }
         } catch (streamError) {
           const chat = getActiveChat();
@@ -920,6 +941,12 @@ async function handleSendMessage(rawMessage) {
       } else {
         state.settings.textModel = modeloOriginal.model;
       }
+    }
+
+    // Auto-extract memory facts from conversation
+    const activeChat = getActiveChat();
+    if (activeChat?.messages?.length > 2) {
+      autoExtractAndStore(activeChat.messages);
     }
   } catch (error) {
     addAssistantErrorMessage(activeChat.id, error);
@@ -1046,6 +1073,16 @@ function handleQuickModelChange(value) {
     return;
   }
 
+  if (provider === "openrouter" && state.settings.openRouterEnabled === false) {
+    showToast("OpenRouter esta desabilitado. Ative nas configuracoes.", "error");
+    return;
+  }
+
+  if (provider === "deepseek" && state.settings.deepSeekEnabled === false) {
+    showToast("DeepSeek esta desabilitado. Ative nas configuracoes.", "error");
+    return;
+  }
+
   state.settings = {
     ...state.settings,
     textProvider: provider,
@@ -1053,7 +1090,9 @@ function handleQuickModelChange(value) {
       ? { deepSeekModel: model }
       : provider === "groq"
         ? { groqModel: model }
-        : { textModel: model }),
+        : provider === "qwen"
+          ? { qwenModel: model }
+          : { textModel: model }),
   };
 
   saveSettings(state.settings);
@@ -1250,6 +1289,7 @@ function handleSaveSettings(formValues) {
     openRouterKey: formValues.openRouterKey?.trim() || "",
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
     groqKey: formValues.groqKey?.trim() || "",
+    qwenKey: formValues.qwenKey?.trim() || "",
     tavilyKey: formValues.tavilyKey?.trim() || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || "",
     falKey: formValues.falKey?.trim() || "",
@@ -1257,6 +1297,8 @@ function handleSaveSettings(formValues) {
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
+    openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,
+    deepSeekEnabled: formValues.deepSeekEnabled === "on" || formValues.deepSeekEnabled === true,
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
@@ -1355,6 +1397,7 @@ function handleSaveAgent(formValues) {
     textModel: formValues.textModel?.toString() || "",
     deepSeekModel: formValues.deepSeekModel?.toString() || "",
     groqModel: formValues.groqModel?.toString() || "",
+    qwenModel: formValues.qwenModel?.toString() || "",
     defaultImageMode: formValues.defaultImageMode?.toString() || "inherit",
     defaultWebSearchMode: formValues.defaultWebSearchMode?.toString() || "inherit",
     defaultPubmedMode: formValues.defaultPubmedMode?.toString() || "inherit",
@@ -1694,6 +1737,8 @@ function initialize() {
       setModal("settings", true);
     },
     onOpenHelp: () => setModal("help", true),
+    onOpenMemory: () => setModal("memory", true),
+    onOpenCodeInterpreter: () => setModal("codeInterpreter", true),
     onOpenAgentModal: () => setModal("agentForm", true),
     onOpenBrandModal: handleOpenBrandModal,
     onCloseModal: (name) => setModal(name, false),
@@ -1771,6 +1816,24 @@ function initialize() {
     },
     onToggleSidebarCollapse: () => {
       state.sidebarCollapsed = !state.sidebarCollapsed;
+      persistAndRender();
+    },
+    onRemoveMemoryFact: (factId) => {
+      removeMemoryFact(factId);
+      showToast("Fato removido da memoria.", "success");
+      persistAndRender();
+    },
+    onExecuteCode: async (code) => {
+      state.codeInterpreterOutput = "Executando...";
+      persistAndRender();
+      try {
+        const result = await executePython(code);
+        state.codeInterpreterOutput = result.success
+          ? result.result || "(sem saida)"
+          : `Erro:\n${result.error}`;
+      } catch (err) {
+        state.codeInterpreterOutput = `Falha: ${err.message}`;
+      }
       persistAndRender();
     },
     onExportData: () => {
