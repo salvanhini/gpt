@@ -44,6 +44,7 @@ import {
   GEMINI_MODELS,
   GROQ_MODELS,
   hasTextProviderKey,
+  IMAGE_PROVIDER_OPTIONS,
   IMAGE_SIZE_OPTIONS,
   OPENROUTER_MODELS,
   runWebSearchQuery,
@@ -166,6 +167,7 @@ const state = {
   geminiModelOptions: GEMINI_MODELS,
   openRouterAvailableModels: [],
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
+  imageProviderOptions: IMAGE_PROVIDER_OPTIONS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
 
@@ -787,7 +789,7 @@ async function handleSendMessage(rawMessage) {
             meta: {
               kind: "image",
               imageUrl: image.url,
-              provider: "fal.ai",
+              provider: getActiveSettings().imageProvider === "replicate" ? "Replicate" : "Pollinations.ai",
               brandId: instagramPayload.brand.id,
               instagramFormat: instagramPayload.format.id,
               creativeBrief: instagramPayload.creativeBrief,
@@ -811,7 +813,7 @@ async function handleSendMessage(rawMessage) {
           meta: {
             kind: "image",
             imageUrl: image.url,
-            provider: "fal.ai",
+            provider: getActiveSettings().imageProvider === "replicate" ? "Replicate" : "Pollinations.ai",
             brandId: instagramPayload?.brand.id || null,
             instagramFormat: instagramPayload?.format.id || null,
             creativeBrief: instagramPayload?.creativeBrief || null,
@@ -1260,7 +1262,8 @@ function handleSaveSettings(formValues) {
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || state.settings.braveSearchKey || "",
-    falKey: formValues.falKey?.trim() || state.settings.falKey || "",
+    replicateKey: formValues.replicateKey?.trim() || state.settings.replicateKey || "",
+    imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",

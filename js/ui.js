@@ -841,7 +841,7 @@ function renderMessage(message, state) {
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
-  const sourceBadge = message.meta?.sourceType && message.meta?.provider !== "fal.ai"
+  const sourceBadge = message.meta?.sourceType && message.meta?.kind !== "image"
     ? `<span class="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">${escapeHtml(message.meta.sourceType === "web-search" ? "Busca Web" : message.meta.sourceType)}</span>`
     : "";
   const fallbackBadge = message.meta?.webSearch
@@ -1298,19 +1298,28 @@ function renderSettingsModal(state) {
             <div class="grid gap-3 lg:grid-cols-2">
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
                 <div class="mb-2">
-                  <div class="text-sm font-semibold text-slate-900">Imagem (fal.ai)</div>
-                  <div class="text-xs text-slate-500">Usado no modo imagem.</div>
+                  <div class="text-sm font-semibold text-slate-900">Imagem</div>
+                  <div class="text-xs text-slate-500">Provedor para geracao de imagens.</div>
                 </div>
                 <div class="grid gap-2 lg:grid-cols-2">
                   <label class="block">
-                    <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                    <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal" />
+                    <span class="mb-2 block text-sm font-medium text-slate-700">Provedor</span>
+                    <select class="modal-input" name="imageProvider">
+                      ${(state.imageProviderOptions || []).map((opt) => `
+                        <option value="${escapeHtml(opt.value)}" ${settings.imageProvider === opt.value ? "selected" : ""}>${escapeHtml(opt.label)}</option>
+                      `).join("")}
+                    </select>
                   </label>
                   <label class="block">
                     <span class="mb-2 block text-sm font-medium text-slate-700">Modelo</span>
-                    <input class="modal-input" name="imageModel" type="text" value="${escapeHtml(settings.imageModel || "")}" />
+                    <input class="modal-input" name="imageModel" type="text" value="${escapeHtml(settings.imageModel || "")}" placeholder="flux" />
                   </label>
                 </div>
+                <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Replicate)</span>
+                  <input class="modal-input" name="replicateKey" type="password" value="${escapeHtml(settings.replicateKey || "")}" placeholder="r8_... (so necessario para Replicate)" />
+                </label>
+                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuita e nao precisa de chave.</div>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
                   <div class="flex flex-wrap gap-1.5">

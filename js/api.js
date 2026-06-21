@@ -11,7 +11,9 @@ const DEFAULT_TEXT_PROVIDER = "groq";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
-const DEFAULT_IMAGE_MODEL = "fal-ai/flux/schnell";
+const DEFAULT_IMAGE_PROVIDER = "pollinations";
+const DEFAULT_IMAGE_MODEL_POLLINATIONS = "flux";
+const DEFAULT_IMAGE_MODEL_REPLICATE = "black-forest-labs/flux-schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_OPENAI_TTS_VOICE = "coral";
@@ -104,6 +106,21 @@ export const IMAGE_SIZE_OPTIONS = [
   { value: "portrait_4_3", label: "Retrato 4:3" },
   { value: "portrait_16_9", label: "Retrato 16:9" },
 ];
+
+export const IMAGE_PROVIDER_OPTIONS = [
+  { value: "pollinations", label: "Pollinations.ai (Gratis)" },
+  { value: "replicate", label: "Replicate API" },
+];
+
+const IMAGE_SIZE_DIMENSIONS = {
+  landscape_4_3: { width: 1024, height: 768 },
+  landscape_16_9: { width: 1280, height: 720 },
+  landscape_3_2: { width: 1152, height: 768 },
+  square_hd: { width: 1024, height: 1024 },
+  square: { width: 1080, height: 1080 },
+  portrait_4_3: { width: 768, height: 1024 },
+  portrait_16_9: { width: 720, height: 1280 },
+};
 
 export const DEEPSEEK_MODELS = [
   {
@@ -256,13 +273,14 @@ export function getDefaultSettings() {
     deepSeekKey: "",
     groqKey: "",
     geminiKey: "",
-    falKey: "",
+    replicateKey: "",
+    imageProvider: DEFAULT_IMAGE_PROVIDER,
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
     deepSeekModel: DEFAULT_DEEPSEEK_MODEL,
     groqModel: DEFAULT_GROQ_MODEL,
     geminiModel: DEFAULT_GEMINI_MODEL,
-    imageModel: DEFAULT_IMAGE_MODEL,
+    imageModel: DEFAULT_IMAGE_MODEL_POLLINATIONS,
     imageSize: "landscape_4_3",
     globalSystemPrompt: "",
     openRouterEnabled: true,
@@ -1036,47 +1054,124 @@ function salvarCache(chave, conteudo) {
 }
 
 export async function generateImage({ prompt, settings }) {
-  if (!settings.falKey) {
-    throw new Error("Adicione sua chave da fal.ai nas configurações.");
+  const provider = settings.imageProvider || DEFAULT_IMAGE_PROVIDER;
+
+  if (provider === "replicate") {
+    return generateImageReplicate({ prompt, settings });
   }
 
-  const model = settings.imageModel || DEFAULT_IMAGE_MODEL;
+  return generateImagePollinations({ prompt, settings });
+}
+
+async function generateImagePollinations({ prompt, settings }) {
+  const model = settings.imageModel || DEFAULT_IMAGE_MODEL_POLLINATIONS;
+  const sizeKey = settings.imageSize || "square";
+  const dims = IMAGE_SIZE_DIMENSIONS[sizeKey] || IMAGE_SIZE_DIMENSIONS.square;
+  const encodedPrompt = encodeURIComponent(prompt);
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dims.width}&height=${dims.height}&nologo=true&model=${model}`;
+
   let response;
   try {
-    response = await fetch(`https://fal.run/${model}`, {
+    response = await fetch(url);
+  } catch {
+    throw new Error("Nao foi possivel conectar ao Pollinations.ai. Verifique sua conexao com a internet.");
+  }
+
+  if (!response.ok) {
+    throw new Error("Pollinations.ai falhou ao gerar a imagem. Tente novamente.");
+  }
+
+  const blob = await response.blob();
+  if (!blob || blob.size < 1000) {
+    throw new Error("O Pollinations.ai retornou uma imagem invalida.");
+  }
+
+  const imageUrl = URL.createObjectURL(blob);
+
+  return {
+    url: imageUrl,
+    prompt,
+    raw: { provider: "pollinations", model, width: dims.width, height: dims.height },
+  };
+}
+
+async function generateImageReplicate({ prompt, settings }) {
+  if (!settings.replicateKey) {
+    throw new Error("Adicione sua chave da Replicate API nas configuracoes.");
+  }
+
+  const model = settings.imageModel || DEFAULT_IMAGE_MODEL_REPLICATE;
+  const sizeKey = settings.imageSize || "square";
+  const dims = IMAGE_SIZE_DIMENSIONS[sizeKey] || IMAGE_SIZE_DIMENSIONS.square;
+
+  let createResponse;
+  try {
+    createResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Key ${settings.falKey}`,
+        Authorization: `Bearer ${settings.replicateKey}`,
       },
       body: JSON.stringify({
-        prompt,
-        image_size: settings.imageSize || "landscape_4_3",
-        num_images: 1,
+        version: model,
+        input: {
+          prompt,
+          width: dims.width,
+          height: dims.height,
+          num_outputs: 1,
+        },
       }),
     });
   } catch {
-    throw new Error("Não foi possível conectar à fal.ai. Verifique internet, chave e modelo de imagem.");
+    throw new Error("Nao foi possivel conectar a Replicate API. Verifique internet e chave.");
   }
 
-  const data = await response.json().catch(() => null);
+  const createData = await createResponse.json().catch(() => null);
 
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao gerar imagem na fal.ai."));
+  if (!createResponse.ok) {
+    throw new Error(extractErrorMessage(createData, "Falha ao iniciar geracao na Replicate."));
   }
 
-  const images = data?.images || data?.data?.images || [];
-  const image = images[0];
-  const url = image?.url || image?.image?.url;
+  let prediction = createData;
+  const maxAttempts = 60;
+  for (let i = 0; i < maxAttempts; i++) {
+    if (prediction.status === "succeeded") break;
+    if (prediction.status === "failed" || prediction.status === "canceled") {
+      throw new Error(prediction.error || "A geracao de imagem na Replicate falhou.");
+    }
 
-  if (!url) {
-    throw new Error("A fal.ai não retornou uma imagem válida.");
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    let pollResponse;
+    try {
+      pollResponse = await fetch(prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${settings.replicateKey}` },
+      });
+    } catch {
+      throw new Error("Perdeu conexao com a Replicate durante a geracao.");
+    }
+
+    prediction = await pollResponse.json().catch(() => null);
+    if (!pollResponse.ok) {
+      throw new Error(extractErrorMessage(prediction, "Erro ao consultar status na Replicate."));
+    }
+  }
+
+  if (prediction.status !== "succeeded") {
+    throw new Error("A Replicate demorou demais ou falhou ao gerar a imagem.");
+  }
+
+  const output = prediction.output;
+  const imageUrl = Array.isArray(output) ? output[0] : output;
+
+  if (!imageUrl || typeof imageUrl !== "string") {
+    throw new Error("A Replicate nao retornou uma imagem valida.");
   }
 
   return {
-    url,
+    url: imageUrl,
     prompt,
-    raw: data,
+    raw: prediction,
   };
 }
 
