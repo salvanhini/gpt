@@ -1,3 +1,9 @@
+function formatCostValue(cost) {
+  if (cost === 0) return "$0.00";
+  if (cost < 0.01) return "<$0.01";
+  return `$${cost.toFixed(2)}`;
+}
+
 function escapeHtml(value = "") {
   return (value ?? "")
     .replace(/&/g, "&amp;")
@@ -410,8 +416,8 @@ function renderActiveChatHeader(state) {
             const totalCached = (chat.messages || []).reduce((t, m) => t + (m.meta?.cachedTokens || 0), 0);
             return totalCached > 0 ? ` <span class="text-emerald-600">(${totalCached} cached)</span>` : "";
           })()}</span>
-          ${dailyCost > 0 ? `<span class="text-slate-400">•</span><span class="text-slate-400">💰 Hoje: ${escapeHtml(formatCost(dailyCost))}</span>` : ""}
-          ${monthlyCost > 0 ? `<span class="text-slate-400">· Mês: ${escapeHtml(formatCost(monthlyCost))}</span>` : ""}
+          ${dailyCost > 0 ? `<span class="text-slate-400">•</span><span class="text-slate-400">💰 Hoje: ${escapeHtml(formatCostValue(dailyCost))}</span>` : ""}
+          ${monthlyCost > 0 ? `<span class="text-slate-400">· Mês: ${escapeHtml(formatCostValue(monthlyCost))}</span>` : ""}
         </div>
       </div>
       ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
@@ -1321,11 +1327,11 @@ function renderSettingsModal(state) {
             <div class="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
                 <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Hoje</div>
-                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCost(state.dailyCost || 0))}</div>
+                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCostValue(state.dailyCost || 0))}</div>
               </div>
               <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
                 <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Mensal</div>
-                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCost(state.monthlyCost || 0))}</div>
+                <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCostValue(state.monthlyCost || 0))}</div>
               </div>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
