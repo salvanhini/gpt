@@ -1,7 +1,7 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
 const TAVILY_URL = "https://api.tavily.com/search";
 const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
@@ -10,7 +10,7 @@ const DEFAULT_TEXT_MODEL = "qwen-plus";
 const DEFAULT_TEXT_PROVIDER = "groq";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
-const DEFAULT_QWEN_MODEL = "qwen-plus";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_IMAGE_MODEL = "fal-ai/flux/schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
@@ -37,7 +37,7 @@ function resolveEndpoint(provider, settings, bodyObject) {
     openrouter: "OpenRouter",
     deepseek: "DeepSeek",
     groq: "Groq",
-    qwen: "Qwen DashScope",
+    gemini: "Google Gemini",
   };
   const label = providerNames[provider] || "API";
 
@@ -45,7 +45,7 @@ function resolveEndpoint(provider, settings, bodyObject) {
     openrouter: { url: OPENROUTER_URL, key: settings.openRouterKey },
     deepseek: { url: DEEPSEEK_URL, key: settings.deepSeekKey },
     groq: { url: GROQ_URL, key: settings.groqKey },
-    qwen: { url: QWEN_URL, key: settings.qwenKey },
+    gemini: { url: GEMINI_URL, key: settings.geminiKey },
   };
 
   const endpoint = endpointMap[provider];
@@ -75,16 +75,23 @@ export const OPENROUTER_MODELS = [
   {
     value: "qwen/qwen3.7-plus",
     label: "Qwen 3.7 Plus",
-    description: "Modelo Qwen recente via OpenRouter para uso geral e produtividade.",
+    description: "Modelo Qwen equilibrado via OpenRouter.",
     badges: ["Rapido", "Equilibrado", "Texto", "Web"],
-    helperText: "Boa escolha para produtividade, conversa geral e pesquisas com resposta bem equilibrada.",
+    helperText: "Melhor para produtividade, conversa geral e pesquisas com resposta equilibrada.",
   },
   {
     value: "deepseek/deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
-    description: "DeepSeek recente via OpenRouter, com foco em qualidade de resposta.",
+    description: "DeepSeek de alta qualidade via OpenRouter.",
     badges: ["Qualidade", "Analise", "Texto", "Web"],
-    helperText: "Melhor quando voce quer respostas mais densas, analise e acabamento acima de velocidade.",
+    helperText: "Melhor para analises profundas e respostas mais densas.",
+  },
+  {
+    value: "deepseek/deepseek-r1",
+    label: "DeepSeek R1",
+    description: "DeepSeek com raciocinio encadeado via OpenRouter.",
+    badges: ["Raciocinio", "Thinking", "Texto", "Web"],
+    helperText: "Melhor para problemas logicos, matematicos e cadeias de raciocinio.",
   },
 ];
 
@@ -102,30 +109,23 @@ export const DEEPSEEK_MODELS = [
   {
     value: "deepseek-v4-flash",
     label: "DeepSeek V4 Flash",
-    description: "Modelo direto da DeepSeek para respostas rápidas.",
+    description: "Modelo rapido e barato da DeepSeek.",
     badges: ["Rapido", "Economico", "Texto"],
-    helperText: "Ideal para conversas frequentes e respostas rapidas com custo mais leve.",
+    helperText: "Melhor para respostas rapidas do dia a dia e conversas frequentes.",
   },
   {
     value: "deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
-    description: "Modelo direto da DeepSeek com mais capacidade.",
+    description: "Alta qualidade da DeepSeek para tarefas exigentes.",
     badges: ["Qualidade", "Analise", "Texto"],
-    helperText: "Use quando quiser mais profundidade e consistencia em tarefas mais exigentes.",
+    helperText: "Melhor para analises profundas, codigo complexo e tarefas que exigem raciocinio.",
   },
   {
-    value: "deepseek-chat",
-    label: "DeepSeek Chat",
-    description: "Modelo legado compatível, mantido por conveniência.",
-    badges: ["Legado", "Texto"],
-    helperText: "Opcao mantida por compatibilidade para quem ja usa esse fluxo.",
-  },
-  {
-    value: "deepseek-reasoner",
-    label: "DeepSeek Reasoner",
-    description: "Modelo legado de raciocínio, quando disponível na conta.",
-    badges: ["Raciocinio", "Legado", "Texto"],
-    helperText: "Serve para cadeias de raciocinio quando esse modelo ainda estiver habilitado na conta.",
+    value: "deepseek-r1",
+    label: "DeepSeek R1",
+    description: "Modelo com raciocinio encadeado (thinking) da DeepSeek.",
+    badges: ["Raciocinio", "Thinking", "Texto"],
+    helperText: "Melhor para problemas logicos, matematicos e cadeias de raciocinio complexas.",
   },
 ];
 
@@ -133,47 +133,47 @@ export const GROQ_MODELS = [
   {
     value: "openai/gpt-oss-20b",
     label: "GPT OSS 20B",
-    description: "Modelo leve e rapido da Groq, compativel com browser search.",
+    description: "Ultra rapido e leve para chat simples.",
     badges: ["Rapido", "Web", "Economico", "Texto"],
-    helperText: "Melhor para velocidade e busca web com resposta curta ou media.",
+    helperText: "Melhor para perguntas rapidas, chat simples e tarefas do dia a dia.",
   },
   {
     value: "openai/gpt-oss-120b",
     label: "GPT OSS 120B",
-    description: "Modelo Groq mais forte para raciocinio e web search com mais profundidade.",
+    description: "Mais inteligente com busca web integrada.",
     badges: ["Qualidade", "Web", "Raciocinio", "Texto"],
-    helperText: "Escolha quando quiser busca web com mais contexto e respostas mais robustas.",
+    helperText: "Melhor para pesquisas, analises e tarefas que precisam de mais raciocinio.",
   },
   {
     value: "llama-3.1-8b-instant",
     label: "Llama 3.1 8B Instant",
-    description: "Opcao muito rapida e economica para chat geral na Groq.",
+    description: "Muito rapido e economico.",
     badges: ["Rapido", "Economico", "Texto"],
-    helperText: "Bom para respostas instantaneas e tarefas simples do dia a dia.",
+    helperText: "Melhor para tarefas simples e respostas instantaneas.",
   },
 ];
 
-export const QWEN_MODELS = [
+export const GEMINI_MODELS = [
   {
-    value: "qwen-plus",
-    label: "Qwen Plus",
-    description: "Modelo principal do Qwen para raciocinio e uso geral, 128K contexto.",
-    badges: ["Qualidade", "Raciocinio", "Texto", "Multimodal"],
-    helperText: "Melhor para tarefas complexas que exigem analise profunda e raciocinio avancado.",
+    value: "gemini-3.5-flash",
+    label: "Gemini 3.5 Flash",
+    description: "Modelo mais recente e rapido do Google.",
+    badges: ["Rapido", "Multimodal", "Texto", "Web"],
+    helperText: "Melhor para respostas rapidas, analise de imagens e tarefas gerais.",
   },
   {
-    value: "qwen-max",
-    label: "Qwen Max",
-    description: "Modelo flagship do Qwen, mais capacidade e qualidade de resposta.",
-    badges: ["Qualidade", "Texto", "Multimodal"],
-    helperText: "Escolha para tarefas que precisam da maxima qualidade e consistencia.",
+    value: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    description: "Modelo rapido e versatile do Google.",
+    badges: ["Rapido", "Multimodal", "Texto"],
+    helperText: "Boa opcao para tarefas do dia a dia e analise de conteudo.",
   },
   {
-    value: "qwen-flash",
-    label: "Qwen Flash",
-    description: "Modelo rapido e economico do Qwen para uso geral.",
-    badges: ["Rapido", "Economico", "Texto"],
-    helperText: "Ideal para respostas rapidas e tarefas simples do dia a dia.",
+    value: "gemini-1.5-flash",
+    label: "Gemini 1.5 Flash",
+    description: "Modelo anterior rapido do Google.",
+    badges: ["Rapido", "Economico", "Multimodal", "Texto"],
+    helperText: "Opcao economica para tarefas simples.",
   },
 ];
 
@@ -186,8 +186,8 @@ function findModelByProvider(provider, settings = {}) {
     return GROQ_MODELS.find((model) => model.value === settings.groqModel) || null;
   }
 
-  if (provider === "qwen") {
-    return QWEN_MODELS.find((model) => model.value === settings.qwenModel) || null;
+  if (provider === "gemini") {
+    return GEMINI_MODELS.find((model) => model.value === settings.geminiModel) || null;
   }
 
   return OPENROUTER_MODELS.find((model) => model.value === settings.textModel) || null;
@@ -255,18 +255,21 @@ export function getDefaultSettings() {
     openRouterKey: "",
     deepSeekKey: "",
     groqKey: "",
-    qwenKey: "",
+    geminiKey: "",
     falKey: "",
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
     deepSeekModel: DEFAULT_DEEPSEEK_MODEL,
     groqModel: DEFAULT_GROQ_MODEL,
-    qwenModel: DEFAULT_QWEN_MODEL,
+    geminiModel: DEFAULT_GEMINI_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL,
     imageSize: "landscape_4_3",
     globalSystemPrompt: "",
     openRouterEnabled: true,
     deepSeekEnabled: true,
+    groqEnabled: true,
+    geminiEnabled: true,
+    openRouterSelectedModels: [],
     tavilyKey: "",
     braveSearchKey: "",
     usageLimits: {
@@ -283,6 +286,28 @@ export function getDefaultSettings() {
   };
 }
 
+export async function fetchOpenRouterModels(apiKey) {
+  if (!apiKey) {
+    throw new Error("Chave da API OpenRouter necessaria.");
+  }
+
+  const response = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (!response.ok) {
+    throw new Error("Falha ao buscar modelos da OpenRouter.");
+  }
+
+  const data = await response.json();
+  return (data?.data || []).map((model) => ({
+    id: model.id,
+    name: model.name || model.id,
+    contextLength: model.context_length || 0,
+    pricing: model.pricing || {},
+  }));
+}
+
 export function getTextProviderDisplayName(provider) {
   if (provider === "deepseek") {
     return "DeepSeek";
@@ -292,8 +317,8 @@ export function getTextProviderDisplayName(provider) {
     return "Groq";
   }
 
-  if (provider === "qwen") {
-    return "Qwen";
+  if (provider === "gemini") {
+    return "Google Gemini";
   }
 
   return "OpenRouter";
@@ -308,8 +333,8 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
     return Boolean(settings?.groqKey);
   }
 
-  if (provider === "qwen") {
-    return Boolean(settings?.qwenKey);
+  if (provider === "gemini") {
+    return Boolean(settings?.geminiKey);
   }
 
   return Boolean(settings?.openRouterKey);
@@ -399,11 +424,15 @@ export function buildGroqRequestBody({ messages, settings, webSearchMode = false
   return body;
 }
 
-export function buildOpenRouterRequestBody({ messages, settings, webSearchMode = false }) {
+export function buildOpenRouterRequestBody({ messages, settings, webSearchMode = false, thinkingEnabled = false }) {
   const body = {
     model: settings.textModel || DEFAULT_TEXT_MODEL,
     messages: webSearchMode ? buildOpenRouterSearchMessages(messages) : messages,
   };
+
+  if (thinkingEnabled) {
+    body.include_reasoning = true;
+  }
 
   if (webSearchMode) {
     body.tools = [
@@ -720,8 +749,8 @@ export async function runWebSearchQuery({ messages, settings }) {
     throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
   }
 
-  if (settings.textProvider === "qwen") {
-    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Qwen DashScope continua apenas no chat normal.");
+  if (settings.textProvider === "gemini") {
+    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
   }
 
   try {
@@ -798,7 +827,7 @@ async function chatFetch(url, headers, body) {
   return data;
 }
 
-export async function sendTextMessage({ messages, settings, webSearchMode = false }) {
+export async function sendTextMessage({ messages, settings, webSearchMode = false, thinkingEnabled = false }) {
   // Cache: verifica resposta repetida antes de chamar a API
   const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
   const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
@@ -813,16 +842,16 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
     if (webSearchMode) {
       throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
     }
-    resultado = await sendDeepSeekMessage({ messages, settings });
+    resultado = await sendDeepSeekMessage({ messages, settings, thinkingEnabled });
   } else if (settings.textProvider === "groq") {
     resultado = await sendGroqMessage({ messages, settings, webSearchMode });
-  } else if (settings.textProvider === "qwen") {
+  } else if (settings.textProvider === "gemini") {
     if (webSearchMode) {
-      throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Qwen DashScope continua apenas no chat normal.");
+      throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
     }
-    resultado = await sendQwenMessage({ messages, settings });
+    resultado = await sendGeminiMessage({ messages, settings });
   } else {
-    const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode });
+    const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode, thinkingEnabled });
     const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
     const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 
@@ -846,12 +875,17 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
   return resultado;
 }
 
-async function sendDeepSeekMessage({ messages, settings }) {
+async function sendDeepSeekMessage({ messages, settings, thinkingEnabled = false }) {
   const bodyObj = {
     model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
     messages,
     stream: false,
   };
+
+  if (thinkingEnabled && settings.deepSeekModel === "deepseek-r1") {
+    bodyObj.thinking = { type: "enabled", budget_tokens: 4096 };
+  }
+
   const endpoint = resolveEndpoint("deepseek", settings, bodyObj);
   const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 
@@ -894,29 +928,68 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
   };
 }
 
-async function sendQwenMessage({ messages, settings }) {
-  const bodyObj = {
-    model: settings.qwenModel || DEFAULT_QWEN_MODEL,
-    messages,
-    stream: false,
-  };
-  const endpoint = resolveEndpoint("qwen", settings, bodyObj);
-  const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
+async function sendGeminiMessage({ messages, settings }) {
+  const model = settings.geminiModel || DEFAULT_GEMINI_MODEL;
+  const apiKey = settings.geminiKey;
 
-  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
-  if (!content) {
-    throw new Error("A resposta do Qwen DashScope veio vazia.");
+  const contents = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content || "" }],
+    }));
+
+  const systemInstruction = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+
+  const bodyObj = {
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    },
+  };
+
+  if (systemInstruction) {
+    bodyObj.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
 
-  const usage = data?.usage;
-  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+  const url = `${GEMINI_URL}/${model}:generateContent?key=${apiKey}`;
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj),
+    });
+  } catch {
+    throw new Error("Sem conexao com a API do Google Gemini.");
+  }
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
+    if (response.status === 401) throw new Error("Chave de API do Gemini invalida. Verifique nas configuracoes.");
+    throw new Error(data?.error?.message || "Falha na API do Google Gemini.");
+  }
+
+  const content = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!content) {
+    throw new Error("A resposta do Gemini veio vazia.");
+  }
+
+  const usage = data?.usageMetadata || {};
 
   return {
     content,
     raw: data,
-    cachedTokens,
-    promptTokens: usage?.prompt_tokens || 0,
-    completionTokens: usage?.completion_tokens || 0,
+    cachedTokens: 0,
+    promptTokens: usage.promptTokenCount || 0,
+    completionTokens: usage.candidatesTokenCount || 0,
   };
 }
 

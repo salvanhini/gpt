@@ -107,10 +107,6 @@ function getProviderLabel(state) {
     return (settings.groqModel || "").split("/").pop() || "Groq";
   }
 
-  if (settings.textProvider === "qwen") {
-    return settings.qwenModel || "Qwen";
-  }
-
   return (settings.textModel || "").split("/").pop() || "OpenRouter";
 }
 
@@ -123,8 +119,8 @@ function getQuickModelValue(state) {
     return `groq::${state.settings.groqModel}`;
   }
 
-  if (state.settings.textProvider === "qwen") {
-    return `qwen::${state.settings.qwenModel}`;
+  if (state.settings.textProvider === "gemini") {
+    return `gemini::${state.settings.geminiModel}`;
   }
 
   return `openrouter::${state.settings.textModel}`;
@@ -138,22 +134,22 @@ function getActiveModelDetails(state) {
       ? state.deepSeekModelOptions || []
       : provider === "groq"
         ? state.groqModelOptions || []
-        : provider === "qwen"
-          ? state.qwenModelOptions || []
+        : provider === "gemini"
+          ? state.geminiModelOptions || []
           : state.modelOptions || [];
   const selectedValue =
     provider === "deepseek"
       ? settings.deepSeekModel
       : provider === "groq"
         ? settings.groqModel
-        : provider === "qwen"
-          ? settings.qwenModel
+        : provider === "gemini"
+          ? settings.geminiModel
           : settings.textModel;
   const model = collection.find((item) => item.value === selectedValue) || collection[0] || null;
 
   return {
     providerLabel:
-      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : provider === "qwen" ? "Qwen" : "OpenRouter",
+      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "OpenRouter",
     label: model?.label || "Modelo padrão",
     helperText: model?.helperText || model?.description || "Modelo pronto para uso geral.",
     badges: Array.isArray(model?.badges) ? model.badges : [],
@@ -175,13 +171,30 @@ function getInstagramFormatById(state, formatId) {
 function renderQuickModelOptions(state) {
   const current = getQuickModelValue(state);
   const settings = state.settings || {};
-  const openRouter = settings.openRouterEnabled !== false ? (state.modelOptions || []).map(
-    (model) => `
-      <option value="openrouter::${escapeHtml(model.value)}" ${current === `openrouter::${model.value}` ? "selected" : ""}>
-        OpenRouter · ${escapeHtml(model.label)}
-      </option>
-    `,
-  ) : [];
+  const selectedModels = settings.openRouterSelectedModels || [];
+  const hasDynamicModels = state.openRouterAvailableModels?.length > 0;
+
+  const openRouter = settings.openRouterEnabled !== false ? (() => {
+    if (hasDynamicModels) {
+      const modelsToShow = selectedModels.length > 0
+        ? state.openRouterAvailableModels.filter((m) => selectedModels.includes(m.id))
+        : state.openRouterAvailableModels.slice(0, 20);
+      return modelsToShow.map(
+        (model) => `
+          <option value="openrouter::${escapeHtml(model.id)}" ${current === `openrouter::${model.id}` ? "selected" : ""}>
+            OpenRouter · ${escapeHtml(model.name)}
+          </option>
+        `,
+      );
+    }
+    return (state.modelOptions || []).map(
+      (model) => `
+        <option value="openrouter::${escapeHtml(model.value)}" ${current === `openrouter::${model.value}` ? "selected" : ""}>
+          OpenRouter · ${escapeHtml(model.label)}
+        </option>
+      `,
+    );
+  })() : [];
   const deepSeek = settings.deepSeekEnabled !== false ? (state.deepSeekModelOptions || []).map(
     (model) => `
       <option value="deepseek::${escapeHtml(model.value)}" ${current === `deepseek::${model.value}` ? "selected" : ""}>
@@ -189,22 +202,22 @@ function renderQuickModelOptions(state) {
       </option>
     `,
   ) : [];
-  const groq = (state.groqModelOptions || []).map(
+  const groq = settings.groqEnabled !== false ? (state.groqModelOptions || []).map(
     (model) => `
       <option value="groq::${escapeHtml(model.value)}" ${current === `groq::${model.value}` ? "selected" : ""}>
         Groq · ${escapeHtml(model.label)}
       </option>
     `,
-  );
-  const qwen = (state.qwenModelOptions || []).map(
+  ) : [];
+  const gemini = settings.geminiEnabled !== false ? (state.geminiModelOptions || []).map(
     (model) => `
-      <option value="qwen::${escapeHtml(model.value)}" ${current === `qwen::${model.value}` ? "selected" : ""}>
-        Qwen · ${escapeHtml(model.label)}
+      <option value="gemini::${escapeHtml(model.value)}" ${current === `gemini::${model.value}` ? "selected" : ""}>
+        Gemini · ${escapeHtml(model.label)}
       </option>
     `,
-  );
+  ) : [];
 
-  return [...openRouter, ...deepSeek, ...groq, ...qwen].join("");
+  return [...openRouter, ...deepSeek, ...groq, ...gemini].join("");
 }
 
 function renderModelGuidance(state) {
@@ -1043,7 +1056,6 @@ function renderBoardCard(chat, state) {
               data-action="toggle-pin-chat"
               data-chat-id="${chat.id}"
               title="${chat.pinned ? "Desafixar" : "Fixar"}"
-              onclick="event.stopPropagation()"
             >📌</button>
             <button
               type="button"
@@ -1051,7 +1063,6 @@ function renderBoardCard(chat, state) {
               data-action="delete-chat"
               data-chat-id="${chat.id}"
               title="Excluir conversa"
-              onclick="event.stopPropagation()"
             >✕</button>
             ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
           </div>
@@ -1202,6 +1213,28 @@ function renderSettingsModal(state) {
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
                   <input class="modal-input" name="openRouterKey" type="password" value="${escapeHtml(settings.openRouterKey || "")}" placeholder="sk-or-v1-..." ${settings.openRouterEnabled === false ? "disabled" : ""} />
                 </label>
+                ${settings.openRouterEnabled !== false ? `
+                  <div class="mt-3 border-t border-slate-200 pt-3">
+                    <div class="mb-2 flex items-center justify-between">
+                      <span class="text-xs font-semibold text-slate-700">Modelos Disponíveis</span>
+                      <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-medium text-slate-600 shadow-sm hover:bg-slate-50" data-action="fetch-openrouter-models">Buscar Modelos</button>
+                    </div>
+                    ${state.openRouterAvailableModels?.length > 0 ? `
+                      <div class="max-h-[200px] space-y-1 overflow-auto">
+                        ${state.openRouterAvailableModels.map((model) => {
+                          const isSelected = (settings.openRouterSelectedModels || []).includes(model.id);
+                          return `
+                            <label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-xs hover:bg-slate-50">
+                              <input type="checkbox" ${isSelected ? "checked" : ""} data-action="toggle-openrouter-model" data-model-id="${escapeHtml(model.id)}" class="rounded border-slate-300 text-femic-cyan focus:ring-femic-cyan" />
+                              <span class="min-w-0 flex-1 truncate text-slate-700">${escapeHtml(model.name)}</span>
+                              ${model.contextLength ? `<span class="shrink-0 text-[10px] text-slate-400">${Math.round(model.contextLength / 1000)}K</span>` : ""}
+                            </label>
+                          `;
+                        }).join("")}
+                      </div>
+                    ` : `<p class="text-[10px] text-slate-400">Clique em "Buscar Modelos" para carregar a lista.</p>`}
+                  </div>
+                ` : ""}
               </section>
 
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
@@ -1222,24 +1255,39 @@ function renderSettingsModal(state) {
               </section>
 
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-                <div class="mb-2">
-                  <div class="text-sm font-semibold text-slate-900">Groq</div>
-                  <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
+                <div class="mb-2 flex items-center justify-between">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">Groq</div>
+                    <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
+                  </div>
+                  <label class="relative inline-flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" name="groqEnabled" class="peer sr-only" ${settings.groqEnabled !== false ? "checked" : ""} />
+                    <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
                 </div>
                 <label class="block">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                  <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." />
+                  <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." ${settings.groqEnabled === false ? "disabled" : ""} />
                 </label>
               </section>
 
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-                <div class="mb-2">
-                  <div class="text-sm font-semibold text-slate-900">Qwen DashScope</div>
-                  <div class="text-xs text-slate-500">Chave para modelos Qwen direto (multimodal).</div>
+                <div class="mb-2 flex items-center justify-between">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">Google Gemini</div>
+                    <div class="text-xs text-slate-500">Modelos multimodais do Google.</div>
+                  </div>
+                  <label class="relative inline-flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" name="geminiEnabled" class="peer sr-only" ${settings.geminiEnabled !== false ? "checked" : ""} />
+                    <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
+                </div>
+                <div class="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p class="text-[11px] font-medium text-amber-800">⚠️ A Google pode usar seus dados para melhoria dos modelos. Evite enviar dados sensiveis.</p>
                 </div>
                 <label class="block">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                  <input class="modal-input" name="qwenKey" type="password" value="${escapeHtml(settings.qwenKey || "")}" placeholder="sk-..." />
+                  <input class="modal-input" name="geminiKey" type="password" value="${escapeHtml(settings.geminiKey || "")}" placeholder="AIza..." ${settings.geminiEnabled === false ? "disabled" : ""} />
                 </label>
               </section>
             </div>
@@ -1248,17 +1296,6 @@ function renderSettingsModal(state) {
           <div class="space-y-2">
             <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Servicos Externos</h4>
             <div class="grid gap-3 lg:grid-cols-2">
-              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-                <div class="mb-2">
-                  <div class="text-sm font-semibold text-slate-900">E2B (Code Interpreter)</div>
-                  <div class="text-xs text-slate-500">Execucao de codigo Python em sandbox isolado.</div>
-                </div>
-                <label class="block">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                  <input class="modal-input" name="e2bKey" type="password" value="${escapeHtml(settings.e2bKey || "")}" placeholder="e2b_..." />
-                </label>
-              </section>
-
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
                 <div class="mb-2">
                   <div class="text-sm font-semibold text-slate-900">Imagem (fal.ai)</div>
@@ -1537,48 +1574,6 @@ function renderMemoryModal(state) {
   `;
 }
 
-function renderCodeInterpreterModal(state) {
-  if (!state.modals.codeInterpreter) {
-    return "";
-  }
-
-  const output = state.codeInterpreterOutput || "";
-
-  return `
-    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="codeInterpreter">
-      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-3xl" data-modal-surface="codeInterpreter">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-xl font-semibold text-slate-900">🐍 Interpretador Python</h3>
-            <p class="mt-1 text-sm text-slate-500">Execute codigo Python diretamente no navegador via Pyodide (WebAssembly).</p>
-          </div>
-          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="codeInterpreter">✕</button>
-        </div>
-        <div class="space-y-3">
-          <label class="block">
-            <span class="mb-2 block text-sm font-medium text-slate-700">Codigo Python</span>
-            <textarea
-              id="code-interpreter-input"
-              class="modal-textarea min-h-[160px] font-mono text-sm"
-              placeholder="print('Ola mundo!')"
-            >${escapeHtml(state.codeInterpreterDraft || "")}</textarea>
-          </label>
-          <div class="flex justify-end gap-3">
-            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="codeInterpreter">Fechar</button>
-            <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white shadow-soft" data-action="execute-code">▶ Executar</button>
-          </div>
-          ${output ? `
-            <div class="mt-3">
-              <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Saida</div>
-              <pre class="mt-2 max-h-[300px] overflow-auto rounded-xl border border-slate-200 bg-slate-900 p-3 text-sm text-green-400 font-mono">${escapeHtml(output)}</pre>
-            </div>
-          ` : ""}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function renderBrandModal(state) {
   if (!state.modals.brandForm) {
     return "";
@@ -1789,7 +1784,7 @@ function renderAgentModal(state) {
                     <option value="openrouter" ${editing.textProvider === "openrouter" ? "selected" : ""}>OpenRouter</option>
                     <option value="deepseek" ${editing.textProvider === "deepseek" ? "selected" : ""}>DeepSeek</option>
                     <option value="groq" ${editing.textProvider === "groq" ? "selected" : ""}>Groq</option>
-                    <option value="qwen" ${editing.textProvider === "qwen" ? "selected" : ""}>Qwen DashScope</option>
+                    <option value="gemini" ${editing.textProvider === "gemini" ? "selected" : ""}>Google Gemini</option>
                   </select>
                 </label>
                 <label class="block">
@@ -1814,10 +1809,10 @@ function renderAgentModal(state) {
                   </select>
                 </label>
                 <label class="block">
-                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Qwen DashScope</span>
-                  <select class="modal-input" name="qwenModel">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Gemini</span>
+                  <select class="modal-input" name="geminiModel">
                     <option value="">Modelo global</option>
-                    ${renderModelOptions(state.qwenModelOptions, editing.qwenModel)}
+                    ${renderModelOptions(state.geminiModelOptions, editing.geminiModel)}
                   </select>
                 </label>
               </div>
@@ -1926,9 +1921,6 @@ export function renderApp(state) {
           <button type="button" class="sidebar-icon-action" data-action="open-memory" title="Memoria persistente">
             <span>🧠</span>
           </button>
-          <button type="button" class="sidebar-icon-action" data-action="open-code-interpreter" title="Interpretador Python">
-            <span>🐍</span>
-          </button>
           <button type="button" class="sidebar-icon-action" data-action="open-help" title="Ajuda e tutorial">
             <span>?</span>
           </button>
@@ -2007,9 +1999,13 @@ export function renderApp(state) {
                         <span>${state.imageMode ? "Imagem" : "Texto"}</span>
                       </button>`}
                       ${instagramMode ? "" : renderWebSearchControls(state)}
-                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.smartMode ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-smart-mode" title="Modo automatico: escolhe modelo e web search conforme a pergunta">
-                        <span>🤖</span>
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.smartMode ? "border-emerald-400 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-200" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-smart-mode" title="Modo automatico: escolhe modelo e web search conforme a pergunta">
+                        <span>${state.smartMode ? "⚡" : "🤖"}</span>
                         <span>${state.smartMode ? "Auto" : "Manual"}</span>
+                      </button>`}
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.thinkingEnabled ? "border-violet-400 bg-violet-50 text-violet-800 ring-2 ring-violet-200" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-thinking-mode" title="Thinking: raciocinio encadeado para modelos compatíveis">
+                        <span>🧠</span>
+                        <span>Think</span>
                       </button>`}
                     </div>
                     <div class="flex items-center gap-1">
@@ -2034,7 +2030,6 @@ export function renderApp(state) {
     ${renderRenameChatModal(state)}
     ${renderHelpModal(state)}
     ${renderMemoryModal(state)}
-    ${renderCodeInterpreterModal(state)}
     ${renderBrandModal(state)}
     ${renderAgentModal(state)}
   `;
@@ -2070,21 +2065,23 @@ export function bindUIHandlers(handlers) {
     if (action === "duplicate-agent") handlers.onDuplicateAgent(target.dataset.agentId);
     if (action === "restore-default-agents") handlers.onRestoreDefaultAgents();
     if (action === "select-chat") handlers.onSelectChat(target.dataset.chatId);
-    if (action === "delete-chat") handlers.onDeleteChat(target.dataset.chatId);
+    if (action === "delete-chat") { event.stopPropagation(); handlers.onDeleteChat(target.dataset.chatId); }
     if (action === "create-chat") handlers.onCreateChat();
     if (action === "open-help") handlers.onOpenHelp();
     if (action === "open-settings") handlers.onOpenSettings();
     if (action === "open-memory") handlers.onOpenMemory();
-    if (action === "open-code-interpreter") handlers.onOpenCodeInterpreter();
+    if (action === "fetch-openrouter-models") handlers.onFetchOpenRouterModels();
+    if (action === "toggle-openrouter-model") handlers.onToggleOpenRouterModel(target.dataset.modelId);
     if (action === "open-agent-modal") handlers.onOpenAgentModal();
     if (action === "open-brand-modal") handlers.onOpenBrandModal(target.dataset.brandId);
     if (action === "close-modal") handlers.onCloseModal(target.dataset.modal);
     if (action === "toggle-image-mode") handlers.onToggleImageMode();
-    if (action === "toggle-pin-chat") handlers.onTogglePinChat(target.dataset.chatId);
+    if (action === "toggle-pin-chat") { event.stopPropagation(); handlers.onTogglePinChat(target.dataset.chatId); }
     if (action === "toggle-show-archived") handlers.onToggleShowArchived();
     if (action === "restore-archived") handlers.onRestoreArchived(target.dataset.chatId);
     if (action === "delete-archived") handlers.onDeleteArchived(target.dataset.chatId);
     if (action === "toggle-smart-mode") handlers.onToggleSmartMode();
+    if (action === "toggle-thinking-mode") handlers.onToggleThinkingMode();
     if (action === "toggle-voice") handlers.onToggleVoice();
     if (action === "speak-message") handlers.onSpeakMessage(target.dataset.messageId);
     if (action === "copy-message") handlers.onCopyMessage(target.dataset.messageId);
@@ -2110,12 +2107,6 @@ export function bindUIHandlers(handlers) {
     if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
     if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);
     if (action === "remove-memory-fact") handlers.onRemoveMemoryFact(target.dataset.factId);
-    if (action === "execute-code") {
-      const textarea = document.getElementById("code-interpreter-input");
-      if (textarea) {
-        handlers.onExecuteCode(textarea.value);
-      }
-    }
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {

@@ -36,12 +36,13 @@ import {
 } from "./chat.js";
 import {
   DEEPSEEK_MODELS,
+  fetchOpenRouterModels,
   generateSpeechAudio,
   generateImage,
   getDefaultSettings,
   getTextProviderDisplayName,
+  GEMINI_MODELS,
   GROQ_MODELS,
-  QWEN_MODELS,
   hasTextProviderKey,
   IMAGE_SIZE_OPTIONS,
   OPENROUTER_MODELS,
@@ -95,7 +96,6 @@ import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
 import { getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
-import { executePython } from "./codeInterpreter.js";
 
 let bootSettingsFallbacks = [];
 
@@ -120,6 +120,7 @@ const state = {
   smartMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
+  thinkingEnabled: false,
   modelGuidanceCollapsed: false,
   agentSummaryCollapsed: true,
   instagramFormat: "story_9_16",
@@ -145,7 +146,6 @@ const state = {
     renameChat: false,
     help: false,
     memory: false,
-    codeInterpreter: false,
   },
   modalPayload: {},
   draftMessage: "",
@@ -163,7 +163,8 @@ const state = {
   modelOptions: OPENROUTER_MODELS,
   deepSeekModelOptions: DEEPSEEK_MODELS,
   groqModelOptions: GROQ_MODELS,
-  qwenModelOptions: QWEN_MODELS,
+  geminiModelOptions: GEMINI_MODELS,
+  openRouterAvailableModels: [],
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
@@ -175,7 +176,6 @@ function loadSettings() {
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
-    QWEN_MODELS,
   );
 
   bootSettingsFallbacks = normalized.fallbacks;
@@ -283,7 +283,6 @@ function resetTransientState({ keepDraft = false } = {}) {
   state.mobileSidebarOpen = false;
   state.recordedAudioChunks = [];
   state.modals.memory = false;
-  state.modals.codeInterpreter = false;
   if (!keepDraft) {
     state.draftMessage = "";
   }
@@ -296,7 +295,6 @@ function loadImportedSettings(rawSettings) {
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,
     GROQ_MODELS,
-    QWEN_MODELS,
   );
 
   state.settingsFallbacks = normalized.fallbacks;
@@ -547,7 +545,7 @@ function getActiveTextProviderLabel() {
 
 function canUseWebSearch() {
   const provider = getActiveSettings().textProvider;
-  return provider !== "deepseek" && provider !== "qwen";
+  return provider !== "deepseek" && provider !== "gemini";
 }
 
 function resetAttachments() {
@@ -865,6 +863,7 @@ async function handleSendMessage(rawMessage) {
           messages: textPayload,
           settings: getActiveSettings(),
           webSearchMode: false,
+          thinkingEnabled: state.thinkingEnabled,
         });
         addMessage(activeChat.id, {
           role: "assistant",
@@ -875,11 +874,11 @@ async function handleSendMessage(rawMessage) {
             cachedTokens: sendResult.cachedTokens || 0,
             promptTokens: sendResult.promptTokens || 0,
             completionTokens: sendResult.completionTokens || 0,
-            model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "",
+            model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().geminiModel || "",
           },
         });
         if (sendResult.promptTokens && sendResult.completionTokens) {
-          trackCost(getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().qwenModel || "", sendResult.promptTokens, sendResult.completionTokens);
+          trackCost(getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().geminiModel || "", sendResult.promptTokens, sendResult.completionTokens);
         }
       }
     }
@@ -1035,6 +1034,16 @@ function handleQuickModelChange(value) {
     return;
   }
 
+  if (provider === "groq" && state.settings.groqEnabled === false) {
+    showToast("Groq esta desabilitado. Ative nas configuracoes.", "error");
+    return;
+  }
+
+  if (provider === "gemini" && state.settings.geminiEnabled === false) {
+    showToast("Google Gemini esta desabilitado. Ative nas configuracoes.", "error");
+    return;
+  }
+
   state.settings = {
     ...state.settings,
     textProvider: provider,
@@ -1042,8 +1051,8 @@ function handleQuickModelChange(value) {
       ? { deepSeekModel: model }
       : provider === "groq"
         ? { groqModel: model }
-        : provider === "qwen"
-          ? { qwenModel: model }
+        : provider === "gemini"
+          ? { geminiModel: model }
           : { textModel: model }),
   };
 
@@ -1169,6 +1178,12 @@ function handleToggleSmartMode() {
   persistAndRender();
 }
 
+function handleToggleThinkingMode() {
+  state.thinkingEnabled = !state.thinkingEnabled;
+  showToast(state.thinkingEnabled ? "Thinking mode ativado" : "Thinking mode desativado");
+  persistAndRender();
+}
+
 function handleTogglePinChat(chatId) {
   const chat = state.chats.find((c) => c.id === chatId);
   if (!chat) return;
@@ -1241,7 +1256,7 @@ function handleSaveSettings(formValues) {
     openRouterKey: formValues.openRouterKey?.trim() || "",
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
     groqKey: formValues.groqKey?.trim() || "",
-    qwenKey: formValues.qwenKey?.trim() || "",
+    geminiKey: formValues.geminiKey?.trim() || "",
     e2bKey: formValues.e2bKey?.trim() || "",
     tavilyKey: formValues.tavilyKey?.trim() || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || "",
@@ -1252,6 +1267,8 @@ function handleSaveSettings(formValues) {
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,
     deepSeekEnabled: formValues.deepSeekEnabled === "on" || formValues.deepSeekEnabled === true,
+    groqEnabled: formValues.groqEnabled === "on" || formValues.groqEnabled === true,
+    geminiEnabled: formValues.geminiEnabled === "on" || formValues.geminiEnabled === true,
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
@@ -1350,7 +1367,7 @@ function handleSaveAgent(formValues) {
     textModel: formValues.textModel?.toString() || "",
     deepSeekModel: formValues.deepSeekModel?.toString() || "",
     groqModel: formValues.groqModel?.toString() || "",
-    qwenModel: formValues.qwenModel?.toString() || "",
+    geminiModel: formValues.geminiModel?.toString() || "",
     defaultImageMode: formValues.defaultImageMode?.toString() || "inherit",
     defaultWebSearchMode: formValues.defaultWebSearchMode?.toString() || "inherit",
     defaultPubmedMode: formValues.defaultPubmedMode?.toString() || "inherit",
@@ -1691,7 +1708,6 @@ function initialize() {
     },
     onOpenHelp: () => setModal("help", true),
     onOpenMemory: () => setModal("memory", true),
-    onOpenCodeInterpreter: () => setModal("codeInterpreter", true),
     onOpenAgentModal: () => setModal("agentForm", true),
     onOpenBrandModal: handleOpenBrandModal,
     onCloseModal: (name) => setModal(name, false),
@@ -1729,6 +1745,7 @@ function initialize() {
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleWebSearchMode: handleToggleWebSearchMode,
     onToggleSmartMode: handleToggleSmartMode,
+    onToggleThinkingMode: handleToggleThinkingMode,
     onTogglePinChat: handleTogglePinChat,
     onToggleShowArchived: handleToggleShowArchived,
     onRestoreArchived: handleRestoreArchived,
@@ -1776,19 +1793,6 @@ function initialize() {
       showToast("Fato removido da memoria.", "success");
       persistAndRender();
     },
-    onExecuteCode: async (code) => {
-      state.codeInterpreterOutput = "Executando...";
-      persistAndRender();
-      try {
-        const result = await executePython(code);
-        state.codeInterpreterOutput = result.success
-          ? result.result || "(sem saida)"
-          : `Erro:\n${result.error}`;
-      } catch (err) {
-        state.codeInterpreterOutput = `Falha: ${err.message}`;
-      }
-      persistAndRender();
-    },
     onExportData: () => {
       const backup = buildBackupPayload(localStorage);
 
@@ -1832,6 +1836,31 @@ function initialize() {
       } catch (error) {
         showToast(buildUserErrorMessage(error, "Falha ao importar: arquivo inválido."), "error");
       }
+    },
+    onFetchOpenRouterModels: async () => {
+      const key = state.settings.openRouterKey;
+      if (!key) {
+        showToast("Adicione a chave da OpenRouter primeiro.", "error");
+        return;
+      }
+      showToast("Buscando modelos...", "info");
+      try {
+        const models = await fetchOpenRouterModels(key);
+        state.openRouterAvailableModels = models;
+        persistAndRender();
+        showToast(`${models.length} modelos encontrados.`, "success");
+      } catch (err) {
+        showToast(buildUserErrorMessage(err, "Falha ao buscar modelos."), "error");
+      }
+    },
+    onToggleOpenRouterModel: (modelId) => {
+      const current = state.settings.openRouterSelectedModels || [];
+      const next = current.includes(modelId)
+        ? current.filter((id) => id !== modelId)
+        : [...current, modelId];
+      state.settings = { ...state.settings, openRouterSelectedModels: next };
+      saveSettings(state.settings);
+      persistAndRender();
     },
   });
 
