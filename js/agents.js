@@ -651,5 +651,6 @@ export function getEffectiveAgentSettings(settings = {}, agent = {}) {
     textModel: normalized.textModel || settings.textModel,
     deepSeekModel: normalized.deepSeekModel || settings.deepSeekModel,
     groqModel: normalized.groqModel || settings.groqModel,
+    geminiModel: normalized.geminiModel || settings.geminiModel,
   };
 }

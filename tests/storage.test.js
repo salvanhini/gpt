@@ -197,7 +197,6 @@ test("normalizeSettingsWithFallback reports repairs for invalid saved models", (
     textModel: "qwen/qwen3.7-plus",
     deepSeekModel: "deepseek-v4-flash",
     groqModel: "openai/gpt-oss-20b",
-    qwenModel: "qwen-plus",
   };
 
   const normalized = normalizeSettingsWithFallback(
@@ -206,24 +205,21 @@ test("normalizeSettingsWithFallback reports repairs for invalid saved models", (
       textModel: "expired-openrouter-model",
       deepSeekModel: "expired-deepseek-model",
       groqModel: "expired-groq-model",
-      qwenModel: "expired-qwen-model",
     },
     defaults,
     [{ value: "qwen/qwen3.7-plus" }],
     [{ value: "deepseek-v4-flash" }],
     [{ value: "openai/gpt-oss-20b" }],
-    [{ value: "qwen-plus" }],
   );
 
   assert.equal(normalized.settings.textProvider, "deepseek");
   assert.equal(normalized.settings.textModel, "qwen/qwen3.7-plus");
   assert.equal(normalized.settings.deepSeekModel, "deepseek-v4-flash");
   assert.equal(normalized.settings.groqModel, "openai/gpt-oss-20b");
-  assert.equal(normalized.settings.qwenModel, "qwen-plus");
-  assert.equal(normalized.fallbacks.length, 4);
+  assert.equal(normalized.fallbacks.length, 3);
   assert.deepEqual(
     normalized.fallbacks.map((item) => item.provider),
-    ["openrouter", "deepseek", "groq", "qwen"],
+    ["openrouter", "deepseek", "groq"],
   );
 });
 

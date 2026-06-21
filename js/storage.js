@@ -73,17 +73,7 @@ export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, d
     settings.groqModel = defaults.groqModel;
   }
 
-  if (!qwenModels.some((model) => model.value === settings.qwenModel)) {
-    fallbacks.push({
-      provider: "qwen",
-      settingKey: "qwenModel",
-      previousValue: settings.qwenModel,
-      nextValue: defaults.qwenModel,
-    });
-    settings.qwenModel = defaults.qwenModel;
-  }
-
-  if (!["openrouter", "deepseek", "groq", "qwen"].includes(settings.textProvider)) {
+  if (!["openrouter", "deepseek", "groq", "gemini"].includes(settings.textProvider)) {
     settings.textProvider = defaults.textProvider;
   }
 
