@@ -790,13 +790,17 @@ async function handleSendMessage(rawMessage) {
             },
           });
 
+          if (image.fallback) {
+            showToast("Replicate API indisponivel. Usando Pollinations.ai como fallback.", "warning");
+          }
+
           addMessage(activeChat.id, {
             role: "assistant",
             content: `${instagramPayload.creativeBrief}\n\nVariação ${index} de ${instagramPayload.variationCount}`,
             meta: {
               kind: "image",
               imageUrl: image.url,
-              provider: getActiveSettings().imageProvider === "replicate" ? "Replicate" : "Pollinations.ai",
+            provider: image.fallback ? "Pollinations.ai (fallback)" : "Replicate",
               brandId: instagramPayload.brand.id,
               instagramFormat: instagramPayload.format.id,
               creativeBrief: instagramPayload.creativeBrief,
@@ -813,6 +817,10 @@ async function handleSendMessage(rawMessage) {
             imageSize: instagramPayload?.format.imageSize || state.settings.imageSize,
           },
         });
+
+        if (image.fallback) {
+          showToast("Replicate API indisponivel. Usando Pollinations.ai como fallback.", "warning");
+        }
 
         addMessage(activeChat.id, {
           role: "assistant",

@@ -1057,7 +1057,13 @@ export async function generateImage({ prompt, settings }) {
   const provider = settings.imageProvider || DEFAULT_IMAGE_PROVIDER;
 
   if (provider === "replicate") {
-    return generateImageReplicate({ prompt, settings });
+    try {
+      return await generateImageReplicate({ prompt, settings });
+    } catch {
+      const pollinations = await generateImagePollinations({ prompt, settings });
+      pollinations.fallback = true;
+      return pollinations;
+    }
   }
 
   return generateImagePollinations({ prompt, settings });
