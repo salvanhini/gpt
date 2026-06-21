@@ -1316,10 +1316,10 @@ function renderSettingsModal(state) {
                   </label>
                 </div>
                 <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Replicate)</span>
-                  <input class="modal-input" name="replicateKey" type="password" value="${escapeHtml(settings.replicateKey || "")}" placeholder="r8_... (so necessario para Replicate)" />
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (fal.ai)</span>
+                  <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (so para fal.ai)" />
                 </label>
-                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuita e nao precisa de chave.</div>
+                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuito e nao precisa de chave. fal.ai requer chave de API.</div>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
                   <div class="flex flex-wrap gap-1.5">

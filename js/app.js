@@ -173,12 +173,6 @@ const state = {
 
 function loadSettings() {
   const raw = readStorageJson(localStorage, STORAGE_KEYS.settings, {});
-  if (raw.imageModel && (raw.imageModel.includes("fal-ai") || raw.imageModel.includes("faliai"))) {
-    raw.imageModel = "";
-  }
-  if (raw.imageProvider && (raw.imageProvider.includes("fal-ai") || raw.imageProvider.includes("faliai"))) {
-    raw.imageProvider = "pollinations";
-  }
   const normalized = normalizeSettingsWithFallback(
     raw,
     getDefaultSettings(),
@@ -790,17 +784,13 @@ async function handleSendMessage(rawMessage) {
             },
           });
 
-          if (image.fallback) {
-            showToast("Replicate API indisponivel. Usando Pollinations.ai como fallback.", "warning");
-          }
-
           addMessage(activeChat.id, {
             role: "assistant",
             content: `${instagramPayload.creativeBrief}\n\nVariação ${index} de ${instagramPayload.variationCount}`,
             meta: {
               kind: "image",
               imageUrl: image.url,
-            provider: image.fallback ? "Pollinations.ai (fallback)" : "Replicate",
+              provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
               brandId: instagramPayload.brand.id,
               instagramFormat: instagramPayload.format.id,
               creativeBrief: instagramPayload.creativeBrief,
@@ -818,17 +808,13 @@ async function handleSendMessage(rawMessage) {
           },
         });
 
-        if (image.fallback) {
-          showToast("Replicate API indisponivel. Usando Pollinations.ai como fallback.", "warning");
-        }
-
         addMessage(activeChat.id, {
           role: "assistant",
           content: instagramPayload?.creativeBrief || message,
           meta: {
             kind: "image",
             imageUrl: image.url,
-            provider: getActiveSettings().imageProvider === "replicate" ? "Replicate" : "Pollinations.ai",
+            provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
             brandId: instagramPayload?.brand.id || null,
             instagramFormat: instagramPayload?.format.id || null,
             creativeBrief: instagramPayload?.creativeBrief || null,
@@ -1276,7 +1262,7 @@ function handleSaveSettings(formValues) {
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || state.settings.braveSearchKey || "",
-    replicateKey: formValues.replicateKey?.trim() || state.settings.replicateKey || "",
+    falKey: formValues.falKey?.trim() || state.settings.falKey || "",
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
