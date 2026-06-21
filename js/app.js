@@ -944,7 +944,6 @@ async function handleSendMessage(rawMessage) {
     }
 
     // Auto-extract memory facts from conversation
-    const activeChat = getActiveChat();
     if (activeChat?.messages?.length > 2) {
       autoExtractAndStore(activeChat.messages);
     }
@@ -1290,6 +1289,7 @@ function handleSaveSettings(formValues) {
     deepSeekKey: formValues.deepSeekKey?.trim() || "",
     groqKey: formValues.groqKey?.trim() || "",
     qwenKey: formValues.qwenKey?.trim() || "",
+    e2bKey: formValues.e2bKey?.trim() || "",
     tavilyKey: formValues.tavilyKey?.trim() || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || "",
     falKey: formValues.falKey?.trim() || "",

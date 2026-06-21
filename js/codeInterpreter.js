@@ -1,111 +1,144 @@
-// E2B Code Interpreter using Pyodide (client-side Python in browser)
-let pyodideInstance = null;
-let loadingPromise = null;
+// E2B Code Interpreter - REST API Client
+const E2B_API_BASE = "https://api.e2b.app";
 
-async function loadPyodideScript() {
-  if (globalThis.loadPyodide) {
-    return globalThis.loadPyodide;
+let sandboxId = null;
+let sandboxReady = false;
+let creationPromise = null;
+
+function getE2BKey() {
+  try {
+    const raw = localStorage.getItem("femicgpt:settings");
+    if (!raw) return null;
+    const settings = JSON.parse(raw);
+    return settings?.e2bKey || null;
+  } catch {
+    return null;
   }
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js";
-    script.onload = () => resolve(globalThis.loadPyodide);
-    script.onerror = () => reject(new Error("Falha ao carregar Pyodide."));
-    document.head.appendChild(script);
-  });
 }
 
-export async function initPyodide() {
-  if (pyodideInstance) {
-    return pyodideInstance;
+async function ensureSandbox() {
+  if (sandboxId && sandboxReady) {
+    return sandboxId;
   }
 
-  if (loadingPromise) {
-    return loadingPromise;
+  if (creationPromise) {
+    return creationPromise;
   }
 
-  loadingPromise = (async () => {
+  creationPromise = (async () => {
     try {
-      const loadPyodide = await loadPyodideScript();
-      pyodideInstance = await loadPyodide({
-        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/",
+      const apiKey = getE2BKey();
+      if (!apiKey) {
+        throw new Error("Chave API do E2B nao configurada. Configure nas configuracoes.");
+      }
+
+      const response = await fetch(`${E2B_API_BASE}/sandboxes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          templateID: "code-interpreter",
+        }),
       });
 
-      // Install common packages
-      await pyodideInstance.loadPackage(["micropip"]);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro ao criar sandbox E2B (${response.status}): ${errorText}`);
+      }
 
-      return pyodideInstance;
+      const data = await response.json();
+      sandboxId = data.sandboxID || data.id;
+      if (!sandboxId) {
+        throw new Error("Resposta E2B invalida: sandboxID nao encontrado.");
+      }
+
+      sandboxReady = true;
+      return sandboxId;
     } catch (error) {
-      loadingPromise = null;
+      creationPromise = null;
+      sandboxReady = false;
       throw error;
     }
   })();
 
-  return loadingPromise;
+  return creationPromise;
 }
 
 export async function executePython(code, onOutput = null) {
-  const pyodide = await initPyodide();
-
-  // Capture stdout/stderr
-  pyodide.runPython(`
-import sys
-from io import StringIO
-sys.stdout = StringIO()
-sys.stderr = StringIO()
-  `);
-
-  let result = "";
-  let error = "";
-
   try {
-    // Execute the code
-    const output = await pyodide.runPythonAsync(code);
+    const sid = await ensureSandbox();
 
-    // Get captured output
-    const stdout = pyodide.runPython("sys.stdout.getvalue()");
-    const stderr = pyodide.runPython("sys.stderr.getvalue()");
+    const response = await fetch(`${E2B_API_BASE}/sandboxes/${sid}/executions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": getE2BKey(),
+      },
+      body: JSON.stringify({
+        language: "python",
+        code: code,
+      }),
+    });
 
-    if (stdout) {
-      result += stdout;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro na execucao E2B (${response.status}): ${errorText}`);
     }
-    if (output !== undefined && output !== null) {
-      result += String(output);
-    }
-    if (stderr) {
-      error += stderr;
-    }
-  } catch (err) {
-    error = err.message || String(err);
+
+    const data = await response.json();
+
+    return {
+      success: !data.error,
+      result: (data.stdout || "") + (data.text || ""),
+      error: data.error || "",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      result: "",
+      error: error.message || String(error),
+    };
   }
-
-  // Reset stdout/stderr
-  pyodide.runPython(`
-sys.stdout = sys.__stdout__
-sys.stderr = sys.__stderr__
-  `);
-
-  return {
-    success: !error,
-    result: result.trim(),
-    error: error.trim(),
-  };
-}
-
-export async function installPackage(packageName) {
-  const pyodide = await initPyodide();
-  await pyodide.loadPackage("micropip");
-  const micropip = pyodide.pyimport("micropip");
-  await micropip.install(packageName);
-  return true;
 }
 
 export async function isPyodideReady() {
-  return pyodideInstance !== null;
+  return sandboxReady;
 }
 
 export async function getPyodideVersion() {
-  if (!pyodideInstance) return null;
-  return pyodideInstance.runPython("import sys; sys.version");
+  if (!sandboxReady) return null;
+  try {
+    const result = await executePython("import sys; sys.version");
+    return result.success ? result.result : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function killSandbox() {
+  if (!sandboxId) return;
+
+  try {
+    const apiKey = getE2BKey();
+    if (apiKey) {
+      await fetch(`${E2B_API_BASE}/sandboxes/${sandboxId}`, {
+        method: "DELETE",
+        headers: {
+          "X-API-Key": apiKey,
+        },
+      });
+    }
+  } catch {
+    // Ignore cleanup errors
+  } finally {
+    sandboxId = null;
+    sandboxReady = false;
+    creationPromise = null;
+  }
+}
+
+export async function installPackage(packageName) {
+  return executePython(`import subprocess; subprocess.check_call(['pip', 'install', '${packageName}'])`);
 }

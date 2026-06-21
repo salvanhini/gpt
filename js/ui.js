@@ -402,6 +402,13 @@ function renderActiveChatHeader(state) {
           >✎</button>
           <button
             type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs ${chat.pinned ? "text-amber-500" : "text-slate-400"} shadow-sm hover:border-amber-200 hover:text-amber-500"
+            data-action="toggle-pin-chat"
+            data-chat-id="${chat.id}"
+            title="${chat.pinned ? "Desafixar conversa" : "Fixar conversa"}"
+          >📌</button>
+          <button
+            type="button"
             class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-rose-200 hover:text-rose-500"
             data-action="clear-chat"
             title="Limpar historico da conversa"
@@ -1038,6 +1045,14 @@ function renderBoardCard(chat, state) {
               title="${chat.pinned ? "Desafixar" : "Fixar"}"
               onclick="event.stopPropagation()"
             >📌</button>
+            <button
+              type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+              data-action="delete-chat"
+              data-chat-id="${chat.id}"
+              title="Excluir conversa"
+              onclick="event.stopPropagation()"
+            >✕</button>
             ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.08em]" style="background:${cat.color}22; color:${cat.color};">${escapeHtml(cat.label)}</span>` : ""}
           </div>
         </div>
@@ -1169,62 +1184,116 @@ function renderSettingsModal(state) {
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="settings">✕</button>
         </div>
         <form data-form="settings" class="space-y-3">
-          <div class="grid gap-3 lg:grid-cols-2">
-            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2 flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-semibold text-slate-900">OpenRouter</div>
-                  <div class="text-xs text-slate-500">Chave para modelos OpenRouter.</div>
+          <div class="space-y-2">
+            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Provedores de Modelo</h4>
+            <div class="grid gap-3 lg:grid-cols-2">
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2 flex items-center justify-between">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">OpenRouter</div>
+                    <div class="text-xs text-slate-500">Chave para modelos OpenRouter.</div>
+                  </div>
+                  <label class="relative inline-flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" name="openRouterEnabled" class="peer sr-only" ${settings.openRouterEnabled !== false ? "checked" : ""} />
+                    <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
                 </div>
-                <label class="relative inline-flex cursor-pointer items-center gap-1">
-                  <input type="checkbox" name="openRouterEnabled" class="peer sr-only" ${settings.openRouterEnabled !== false ? "checked" : ""} />
-                  <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                  <input class="modal-input" name="openRouterKey" type="password" value="${escapeHtml(settings.openRouterKey || "")}" placeholder="sk-or-v1-..." ${settings.openRouterEnabled === false ? "disabled" : ""} />
                 </label>
-              </div>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="openRouterKey" type="password" value="${escapeHtml(settings.openRouterKey || "")}" placeholder="sk-or-v1-..." ${settings.openRouterEnabled === false ? "disabled" : ""} />
-              </label>
-            </section>
+              </section>
 
-            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2 flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-semibold text-slate-900">DeepSeek direta</div>
-                  <div class="text-xs text-slate-500">Chave para modelos DeepSeek direto.</div>
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2 flex items-center justify-between">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">DeepSeek direta</div>
+                    <div class="text-xs text-slate-500">Chave para modelos DeepSeek direto.</div>
+                  </div>
+                  <label class="relative inline-flex cursor-pointer items-center gap-1">
+                    <input type="checkbox" name="deepSeekEnabled" class="peer sr-only" ${settings.deepSeekEnabled !== false ? "checked" : ""} />
+                    <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
                 </div>
-                <label class="relative inline-flex cursor-pointer items-center gap-1">
-                  <input type="checkbox" name="deepSeekEnabled" class="peer sr-only" ${settings.deepSeekEnabled !== false ? "checked" : ""} />
-                  <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                  <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." ${settings.deepSeekEnabled === false ? "disabled" : ""} />
                 </label>
-              </div>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." ${settings.deepSeekEnabled === false ? "disabled" : ""} />
-              </label>
-            </section>
+              </section>
 
-            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2">
-                <div class="text-sm font-semibold text-slate-900">Groq</div>
-                <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
-              </div>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." />
-              </label>
-            </section>
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2">
+                  <div class="text-sm font-semibold text-slate-900">Groq</div>
+                  <div class="text-xs text-slate-500">Chave para modelos gratuitos/rapidos e Busca Web.</div>
+                </div>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                  <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." />
+                </label>
+              </section>
 
-            <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-              <div class="mb-2">
-                <div class="text-sm font-semibold text-slate-900">Qwen DashScope</div>
-                <div class="text-xs text-slate-500">Chave para modelos Qwen direto (multimodal).</div>
-              </div>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="qwenKey" type="password" value="${escapeHtml(settings.qwenKey || "")}" placeholder="sk-..." />
-              </label>
-            </section>
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2">
+                  <div class="text-sm font-semibold text-slate-900">Qwen DashScope</div>
+                  <div class="text-xs text-slate-500">Chave para modelos Qwen direto (multimodal).</div>
+                </div>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                  <input class="modal-input" name="qwenKey" type="password" value="${escapeHtml(settings.qwenKey || "")}" placeholder="sk-..." />
+                </label>
+              </section>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Servicos Externos</h4>
+            <div class="grid gap-3 lg:grid-cols-2">
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2">
+                  <div class="text-sm font-semibold text-slate-900">E2B (Code Interpreter)</div>
+                  <div class="text-xs text-slate-500">Execucao de codigo Python em sandbox isolado.</div>
+                </div>
+                <label class="block">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                  <input class="modal-input" name="e2bKey" type="password" value="${escapeHtml(settings.e2bKey || "")}" placeholder="e2b_..." />
+                </label>
+              </section>
+
+              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+                <div class="mb-2">
+                  <div class="text-sm font-semibold text-slate-900">Imagem (fal.ai)</div>
+                  <div class="text-xs text-slate-500">Usado no modo imagem.</div>
+                </div>
+                <div class="grid gap-2 lg:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
+                    <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-2 block text-sm font-medium text-slate-700">Modelo</span>
+                    <input class="modal-input" name="imageModel" type="text" value="${escapeHtml(settings.imageModel || "")}" />
+                  </label>
+                </div>
+                <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
+                  <div class="flex flex-wrap gap-1.5">
+                    ${state.imageSizeOptions.map((opt) => {
+                      const preview = ASPECT_RATIO_PREVIEWS[opt.value];
+                      const isActive = settings.imageSize === opt.value;
+                      return `
+                        <label class="aspect-option cursor-pointer rounded-lg border p-2 text-center transition-all duration-150 ${isActive ? "border-femic-cyan bg-cyan-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}">
+                          <input type="radio" name="imageSize" value="${escapeHtml(opt.value)}" ${isActive ? "checked" : ""} class="hidden" />
+                          <div class="aspect-svg-wrap mx-auto mb-1 inline-flex items-center justify-center text-slate-600" style="width:28px;height:22px;">
+                            ${preview?.svg || ""}
+                          </div>
+                          <div class="text-[10px] font-medium leading-tight text-slate-700">${escapeHtml(opt.label)}</div>
+                        </label>
+                      `;
+                    }).join("")}
+                  </div>
+                </label>
+              </section>
+            </div>
           </div>
 
           <section class="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3">
@@ -1240,41 +1309,6 @@ function renderSettingsModal(state) {
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Brave Search (Subscription-Token)</span>
                 <input class="modal-input" name="braveSearchKey" type="password" value="${escapeHtml(settings.braveSearchKey || "")}" placeholder="BSA..." />
-              </label>
-            </div>
-          </section>
-
-          <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-            <div class="mb-2">
-              <div class="text-sm font-semibold text-slate-900">Imagem (fal.ai)</div>
-              <div class="text-xs text-slate-500">Usado no modo imagem.</div>
-            </div>
-            <div class="grid gap-3 lg:grid-cols-3">
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal" />
-              </label>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Modelo</span>
-                <input class="modal-input" name="imageModel" type="text" value="${escapeHtml(settings.imageModel || "")}" />
-              </label>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrão</span>
-                <div class="flex flex-wrap gap-1.5">
-                  ${state.imageSizeOptions.map((opt) => {
-                    const preview = ASPECT_RATIO_PREVIEWS[opt.value];
-                    const isActive = settings.imageSize === opt.value;
-                    return `
-                      <label class="aspect-option cursor-pointer rounded-lg border p-2 text-center transition-all duration-150 ${isActive ? "border-femic-cyan bg-cyan-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}">
-                        <input type="radio" name="imageSize" value="${escapeHtml(opt.value)}" ${isActive ? "checked" : ""} class="hidden" />
-                        <div class="aspect-svg-wrap mx-auto mb-1 inline-flex items-center justify-center text-slate-600" style="width:28px;height:22px;">
-                          ${preview?.svg || ""}
-                        </div>
-                        <div class="text-[10px] font-medium leading-tight text-slate-700">${escapeHtml(opt.label)}</div>
-                      </label>
-                    `;
-                  }).join("")}
-                </div>
               </label>
             </div>
           </section>
