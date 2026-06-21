@@ -13,7 +13,7 @@ const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_IMAGE_PROVIDER = "pollinations";
 const DEFAULT_IMAGE_MODEL_POLLINATIONS = "flux";
-const DEFAULT_IMAGE_MODEL_FALAI = "fal-ai/flux-schnell";
+const DEFAULT_IMAGE_MODEL_FALAI = "fal-ai/flux/schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_OPENAI_TTS_VOICE = "coral";
@@ -1105,7 +1105,7 @@ async function generateImageFalAI({ prompt, settings }) {
 
   let response;
   try {
-    response = await fetch("https://api.fal.ai/v1/fal-ai/flux-schnell", {
+    response = await fetch("https://fal.run/fal-ai/flux/schnell", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1115,7 +1115,8 @@ async function generateImageFalAI({ prompt, settings }) {
         prompt,
         image_size: sizeKey,
         num_images: 1,
-        safety_checker: false,
+        num_inference_steps: 4,
+        enable_safety_checker: false,
       }),
     });
   } catch {

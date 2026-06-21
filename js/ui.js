@@ -1889,7 +1889,6 @@ export function renderApp(state) {
       : "Ditado por voz";
 
   app.innerHTML = `
-    ${state.mobileSidebarOpen ? '<div class="sidebar-overlay" data-action="toggle-sidebar"></div>' : ""}
     <div class="femic-shell ${collapsedClass}">
       <aside class="sidebar-gradient sidebar-mobile ${sidebarOpenClass} relative flex h-screen flex-col overflow-hidden border-r border-white/10 p-3 text-white shadow-panel">
         <button
@@ -1962,6 +1961,7 @@ export function renderApp(state) {
         </div>
 
       </aside>
+      ${state.mobileSidebarOpen ? '<div class="sidebar-overlay" data-action="toggle-sidebar"></div>' : ""}
 
       <main class="app-main relative min-w-0">
         ${state.viewMode === "board"
