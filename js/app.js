@@ -172,8 +172,15 @@ const state = {
 };
 
 function loadSettings() {
+  const raw = readStorageJson(localStorage, STORAGE_KEYS.settings, {});
+  if (raw.imageModel && (raw.imageModel.includes("fal-ai") || raw.imageModel.includes("faliai"))) {
+    raw.imageModel = "";
+  }
+  if (raw.imageProvider && (raw.imageProvider.includes("fal-ai") || raw.imageProvider.includes("faliai"))) {
+    raw.imageProvider = "pollinations";
+  }
   const normalized = normalizeSettingsWithFallback(
-    readStorageJson(localStorage, STORAGE_KEYS.settings, {}),
+    raw,
     getDefaultSettings(),
     OPENROUTER_MODELS,
     DEEPSEEK_MODELS,

@@ -1973,6 +1973,12 @@ export function renderApp(state) {
           <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
             <div class="timeline-end-spacer" aria-hidden="true"></div>
+            <button
+              type="button"
+              class="scroll-to-bottom-btn fixed bottom-24 right-6 z-20 hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-lg text-slate-500 shadow-lg transition-all hover:bg-slate-50 hover:text-slate-700"
+              data-action="scroll-to-bottom"
+              title="Rolar para o final"
+            >↓</button>
           </section>
 
           <footer class="composer-dock shrink-0 pt-2">
@@ -2048,6 +2054,21 @@ export function renderApp(state) {
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
   }
+  if (messagesPanel) {
+    const btn = document.querySelector(".scroll-to-bottom-btn");
+    if (btn) {
+      const isNearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
+      btn.classList.toggle("hidden", isNearBottom);
+      btn.classList.toggle("flex", !isNearBottom);
+    }
+    messagesPanel.addEventListener("scroll", () => {
+      const b = document.querySelector(".scroll-to-bottom-btn");
+      if (!b) return;
+      const nearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
+      b.classList.toggle("hidden", nearBottom);
+      b.classList.toggle("flex", !nearBottom);
+    }, { passive: true });
+  }
 }
 
 export function bindUIHandlers(handlers) {
@@ -2120,6 +2141,12 @@ export function bindUIHandlers(handlers) {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {
         input.value = target.dataset.modelValue || "";
+      }
+    }
+    if (action === "scroll-to-bottom") {
+      const panel = document.getElementById("messages-panel");
+      if (panel) {
+        panel.scrollTop = panel.scrollHeight;
       }
     }
   });
