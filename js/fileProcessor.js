@@ -90,6 +90,76 @@ async function readDocx(file) {
   return result.value || "";
 }
 
+async function readOdf(file, type) {
+  if (!globalThis.JSZip) {
+    throw new Error("Biblioteca JSZip nao carregada.");
+  }
+
+  const arrayBuffer = await readAsArrayBuffer(file);
+  const zip = await globalThis.JSZip.loadAsync(arrayBuffer);
+
+  const contentFile = zip.file("content.xml");
+  if (!contentFile) {
+    throw new Error("Arquivo content.xml nao encontrado no documento.");
+  }
+
+  const xmlText = await contentFile.async("text");
+  const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+
+  const textNodes = doc.querySelectorAll("text\\:p, p");
+  const texts = [];
+  textNodes.forEach((node) => {
+    const text = node.textContent?.trim();
+    if (text) {
+      texts.push(text);
+    }
+  });
+
+  if (texts.length === 0) {
+    return xmlText;
+  }
+
+  return texts.join("\n\n");
+}
+
+async function readPptx(file) {
+  if (!globalThis.JSZip) {
+    throw new Error("Biblioteca JSZip nao carregada.");
+  }
+
+  const arrayBuffer = await readAsArrayBuffer(file);
+  const zip = await globalThis.JSZip.loadAsync(arrayBuffer);
+
+  const slides = [];
+  const slideFiles = Object.keys(zip.files).filter(
+    (name) => name.match(/^ppt\/slides\/slide\d+\.xml$/) && !zip.files[name].dir
+  );
+
+  slideFiles.sort();
+
+  for (const slidePath of slideFiles) {
+    const slideXml = await zip.file(slidePath).async("text");
+    const doc = new DOMParser().parseFromString(slideXml, "application/xml");
+    const textNodes = doc.querySelectorAll("a\\:t, t");
+    const texts = [];
+    textNodes.forEach((node) => {
+      const text = node.textContent?.trim();
+      if (text) {
+        texts.push(text);
+      }
+    });
+    if (texts.length > 0) {
+      slides.push(`Slide: ${texts.join(" ")}`);
+    }
+  }
+
+  if (slides.length === 0) {
+    throw new Error("Nenhum slide encontrado no arquivo.");
+  }
+
+  return slides.join("\n\n");
+}
+
 async function readImage(file) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -115,6 +185,10 @@ async function readImage(file) {
 function getExtension(name) {
   return name.split(".").pop()?.toLowerCase() || "";
 }
+
+const TEXT_EXTENSIONS = ["txt", "json", "html", "htm", "md", "css", "js", "ts", "py", "java", "c", "cpp", "rb", "php", "sql", "sh", "bat", "log", "ini", "cfg", "conf", "yaml", "yml", "toml"];
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "tiff", "tif"];
+const ODF_EXTENSIONS = ["odt", "ods", "odp"];
 
 export function buildCombinedContext(files, max = MAX_CONTEXT_CHARS) {
   const combined = (files || [])
@@ -143,11 +217,20 @@ export async function processFile(file) {
       content = await readCsv(file);
     } else if (extension === "xml") {
       content = await readXml(file);
-    } else if (extension === "txt") {
-      content = await readTxt(file);
     } else if (extension === "docx") {
       content = await readDocx(file);
-    } else if (["jpg", "jpeg", "png"].includes(extension)) {
+    } else if (extension === "doc") {
+      content = await readAsText(file);
+      content = `[Formato .doc antigo - conteudo bruto]\n\n${content}`;
+    } else if (extension === "pptx") {
+      content = await readPptx(file);
+    } else if (ODF_EXTENSIONS.includes(extension)) {
+      const typeLabel = extension === "odt" ? "Texto" : extension === "ods" ? "Planilha" : "Apresentacao";
+      content = await readOdf(file, extension);
+      content = `[Documento LibreOffice ${typeLabel}]\n\n${content}`;
+    } else if (TEXT_EXTENSIONS.includes(extension)) {
+      content = await readAsText(file);
+    } else if (IMAGE_EXTENSIONS.includes(extension)) {
       const imageInfo = await readImage(file);
       const sizeKb = (file.size / 1024).toFixed(1);
       return {

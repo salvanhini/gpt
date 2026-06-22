@@ -19,6 +19,7 @@ import {
   updateBrand,
 } from "./brands.js";
 import {
+  archiveConversation,
   archiveConversations,
   getAllArchived,
   restoreConversation,
@@ -97,6 +98,19 @@ import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
 import { getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
+import {
+  loadContacts,
+  addContact,
+  updateContact,
+  deleteContact,
+  addEmailRecord,
+  loadEmailHistory,
+  addWhatsAppRecord,
+  loadWhatsAppHistory,
+} from "./communicationStorage.js";
+import { sendEmail } from "./emailService.js";
+import { sendWhatsApp } from "./whatsappService.js";
+import { exportChatAsPDF, exportMessageAsPDF } from "./pdfGenerator.js";
 
 let bootSettingsFallbacks = [];
 
@@ -147,6 +161,8 @@ const state = {
     renameChat: false,
     help: false,
     memory: false,
+    emailCompose: false,
+    whatsappCompose: false,
   },
   modalPayload: {},
   draftMessage: "",
@@ -158,6 +174,9 @@ const state = {
   mediaRecorder: null,
   mediaStream: null,
   recordedAudioChunks: [],
+  contacts: [],
+  emailHistory: [],
+  whatsappHistory: [],
   currentAudio: null,
   currentAudioUrl: null,
   availableVoice: null,
@@ -883,6 +902,61 @@ async function handleSendMessage(rawMessage) {
         if (sendResult.promptTokens && sendResult.completionTokens) {
           trackCost(getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().geminiModel || "", sendResult.promptTokens, sendResult.completionTokens);
         }
+
+        // Detectar e executar acao de email
+        const emailActionMatch = sendResult.content.match(/\[ENVIAR_EMAIL\]\s*\n([\s\S]*?)\n\[\/ENVIAR_EMAIL\]\s*\n([\s\S]*)/);
+        console.log("[DEBUG] emailActionMatch:", !!emailActionMatch, "content length:", sendResult.content.length);
+        if (!emailActionMatch) {
+          console.log("[DEBUG] Conteudo da resposta (primeiros 500 chars):", sendResult.content.substring(0, 500));
+        }
+        if (emailActionMatch) {
+          const headerBlock = emailActionMatch[1];
+          const bodyText = emailActionMatch[2].trim();
+          const toMatch = headerBlock.match(/Para:\s*(.+)/);
+          const nameMatch = headerBlock.match(/Nome:\s*(.+)/);
+          const subjectMatch = headerBlock.match(/Assunto:\s*(.+)/);
+          const senderMatch = headerBlock.match(/Remetente:\s*(.+)/);
+          if (toMatch) {
+            const emailTo = toMatch[1].trim();
+            const emailName = nameMatch ? nameMatch[1].trim() : "";
+            const emailSubject = subjectMatch ? subjectMatch[1].trim() : "";
+            const emailSender = senderMatch ? senderMatch[1].trim() : "marco";
+            console.log("[DEBUG] Enviando email:", { emailTo, emailName, emailSubject, emailSender, bodyLength: bodyText.length });
+            try {
+              const emailResult = await sendEmail({
+                toEmail: emailTo,
+                toName: emailName,
+                subject: emailSubject,
+                message: bodyText,
+                sender: emailSender,
+                settings: state.settings,
+              });
+              console.log("[DEBUG] Email enviado com sucesso:", emailResult);
+              await addEmailRecord({
+                to: emailTo,
+                toName: emailName,
+                subject: emailSubject,
+                body: bodyText,
+                status: "sent",
+              });
+              state.emailHistory = await loadEmailHistory();
+              addMessage(activeChat.id, {
+                role: "assistant",
+                content: `Email enviado com sucesso para ${emailTo}!`,
+                meta: { kind: "text", provider: "email-system", sourceType: "email-send", emailSent: true },
+              });
+              showToast(`Email enviado para ${emailTo}.`, "success");
+            } catch (emailError) {
+              console.log("[DEBUG] Erro ao enviar email:", emailError.message);
+              addMessage(activeChat.id, {
+                role: "assistant",
+                content: `Erro ao enviar email: ${emailError.message}`,
+                meta: { kind: "text", provider: "email-system", sourceType: "email-send", failed: true },
+              });
+              showToast(emailError.message || "Erro ao enviar email.", "error");
+            }
+          }
+        }
       }
     }
 
@@ -1017,6 +1091,33 @@ function handleDeleteChat(chatId) {
 
   saveChats(state.chats);
   showToast("Conversa excluída.", "success");
+  persistAndRender();
+}
+
+function handleArchiveChat(chatId) {
+  const chat = state.chats.find((item) => item.id === chatId);
+  if (!chat) return;
+
+  archiveConversation(chat);
+  state.chats = state.chats.filter((item) => item.id !== chatId);
+
+  if (!state.chats.length) {
+    state.chats.push(createChat(state.activeAgentId));
+  }
+
+  if (state.activeChatId === chatId) {
+    const nextForAgent = state.chats.find((item) => item.agentId === state.activeAgentId);
+    if (nextForAgent) {
+      state.activeChatId = nextForAgent.id;
+    } else {
+      const newChat = createChat(state.activeAgentId);
+      state.chats.push(newChat);
+      state.activeChatId = newChat.id;
+    }
+  }
+
+  saveChats(state.chats);
+  showToast("Conversa arquivada.", "success");
   persistAndRender();
 }
 
@@ -1250,6 +1351,13 @@ function handleChangePubMedResultLimit(value) {
 function handleSearchChats(query) {
   state.boardSearchQuery = query;
   render();
+  requestAnimationFrame(() => {
+    const searchInput = document.querySelector('[data-action="search-chats"]');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.selectionStart = searchInput.selectionEnd = searchInput.value.length;
+    }
+  });
 }
 
 function handleSaveSettings(formValues) {
@@ -1283,6 +1391,15 @@ function handleSaveSettings(formValues) {
       maxHistoryMessages: Math.max(4, Number(formValues.maxHistoryMessages) || 12),
       tokenWarningLimit: Math.max(0, Number(formValues.tokenWarningLimit) || 12000),
     },
+    emailJSMarcoServiceId: formValues.emailJSMarcoServiceId?.trim() || "",
+    emailJSMarcoTemplateId: formValues.emailJSMarcoTemplateId?.trim() || "",
+    emailJSMarcoPublicKey: formValues.emailJSMarcoPublicKey?.trim() || "",
+    emailJSAlessandraServiceId: formValues.emailJSAlessandraServiceId?.trim() || "",
+    emailJSAlessandraTemplateId: formValues.emailJSAlessandraTemplateId?.trim() || "",
+    emailJSAlessandraPublicKey: formValues.emailJSAlessandraPublicKey?.trim() || "",
+    evolutionInstanceUrl: formValues.evolutionInstanceUrl?.trim() || "",
+    evolutionApiKey: formValues.evolutionApiKey?.trim() || "",
+    evolutionInstanceName: formValues.evolutionInstanceName?.trim() || "",
   };
 
   saveSettings(state.settings);
@@ -1290,6 +1407,42 @@ function handleSaveSettings(formValues) {
   state.modals.settings = false;
   showToast("Configurações salvas no navegador.", "success");
   persistAndRender();
+}
+
+async function handleSendEmailNow({ toEmail, toName, subject, message, sender }) {
+  try {
+    await sendEmail({ toEmail, toName, subject, message, sender, settings: state.settings });
+    await addEmailRecord({ to: toEmail, toName: toName || "", subject: subject || "", body: message, status: "sent" });
+    state.emailHistory = await loadEmailHistory();
+    showToast(`Email enviado para ${toEmail}.`, "success");
+    state.modals.emailCompose = false;
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao enviar email.", "error");
+  }
+}
+
+async function handleSendWhatsAppNow({ number, text }) {
+  try {
+    await sendWhatsApp({ number, text, settings: state.settings });
+    await addWhatsAppRecord({ to: number, toName: "", message: text, status: "sent" });
+    state.whatsappHistory = await loadWhatsAppHistory();
+    showToast(`WhatsApp enviado para ${number}.`, "success");
+    state.modals.whatsappCompose = false;
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao enviar WhatsApp.", "error");
+  }
+}
+
+function handleOpenEmailCompose(contact) {
+  state.modalPayload = { contact: contact || null };
+  setModal("emailCompose", true);
+}
+
+function handleOpenWhatsAppCompose(contact) {
+  state.modalPayload = { contact: contact || null };
+  setModal("whatsappCompose", true);
 }
 
 function handleOpenBrandModal(brandId = "") {
@@ -1705,12 +1858,109 @@ function initialize() {
     onEditAgent: handleEditAgent,
     onSelectChat: handleSelectChat,
     onDeleteChat: handleDeleteChat,
+    onArchiveChat: handleArchiveChat,
     onCreateChat: handleCreateChat,
     onOpenSettings: () => {
       setModal("settings", true);
     },
     onOpenHelp: () => setModal("help", true),
     onOpenMemory: () => setModal("memory", true),
+    onApplyGlobalPromptTemplate: () => {
+      const template = `## IDENTIDADE E COMPORTAMENTO
+Voce e o FEMIC GPT, um assistente de IA profissional, eficiente e objetivo. Responda SEMPRE em português do Brasil. Seja claro, direto e util. Evite respostas longas desnecessarias. Quando a tarefa pedir profundidade, sim. Para perguntas simples, seja conciso.
+
+## REGRAS GERAIS
+1. Responda em portugues do Brasil, exceto se o usuario pedir outro idioma
+2. Seja profissional mas acessivel
+3. Quando nao souber a resposta, diga honestamente
+4. Use formatacao (listas, negrito, titulos) para organizar informacoes
+5. Quando o usuario pedir para "enviar", "mandar" ou "disparar", isso significa ACAO via blocos abaixo
+
+## MEMORIA
+O sistema mantem memoria persistente sobre voce. Use os fatos conhecidos para personalizar respostas sem precisar perguntar novamente.
+
+## OTIMIZACAO DE RESPOSTAS
+- Perguntas simples: resposta direta em 1-3 linhas
+- Analises: use estrutura com topicos e subtopicos
+- Codigo: sempre em blocos de codigo com linguagem identificada
+- Listas: use marcadores ou numeracao
+- Email formal: estrutura com saudacao, corpo, despedida
+
+## FUNCOES DE COMUNICACAO
+
+Voce pode enviar emails e mensagens WhatsApp diretamente pelo chat. Quando o usuario pedir para enviar um email ou WhatsApp, use os blocos de acao abaixo.
+
+### REGRAS DE ENVIO
+- Cada pedido de envio e um email/WhatsApp NOVO e DIFERENTE
+- NAO reenvie emails ou mensagens anteriores
+- Sempre baseie o conteudo no pedido ATUAL do usuario
+- Se o usuario pedir "envie outro email", isso significa um email NOVO com conteudo NOVO
+- NAO repita conteudos de emails enviados anteriormente na conversa
+- Se so pediu para redigir (nao enviar), NAO use o bloco, apenas apresente o texto
+
+### ENVIO DE EMAIL
+
+Quando o usuario pedir para ENVIAR um email, responda EXATAMENTE neste formato:
+
+[ENVIAR_EMAIL]
+Para: email@exemplo.com
+Nome: Nome do Destinatario
+Assunto: Assunto do Email
+Remetente: marco
+[/ENVIAR_EMAIL]
+
+(texto do email aqui)
+
+- Remetente deve ser "marco" ou "alessandra"
+- Se o usuario nao informar o remetente, pergunte quem deve enviar
+
+Exemplo:
+Usuario: "Envie um email para joao@exemplo.com dizendo que a reuniao e amanha as 14h"
+Voce:
+[ENVIAR_EMAIL]
+Para: joao@exemplo.com
+Nome: Joao
+Assunto: Reuniao Amanha
+Remetente: marco
+[/ENVIAR_EMAIL]
+
+Ola Joao,
+
+Gostaria de informar que a reuniao esta marcada para amanha as 14h.
+
+Atenciosamente,
+Marco
+
+### ENVIO DE WHATSAPP
+
+Quando o usuario pedir para ENVIAR uma mensagem WhatsApp, responda EXATAMENTE neste formato:
+
+[ENVIAR_WHATSAPP]
+Numero: 5511999999999
+[/ENVIAR_WHATSAPP]
+
+(texto da mensagem aqui)
+
+- O numero deve conter codigo do pais (ex: 55 para Brasil)
+- Se o usuario nao informar o codigo do pais, pergunte
+- Mensagens WhatsApp devem ser claras e diretas
+- Cada mensagem e NOVA, nao repita mensagens anteriores
+
+Exemplo:
+Usuario: "Envie um WhatsApp para 11999998888 dizendo que estou a caminho"
+Voce:
+[ENVIAR_WHATSAPP]
+Numero: 5511999998888
+[/ENVIAR_WHATSAPP]
+
+Ola! Estou a caminho. Chego em instantes.`;
+      const textarea = document.querySelector('textarea[name="globalSystemPrompt"]');
+      if (textarea) {
+        textarea.value = template;
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      showToast("Prompt de exemplo aplicado. Clique em Salvar para gravar.", "success");
+    },
     onOpenAgentModal: () => setModal("agentForm", true),
     onOpenBrandModal: handleOpenBrandModal,
     onCloseModal: (name) => setModal(name, false),
@@ -1728,6 +1978,19 @@ function initialize() {
     onSetChatCategory: handleSetChatCategory,
     onSetMessageCategory: handleSetMessageCategory,
     onRenameChat: handleRenameChat,
+    onExportChatPDF: async () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        await exportChatAsPDF(chat.messages, chat.title);
+        showToast("PDF exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar PDF.", "error");
+      }
+    },
     onClearChat: () => {
       const chat = getActiveChat();
       if (!chat || chat.messages.length === 0) {
@@ -1865,6 +2128,10 @@ function initialize() {
       saveSettings(state.settings);
       persistAndRender();
     },
+    onOpenEmailCompose: handleOpenEmailCompose,
+    onSendEmailNow: handleSendEmailNow,
+    onOpenWhatsAppCompose: handleOpenWhatsAppCompose,
+    onSendWhatsAppNow: handleSendWhatsAppNow,
   });
 
   document.addEventListener("click", (event) => {

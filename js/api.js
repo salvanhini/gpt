@@ -298,6 +298,15 @@ export function getDefaultSettings() {
       maxHistoryMessages: 30,
       tokenWarningLimit: 12000,
     },
+    emailJSMarcoServiceId: "",
+    emailJSMarcoTemplateId: "",
+    emailJSMarcoPublicKey: "",
+    emailJSAlessandraServiceId: "",
+    emailJSAlessandraTemplateId: "",
+    emailJSAlessandraPublicKey: "",
+    evolutionInstanceUrl: "",
+    evolutionApiKey: "",
+    evolutionInstanceName: "",
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
     openAITtsModel: DEFAULT_OPENAI_TTS_MODEL,
     openAITtsVoice: DEFAULT_OPENAI_TTS_VOICE,
@@ -771,28 +780,8 @@ export async function runWebSearchQuery({ messages, settings }) {
     throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
   }
 
+  // Primeiro: Tavily > Brave > DuckDuckGo (provedores externos)
   try {
-    const reply = await sendTextMessage({
-      messages,
-      settings,
-      webSearchMode: true,
-    });
-
-    return {
-      content: reply.content,
-      provider: getTextProviderDisplayName(settings.textProvider),
-      sourceType: "web-search",
-      webSearch: true,
-      isFallback: false,
-      citations: [],
-      raw: reply.raw,
-    };
-  } catch (error) {
-    if (!["groq", "openrouter"].includes(settings.textProvider)) {
-      throw error;
-    }
-
-    // Fallback: Tavily > Brave > DuckDuckGo com cache
     const sources = await collectWebSearchSources({ query, settings });
     const reply = await sendTextMessage({
       messages: [
@@ -811,6 +800,30 @@ export async function runWebSearchQuery({ messages, settings }) {
       content: `${reply.content}\n\nFontes consultadas:\n${sources.citations.map((item, index) => `${index + 1}. ${item.title}\n${item.url}`).join("\n")}`,
       answerProvider: getTextProviderDisplayName(settings.textProvider),
     };
+  } catch (externalError) {
+    // Fallback: busca web integrada do Groq/OpenRouter
+    if (["groq", "openrouter"].includes(settings.textProvider)) {
+      try {
+        const reply = await sendTextMessage({
+          messages,
+          settings,
+          webSearchMode: true,
+        });
+
+        return {
+          content: reply.content,
+          provider: getTextProviderDisplayName(settings.textProvider),
+          sourceType: "web-search",
+          webSearch: true,
+          isFallback: false,
+          citations: [],
+          raw: reply.raw,
+        };
+      } catch (providerError) {
+        throw providerError;
+      }
+    }
+    throw externalError;
   }
 }
 

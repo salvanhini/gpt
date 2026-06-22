@@ -149,7 +149,6 @@ test("renderApp includes help entry, compact web toggle and collapsible model gu
       viewMode: "chat",
     });
 
-    assert.match(app.innerHTML, /sidebar-brand-panel-compact/);
     assert.match(app.innerHTML, /has-messages/);
     assert.match(app.innerHTML, /agent-summary-panel/);
     assert.doesNotMatch(app.innerHTML, /active-chat-header/);

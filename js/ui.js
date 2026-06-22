@@ -415,11 +415,17 @@ function renderActiveChatHeader(state) {
           >✎</button>
           <button
             type="button"
-            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs ${chat.pinned ? "text-amber-500" : "text-slate-400"} shadow-sm hover:border-amber-200 hover:text-amber-500"
+            class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${chat.pinned ? "border-amber-300 bg-amber-50 text-amber-500" : "border-slate-200 bg-white text-slate-400"} hover:border-amber-200 hover:text-amber-500"
             data-action="toggle-pin-chat"
             data-chat-id="${chat.id}"
             title="${chat.pinned ? "Desafixar conversa" : "Fixar conversa"}"
           >📌</button>
+          <button
+            type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-sky-200 hover:text-sky-500"
+            data-action="export-chat-pdf"
+            title="Exportar conversa como PDF"
+          >📄</button>
           <button
             type="button"
             class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-rose-200 hover:text-rose-500"
@@ -1059,6 +1065,13 @@ function renderBoardCard(chat, state) {
             >📌</button>
             <button
               type="button"
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-sky-50 hover:text-sky-500"
+              data-action="archive-chat"
+              data-chat-id="${chat.id}"
+              title="Arquivar conversa"
+            >🗄️</button>
+            <button
+              type="button"
               class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-500"
               data-action="delete-chat"
               data-chat-id="${chat.id}"
@@ -1173,6 +1186,237 @@ function renderBoardView(state) {
             ` : ""}
           </div>
         </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderContactsModal(state) {
+  if (!state.modals.contacts) return "";
+  const editContact = state.modalPayload?.contact || null;
+  const contacts = state.contacts || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="contacts">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="contacts">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">${editContact ? "Editar Contato" : "Contatos"}</h3>
+            <p class="mt-1 text-sm text-slate-500">${editContact ? "Editando contato existente." : "Gerencie seus contatos para email e WhatsApp."}</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="contacts">✕</button>
+        </div>
+        ${editContact ? `
+        <form data-form="contact" class="space-y-3">
+          <input type="hidden" name="id" value="${editContact.id}" />
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Nome</span>
+            <input class="modal-input" name="name" type="text" value="${escapeHtml(editContact.name || "")}" placeholder="Nome do contato" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Email</span>
+            <input class="modal-input" name="email" type="email" value="${escapeHtml(editContact.email || "")}" placeholder="email@exemplo.com" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Telefone (WhatsApp)</span>
+            <input class="modal-input" name="phone" type="text" value="${escapeHtml(editContact.phone || "")}" placeholder="5511999999999" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Tags (separadas por virgula)</span>
+            <input class="modal-input" name="tags" type="text" value="${escapeHtml((editContact.tags || []).join(", "))}" placeholder="cliente, parceiro" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Anotacoes</span>
+            <textarea class="modal-textarea" name="notes" placeholder="Observacoes sobre o contato">${escapeHtml(editContact.notes || "")}</textarea>
+          </label>
+          <div class="flex gap-2">
+            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2 text-xs font-semibold text-white hover:opacity-90">Salvar</button>
+            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="contacts">Cancelar</button>
+          </div>
+        </form>
+        ` : `
+        <div class="mb-3 flex gap-2">
+          <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white hover:opacity-90" data-action="open-contact-form">Novo Contato</button>
+          <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="contacts">Fechar</button>
+        </div>
+        ${contacts.length ? `
+        <div class="space-y-2 max-h-80 overflow-auto">
+          ${contacts.map((c) => `
+            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
+              <div class="min-w-0 flex-1">
+                <div class="font-medium text-slate-900">${escapeHtml(c.name || "(sem nome)")}</div>
+                <div class="mt-0.5 text-xs text-slate-500">
+                  ${c.email ? `<span>${escapeHtml(c.email)}</span>` : ""}
+                  ${c.email && c.phone ? " · " : ""}
+                  ${c.phone ? `<span>${escapeHtml(c.phone)}</span>` : ""}
+                </div>
+                ${c.tags?.length ? `<div class="mt-1 flex flex-wrap gap-1">${c.tags.map((t) => `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+              </div>
+              <div class="flex shrink-0 gap-1">
+                <button type="button" class="rounded-lg border border-sky-200 px-2 py-1 text-[10px] font-semibold text-sky-600 hover:bg-sky-50" data-action="open-email-compose" data-contact-id="${c.id}">Email</button>
+                <button type="button" class="rounded-lg border border-emerald-200 px-2 py-1 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-50" data-action="open-whatsapp-compose" data-contact-id="${c.id}">WhatsApp</button>
+                <button type="button" class="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-action="open-contact-form" data-contact-id="${c.id}">Editar</button>
+                <button type="button" class="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50" data-action="delete-contact" data-contact-id="${c.id}">Excluir</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+        ` : '<p class="text-sm text-slate-400">Nenhum contato salvo ainda.</p>'}
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderEmailComposeModal(state) {
+  if (!state.modals.emailCompose) return "";
+  const contact = state.modalPayload?.contact || null;
+  const contacts = state.contacts || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="emailCompose">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="emailCompose">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Compor Email</h3>
+            <p class="mt-1 text-sm text-slate-500">Enviar email via EmailJS.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="emailCompose">✕</button>
+        </div>
+        <form data-form="email-compose" class="space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Remetente</span>
+            <select class="modal-input" name="sender">
+              <option value="marco">Marco</option>
+              <option value="alessandra">Alessandra</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Destinatario</span>
+            <div class="flex gap-2">
+              <input class="modal-input flex-1" name="toEmail" type="email" value="${escapeHtml(contact?.email || "")}" placeholder="email@exemplo.com" list="email-contacts" />
+              <datalist id="email-contacts">
+                ${contacts.filter((c) => c.email).map((c) => `<option value="${escapeHtml(c.email)}">${escapeHtml(c.name)}</option>`).join("")}
+              </datalist>
+            </div>
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Nome do destinatario</span>
+            <input class="modal-input" name="toName" type="text" value="${escapeHtml(contact?.name || "")}" placeholder="Nome" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Assunto</span>
+            <input class="modal-input" name="subject" type="text" placeholder="Assunto do email" />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Mensagem</span>
+            <textarea class="modal-textarea min-h-[120px]" name="message" placeholder="Escreva sua mensagem aqui..."></textarea>
+          </label>
+          <div class="flex gap-2">
+            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2 text-xs font-semibold text-white hover:opacity-90">Enviar</button>
+            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="emailCompose">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function renderWhatsAppComposeModal(state) {
+  if (!state.modals.whatsappCompose) return "";
+  const contact = state.modalPayload?.contact || null;
+  const contacts = state.contacts || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="whatsappCompose">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="whatsappCompose">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Enviar WhatsApp</h3>
+            <p class="mt-1 text-sm text-slate-500">Enviar mensagem via Evolution API.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="whatsappCompose">✕</button>
+        </div>
+        <form data-form="whatsapp-compose" class="space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Numero (com codigo do pais)</span>
+            <div class="flex gap-2">
+              <input class="modal-input flex-1" name="number" type="text" value="${escapeHtml(contact?.phone || "")}" placeholder="5511999999999" list="whatsapp-contacts" />
+              <datalist id="whatsapp-contacts">
+                ${contacts.filter((c) => c.phone).map((c) => `<option value="${escapeHtml(c.phone)}">${escapeHtml(c.name)}</option>`).join("")}
+              </datalist>
+            </div>
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-slate-700">Mensagem</span>
+            <textarea class="modal-textarea min-h-[120px]" name="text" placeholder="Digite sua mensagem..."></textarea>
+          </label>
+          <div class="flex gap-2">
+            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2 text-xs font-semibold text-white hover:opacity-90">Enviar</button>
+            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="whatsappCompose">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function renderEmailHistoryModal(state) {
+  if (!state.modals.emailHistory) return "";
+  const history = state.emailHistory || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="emailHistory">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="emailHistory">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Historico de Emails</h3>
+            <p class="mt-1 text-sm text-slate-500">Ultimos emails enviados.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="emailHistory">✕</button>
+        </div>
+        ${history.length ? `
+        <div class="space-y-2 max-h-80 overflow-auto">
+          ${history.map((item) => `
+            <div class="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-slate-900">${escapeHtml(item.subject || "(sem assunto)")}</span>
+                <span class="text-xs text-slate-400">${new Date(item.sentAt).toLocaleString("pt-BR")}</span>
+              </div>
+              <div class="mt-1 text-xs text-slate-500">Para: ${escapeHtml(item.to)}${item.toName ? ` (${escapeHtml(item.toName)})` : ""}</div>
+              <div class="mt-1 text-xs text-slate-600 line-clamp-2">${escapeHtml(item.body || "").slice(0, 200)}</div>
+            </div>
+          `).join("")}
+        </div>
+        ` : '<p class="text-sm text-slate-400">Nenhum email enviado ainda.</p>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderWhatsAppHistoryModal(state) {
+  if (!state.modals.whatsappHistory) return "";
+  const history = state.whatsappHistory || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="whatsappHistory">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="whatsappHistory">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Historico WhatsApp</h3>
+            <p class="mt-1 text-sm text-slate-500">Ultimas mensagens enviadas.</p>
+          </div>
+          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="whatsappHistory">✕</button>
+        </div>
+        ${history.length ? `
+        <div class="space-y-2 max-h-80 overflow-auto">
+          ${history.map((item) => `
+            <div class="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-slate-900">${escapeHtml(item.toName || item.to)}</span>
+                <span class="text-xs text-slate-400">${new Date(item.sentAt).toLocaleString("pt-BR")}</span>
+              </div>
+              <div class="mt-1 text-xs text-slate-500">${escapeHtml(item.to)}</div>
+              <div class="mt-1 text-xs text-slate-600 line-clamp-2">${escapeHtml(item.message || "")}</div>
+            </div>
+          `).join("")}
+        </div>
+        ` : '<p class="text-sm text-slate-400">Nenhuma mensagem enviada ainda.</p>'}
       </div>
     </div>
   `;
@@ -1390,13 +1634,74 @@ function renderSettingsModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Comunicacao</div>
+              <div class="text-xs text-slate-500">EmailJS e Evolution WhatsApp.</div>
+            </div>
+            <div class="grid gap-3 lg:grid-cols-2">
+              <div class="rounded-lg border border-sky-200/60 bg-sky-50/50 p-2.5">
+                <div class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-sky-700">EmailJS - Marco</div>
+                <div class="space-y-2">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Service ID</span>
+                    <input class="modal-input" name="emailJSMarcoServiceId" type="text" value="${escapeHtml(settings.emailJSMarcoServiceId || "")}" placeholder="service_xxx" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Template ID</span>
+                    <input class="modal-input" name="emailJSMarcoTemplateId" type="text" value="${escapeHtml(settings.emailJSMarcoTemplateId || "")}" placeholder="template_xxx" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Public Key</span>
+                    <input class="modal-input" name="emailJSMarcoPublicKey" type="password" value="${escapeHtml(settings.emailJSMarcoPublicKey || "")}" placeholder="user_xxx" />
+                  </label>
+                </div>
+              </div>
+              <div class="rounded-lg border border-purple-200/60 bg-purple-50/50 p-2.5">
+                <div class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-purple-700">EmailJS - Alessandra</div>
+                <div class="space-y-2">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Service ID</span>
+                    <input class="modal-input" name="emailJSAlessandraServiceId" type="text" value="${escapeHtml(settings.emailJSAlessandraServiceId || "")}" placeholder="service_xxx" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Template ID</span>
+                    <input class="modal-input" name="emailJSAlessandraTemplateId" type="text" value="${escapeHtml(settings.emailJSAlessandraTemplateId || "")}" placeholder="template_xxx" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Public Key</span>
+                    <input class="modal-input" name="emailJSAlessandraPublicKey" type="password" value="${escapeHtml(settings.emailJSAlessandraPublicKey || "")}" placeholder="user_xxx" />
+                  </label>
+                </div>
+              </div>
+              <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/50 p-2.5">
+                <div class="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-emerald-700">Evolution WhatsApp</div>
+                <div class="space-y-2">
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">URL da Instancia</span>
+                    <input class="modal-input" name="evolutionInstanceUrl" type="text" value="${escapeHtml(settings.evolutionInstanceUrl || "")}" placeholder="http://ip:8080" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">API Key</span>
+                    <input class="modal-input" name="evolutionApiKey" type="password" value="${escapeHtml(settings.evolutionApiKey || "")}" placeholder="chave da evolution" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-xs font-medium text-slate-700">Nome da Instancia</span>
+                    <input class="modal-input" name="evolutionInstanceName" type="text" value="${escapeHtml(settings.evolutionInstanceName || "")}" placeholder="femicgpt" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
+            <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Prompt global do sistema</div>
-              <div class="text-xs text-slate-500">Aplica regras gerais para todos os agentes sem apagar o estilo próprio de cada um.</div>
+              <div class="text-xs text-slate-500">Aplica regras gerais para todos os agentes sem apagar o estilo proprio de cada um.</div>
             </div>
             <label class="block">
-              <span class="mb-2 block text-sm font-medium text-slate-700">Instrução global</span>
-              <textarea class="modal-textarea min-h-[96px]" name="globalSystemPrompt" placeholder="Ex.: Responda sempre em português do Brasil, com clareza, objetividade e foco em ações práticas.">${escapeHtml(settings.globalSystemPrompt || "")}</textarea>
+              <span class="mb-2 block text-sm font-medium text-slate-700">Instrucao global</span>
+              <textarea class="modal-textarea min-h-[160px]" name="globalSystemPrompt" placeholder="Cole aqui o prompt global...">${escapeHtml(settings.globalSystemPrompt || "")}</textarea>
             </label>
+            <button type="button" class="mt-2 rounded-full border border-sky-200 px-3 py-1.5 text-[11px] font-semibold text-sky-600 hover:bg-sky-50" data-action="apply-global-prompt-template">Usar prompt de exemplo (Email + WhatsApp)</button>
           </section>
 
           <section class="rounded-xl border border-emerald-200/70 bg-emerald-50/40 p-3">
@@ -1516,28 +1821,91 @@ function renderHelpModal(state) {
 
   return `
     <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="help">
-      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel" data-modal-surface="help">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-3xl max-h-[85vh] overflow-y-auto" data-modal-surface="help">
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h3 class="text-xl font-semibold text-slate-900">Ajuda rápida</h3>
-            <p class="mt-1 text-sm text-slate-500">Resumo das funções principais e de como o sistema decide cada modo.</p>
+            <h3 class="text-xl font-semibold text-slate-900">Centro de Ajuda FEMIC GPT</h3>
+            <p class="mt-1 text-sm text-slate-500">Guia completo de todas as funcoes do sistema.</p>
           </div>
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="help">✕</button>
         </div>
-        <div class="grid gap-3 md:grid-cols-2">
-          ${[
-            ["Agentes", "Cada agente muda o foco da resposta. O prompt global orienta o comportamento geral, e o prompt do agente completa esse papel."],
-            ["Modelos", "Modelos rápidos servem para fluxo diário. Modelos de qualidade ou raciocínio funcionam melhor quando a tarefa pede mais profundidade."],
-            ["Busca Web", "A busca web premium funciona com Groq ou OpenRouter quando estiver ativa. Se a rota principal falhar, o sistema pode cair para uma busca leve."],
-            ["Categorias", "As categorias ajudam a separar conversas por contexto. O marcador no card permite organizar sem sair da lista lateral."],
-            ["Anexos e voz", "Você pode anexar arquivos para enriquecer contexto e usar voz quando o navegador ou a configuração de áudio permitir."],
-            ["Backup e APIs", "Exportar e importar inclui também preferências e chaves de API, então você consegue restaurar tudo sem redigitar."],
-          ].map(([title, body]) => `
-            <section class="rounded-xl border border-slate-200 bg-white/80 p-3">
-              <div class="text-sm font-semibold text-slate-900">${title}</div>
-              <p class="mt-1 text-xs leading-5 text-slate-500">${body}</p>
-            </section>
-          `).join("")}
+
+        <div class="space-y-4">
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Agentes</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Cada agente tem uma especialidade e prompt proprio. O prompt global adiciona regras gerais a todos.</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-500">
+              <li><strong>General:</strong> Conversa geral, qualquer assunto.</li>
+              <li><strong>Marketing:</strong> Estrategias, copy, campanhas.</li>
+              <li><strong>Cientista:</strong> Artigos PubMed, saude, evidencias.</li>
+              <li><strong>Brasil:</strong> CNPJ, CEP, dados nacionais.</li>
+              <li><strong>Instagram:</strong> Gera artes e legendas para posts.</li>
+              <li><strong>ANVISA:</strong> Regulatorio, rotulos, cadastros.</li>
+              <li><strong>Designer:</strong> Logos, banners, materiais visuais.</li>
+              <li><strong>Decorador:</strong> Decoracao de ambientes, sugestoes de design.</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Modelos de IA</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Escolha o modelo certo para cada tarefa.</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-500">
+              <li><strong>⚡ Rapidos (Groq):</strong> Respostas instantaneas. Ideais para perguntas simples, traducoes, resumos.</li>
+              <li><strong>🧠 Qualidade (OpenRouter/DeepSeek):</strong> Textos longos, analises profundas, codigo.</li>
+              <li><strong>🔬 Raciocinio:</strong> Problemas complexos que precisam de etapas logicas.</li>
+              <li><strong>🌐 Gemini:</strong> Multimodal (imagens), bom custo-beneficio.</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Modo Automatico (⚡ Auto)</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Quando ativo, o sistema classifica sua pergunta e escolhe automaticamente:</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-500">
+              <li>O modelo mais adequado (rapido ou qualidade)</li>
+              <li>Se precisa de busca web</li>
+              <li>Economiza tokens e dinheiro</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Busca Web</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Acesso a internet em tempo real. Ordem: Tavily → Brave → DuckDuckGo → Groq/OpenRouter (fallback).</p>
+          </section>
+
+          <section class="rounded-xl border border-sky-200 bg-sky-50/80 p-4">
+            <h4 class="text-sm font-bold text-sky-900">Envio de Email</h4>
+            <p class="mt-1 text-xs leading-5 text-sky-700">Pelo chat, digite "envie um email para..." que o sistema envia via EmailJS. Configure as chaves em Configuracoes → Comunicacao. Remetente: Marco ou Alessandra.</p>
+          </section>
+
+          <section class="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
+            <h4 class="text-sm font-bold text-emerald-900">Envio de WhatsApp</h4>
+            <p class="mt-1 text-xs leading-5 text-emerald-700">Pelo chat, digite "envie um WhatsApp para..." que o sistema envia via Evolution API. Configure em Configuracoes → Comunicacao.</p>
+          </section>
+
+          <section class="rounded-xl border border-violet-200 bg-violet-50/80 p-4">
+            <h4 class="text-sm font-bold text-violet-900">Memoria Persistente</h4>
+            <p class="mt-1 text-xs leading-5 text-violet-700">O sistema lembra fatos sobre voce (nome, profissao, preferencias). Extraido automaticamente das conversas. Acesse pelo botao 🧠 na barra lateral.</p>
+          </section>
+
+          <section class="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+            <h4 class="text-sm font-bold text-amber-900">Prompt Caching</h4>
+            <p class="mt-1 text-xs leading-5 text-amber-700">Respostas identicas usam cache local (24h). Providers como DeepSeek e Groq fazem cache automatico de prefixos (50-90% de desconto).</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Board de Conversas</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Visao em cards para organizar conversas. Use categorias, fixe conversas importantes, arquivue ou exclua.</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Geracao de Imagens</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Ative o modo imagem e peça para gerar. Provedores: Pollinations.ai (gratis) ou fal.ai (pago). Use agentes Designer ou Decorador para melhores resultados.</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Backup</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Exporte e importe todas as conversas, configuracoes e chaves de API pelo menu Configuracoes.</p>
+          </section>
         </div>
       </div>
     </div>
@@ -1899,27 +2267,8 @@ export function renderApp(state) {
         >
           ${state.sidebarCollapsed ? "›" : "‹"}
         </button>
-        <div class="sidebar-brand-panel sidebar-brand-panel-compact mb-2 flex shrink-0 items-center justify-between gap-2 rounded-xl border border-white/10 px-2.5 py-2" style="background:rgba(255,255,255,0.08);">
-          <div class="flex min-w-0 items-center gap-2.5">
-            <div class="sidebar-brand-mark flex h-8 w-8 items-center justify-center rounded-lg text-base shadow-inner shadow-white/10" style="background:rgba(255,255,255,0.12);">✦</div>
-            <div class="sidebar-expanded-only">
-              <div class="text-[15px] font-semibold tracking-tight leading-none">FEMIC GPT</div>
-              <div class="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/50">IA organizada</div>
-            </div>
-          </div>
-          <button type="button" class="sidebar-expanded-only inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm text-white lg:hidden" style="background:rgba(255,255,255,0.08); opacity:0.85;" data-action="toggle-sidebar">✕</button>
-          <button
-            type="button"
-            class="sidebar-collapse-btn sidebar-expanded-only rounded-full border border-white/15 text-white"
-            style="background:rgba(255,255,255,0.08); opacity:0.9;"
-            data-action="toggle-sidebar-collapse"
-            title="${state.sidebarCollapsed ? "Expandir barra lateral" : "Minimizar barra lateral"}"
-          >
-            ${state.sidebarCollapsed ? "›" : "‹"}
-          </button>
-        </div>
 
-        <div class="sidebar-top-actions sidebar-expanded-only mb-3">
+        <div class="sidebar-top-actions sidebar-expanded-only mb-3 flex items-center justify-between">
           <button type="button" class="sidebar-icon-action" data-action="create-chat" title="Nova conversa">
             <span>＋</span>
           </button>
@@ -2014,9 +2363,9 @@ export function renderApp(state) {
                         <span>${state.imageMode ? "Imagem" : "Texto"}</span>
                       </button>`}
                       ${instagramMode ? "" : renderWebSearchControls(state)}
-                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.smartMode ? "border-emerald-400 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-200" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-smart-mode" title="Modo automatico: escolhe modelo e web search conforme a pergunta">
+                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold shadow-sm transition-all ${state.smartMode ? "border-emerald-500 bg-emerald-500 text-white shadow-emerald-200" : "border-slate-200 bg-slate-100 text-slate-500"}" data-action="toggle-smart-mode" title="Modo automatico: escolhe modelo e web search conforme a pergunta">
                         <span>${state.smartMode ? "⚡" : "🤖"}</span>
-                        <span>${state.smartMode ? "Auto" : "Manual"}</span>
+                        <span>${state.smartMode ? "AUTO" : "MANUAL"}</span>
                       </button>`}
                       ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.thinkingEnabled ? "border-violet-400 bg-violet-50 text-violet-800 ring-2 ring-violet-200" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-thinking-mode" title="Thinking: raciocinio encadeado para modelos compatíveis">
                         <span>🧠</span>
@@ -2047,9 +2396,11 @@ export function renderApp(state) {
     ${renderMemoryModal(state)}
     ${renderBrandModal(state)}
     ${renderAgentModal(state)}
+    ${renderEmailComposeModal(state)}
+    ${renderWhatsAppComposeModal(state)}
   `;
 
-  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help);
+  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help || state.modals.emailCompose || state.modals.whatsappCompose);
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
@@ -2096,10 +2447,12 @@ export function bindUIHandlers(handlers) {
     if (action === "restore-default-agents") handlers.onRestoreDefaultAgents();
     if (action === "select-chat") handlers.onSelectChat(target.dataset.chatId);
     if (action === "delete-chat") { event.stopPropagation(); handlers.onDeleteChat(target.dataset.chatId); }
+    if (action === "archive-chat") { event.stopPropagation(); handlers.onArchiveChat(target.dataset.chatId); }
     if (action === "create-chat") handlers.onCreateChat();
     if (action === "open-help") handlers.onOpenHelp();
     if (action === "open-settings") handlers.onOpenSettings();
     if (action === "open-memory") handlers.onOpenMemory();
+    if (action === "apply-global-prompt-template") handlers.onApplyGlobalPromptTemplate();
     if (action === "fetch-openrouter-models") handlers.onFetchOpenRouterModels();
     if (action === "toggle-openrouter-model") handlers.onToggleOpenRouterModel(target.dataset.modelId);
     if (action === "open-agent-modal") handlers.onOpenAgentModal();
@@ -2122,6 +2475,7 @@ export function bindUIHandlers(handlers) {
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
     if (action === "set-message-category") handlers.onSetMessageCategory(target.dataset.messageId, target.dataset.category);
     if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);
+    if (action === "export-chat-pdf") handlers.onExportChatPDF?.();
     if (action === "clear-chat") handlers.onClearChat();
     if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
     if (action === "toggle-message-category-picker") handlers.onToggleMessageCategoryPicker(target.dataset.messageId);
@@ -2137,6 +2491,8 @@ export function bindUIHandlers(handlers) {
     if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
     if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);
     if (action === "remove-memory-fact") handlers.onRemoveMemoryFact(target.dataset.factId);
+    if (action === "open-email-compose") handlers.onOpenEmailCompose?.(target.dataset.contactId ? { id: Number(target.dataset.contactId) } : null);
+    if (action === "open-whatsapp-compose") handlers.onOpenWhatsAppCompose?.(target.dataset.contactId ? { id: Number(target.dataset.contactId) } : null);
     if (action === "pick-model") {
       const input = app.querySelector('input[name="textModel"]');
       if (input) {
@@ -2175,6 +2531,17 @@ export function bindUIHandlers(handlers) {
     }
     if (formType === "brand") {
       handlers.onSaveBrand(Object.fromEntries(data.entries()));
+    }
+    if (formType === "contact") {
+      handlers.onSaveContact(Object.fromEntries(data.entries()));
+    }
+    if (formType === "email-compose") {
+      const entries = Object.fromEntries(data.entries());
+      handlers.onSendEmailNow(entries);
+    }
+    if (formType === "whatsapp-compose") {
+      const entries = Object.fromEntries(data.entries());
+      handlers.onSendWhatsAppNow(entries);
     }
   });
 

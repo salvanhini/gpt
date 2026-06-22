@@ -78,25 +78,42 @@ function extractFactsFromMessages(messages) {
     const content = (msg.content || "").trim();
     if (!content) continue;
 
-    // Extract simple factual statements
     const lower = content.toLowerCase();
 
     // Name patterns
-    const nameMatch = content.match(/(?:meu nome e|me chamo|sou o?|meu nome é)\s+([A-ZÀ-Ú][a-zà-ú]+)/i);
+    const nameMatch = content.match(/(?:meu nome e|me chamo|sou o?|meu nome é|pode me chamar)\s+([A-ZÀ-Ú][a-zà-ú]+)/i);
     if (nameMatch) {
       facts.push(`Nome do usuario: ${nameMatch[1]}`);
     }
 
     // Profession patterns
-    const profMatch = content.match(/(?:sou|trabalho como|exerço como|trabalho como)\s+(.+?)(?:\.|,|$)/i);
+    const profMatch = content.match(/(?:sou|trabalho como|exerço como|trabalho como|minha profissao e|sou formado em)\s+(.+?)(?:\.|,|$)/i);
     if (profMatch) {
       facts.push(`Profissao: ${profMatch[1].trim()}`);
     }
 
     // Location patterns
-    const locMatch = content.match(/(?:moro em|resido em|sou de|cidade de)\s+([A-ZÀ-Ú][a-zà-ú]+)/i);
+    const locMatch = content.match(/(?:moro em|resido em|sou de|cidade de|estou em)\s+([A-ZÀ-Ú][a-zà-ú\s]+)/i);
     if (locMatch) {
-      facts.push(`Localizacao: ${locMatch[1]}`);
+      facts.push(`Localizacao: ${locMatch[1].trim()}`);
+    }
+
+    // Phone patterns
+    const phoneMatch = content.match(/(?:meu (?:telefone|celular|numero) e| whatsapp e|whatsapp:?)\s*(\d[\d\s\-]{8,})/i);
+    if (phoneMatch) {
+      facts.push(`Telefone: ${phoneMatch[1].trim()}`);
+    }
+
+    // Email patterns
+    const emailMatch = content.match(/(?:meu email e|email para|email:?)\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (emailMatch) {
+      facts.push(`Email: ${emailMatch[1]}`);
+    }
+
+    // Preference patterns
+    const prefMatch = content.match(/(?:eu (?:gosto|prefiro|adoro|odeio)|minha (?:preferencia|opiniao) e|acho que)\s+(.+?)(?:\.|$)/i);
+    if (prefMatch) {
+      facts.push(`Preferencia: ${prefMatch[1].trim()}`);
     }
   }
 
