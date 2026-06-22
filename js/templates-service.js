@@ -36,13 +36,7 @@ export function criarTemplateInicial(tipo) {
     storeData: JSON.stringify({
       width: cat.w,
       height: cat.h,
-      pages: [
-        {
-          children: [],
-          background: "#ffffff",
-        },
-      ],
+      layers: [],
     }),
   };
 }
-
