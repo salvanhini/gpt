@@ -1420,6 +1420,7 @@ function handleSaveSettings(formValues) {
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
     braveSearchKey: formValues.braveSearchKey?.trim() || state.settings.braveSearchKey || "",
     falKey: formValues.falKey?.trim() || state.settings.falKey || "",
+    pixazoKey: formValues.pixazoKey?.trim() || state.settings.pixazoKey || "",
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
