@@ -44,7 +44,7 @@ test("buildInstagramImagePrompt includes brand, format and premium direction", (
   assert.match(prompt, /Clinica Bem Viver/);
   assert.match(prompt, /Story 9:16/);
   assert.match(prompt, /#1D4ED8/);
-  assert.match(prompt, /executivo claro/i);
+  assert.match(prompt, /sophisticated/i);
   assert.match(prompt, /Avaliacao gratuita/);
 });
 
@@ -67,8 +67,8 @@ test("buildInstagramVariationPrompt injects variation guidance", () => {
     totalVariations: 4,
   });
 
-  assert.match(prompt, /variacao 2 de 4/i);
-  assert.match(prompt, /mesma marca/i);
+  assert.match(prompt, /Variation 2 of 4/i);
+  assert.match(prompt, /same brand/i);
 });
 
 test("buildInstagramCopyPrompt requests caption and hashtags in a strict format", () => {

@@ -616,14 +616,14 @@ button {
 }
 
 .instagram-workspace .composer-panel {
-  max-height: min(49dvh, 560px);
+  max-height: min(75dvh, 680px);
   overflow: auto;
   overscroll-behavior: contain;
   padding-right: 0.35rem;
 }
 
 .instagram-workspace .instagram-creative-panel {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .composer-dock::before {
@@ -1362,12 +1362,12 @@ button {
   }
 
   .instagram-workspace .composer-panel {
-    max-height: min(58dvh, 620px);
+    max-height: min(80dvh, 720px);
     padding-right: 0.1rem;
   }
 
   .instagram-creative-panel {
-    padding: 0.9rem !important;
+    padding: 0 !important;
   }
 
   .instagram-creative-panel .modal-input,

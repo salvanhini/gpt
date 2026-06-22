@@ -59,29 +59,36 @@ export function buildCreativeBrief(draft = {}) {
     .join("\n");
 }
 
-export function buildInstagramImagePrompt({ brand, formatId, draft }) {
+export function buildInstagramImagePrompt({ brand, formatId, draft, customPrompt = "" }) {
   const format = getInstagramFormatById(formatId);
-  const brandName = brand?.name?.trim() || "Marca não definida";
+  const brandName = brand?.name?.trim() || "Brand";
   const primaryColor = brand?.primaryColor?.trim() || "#1D4ED8";
   const secondaryColor = brand?.secondaryColor?.trim() || "#0F172A";
   const templateGuidance = brand?.templateStyle?.trim() || brand?.templateNotes?.trim() || "";
   const logoGuidance = brand?.logoUrl
-    ? "Incluir a identidade visual da marca com tratamento elegante para o logo enviado pelo usuário."
-    : "Reservar uma área nobre para identidade da marca, mesmo sem logo explícito.";
-  const brief = buildCreativeBrief(draft);
+    ? "Incorporate brand logo with elegant, premium placement."
+    : "Reserve a clean area for brand identity, even without explicit logo.";
+  const headline = String(draft.headline || "").trim();
+  const supportingText = String(draft.supportingText || "").trim();
+  const cta = String(draft.cta || "").trim();
+  const audience = String(draft.audience || "").trim();
 
   return [
-    "Crie uma arte premium para Instagram, pronta para publicação.",
-    `Formato: ${format.label}.`,
-    `Canvas: ${format.canvasGuidance}.`,
-    `Marca: ${brandName}.`,
-    `Paleta principal: ${primaryColor} como cor dominante e ${secondaryColor} como apoio.`,
+    "Professional Instagram brand asset. Ultra-premium, photorealistic, high-end commercial quality.",
+    `Format: ${format.label} — ${format.canvasGuidance}.`,
+    `Brand: ${brandName}.`,
+    `Color palette: ${primaryColor} (dominant), ${secondaryColor} (secondary).`,
     logoGuidance,
-    templateGuidance ? `Template da marca: ${templateGuidance}.` : "",
-    "Estilo: executivo claro, sofisticado, alto contraste, tipografia forte, visual limpo e comercial.",
-    "Priorize legibilidade do texto, hierarquia clara, composição equilibrada e acabamento profissional.",
-    "Nao usar marcas d'agua, mockups de dispositivo ou elementos fora do contexto do Instagram.",
-    brief,
+    templateGuidance ? `Style guidance: ${templateGuidance}.` : "",
+    headline ? `Main message: "${headline}".` : "",
+    supportingText ? `Supporting text: "${supportingText}".` : "",
+    cta ? `Call to action: "${cta}".` : "",
+    audience ? `Target audience: ${audience}.` : "",
+    customPrompt ? `User request: ${customPrompt}.` : "",
+    "Style: clean, sophisticated, high contrast, bold typography, strong visual hierarchy.",
+    "Quality: volumetric lighting, soft shadows, subtle gradients, premium finish, 8K detail.",
+    "CRITICAL: All visible text in the image MUST be in BRAZILIAN PORTUGUESE.",
+    "No watermarks, no device mockups, no UI elements. Pure professional brand asset.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -90,9 +97,9 @@ export function buildInstagramImagePrompt({ brand, formatId, draft }) {
 export function buildInstagramVariationPrompt({ basePrompt, variationIndex, totalVariations }) {
   return [
     basePrompt,
-    `Crie a variacao ${variationIndex} de ${totalVariations}.`,
-    "Mantenha a mesma marca, oferta e objetivo.",
-    "Altere a composicao, enquadramento, distribuicao tipografica, apoio grafico e ritmo visual para que cada versao pareca unica e profissional.",
+    `Variation ${variationIndex} of ${totalVariations}.`,
+    "Keep the same brand, offer, and goal.",
+    "Change composition, framing, typography layout, graphic support, and visual rhythm so each version feels unique and professional.",
   ].join("\n");
 }
 
