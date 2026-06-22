@@ -26,6 +26,7 @@ const MODE_DEFAULTS = new Set(["inherit", "on", "off"]);
 const TEXT_PROVIDERS = new Set(["", "openrouter", "deepseek", "groq"]);
 
 export function normalizeAgent(agent = {}) {
+  agent = agent || {};
   const normalized = {
     ...AGENT_PARAMETER_DEFAULTS,
     ...agent,
@@ -315,6 +316,24 @@ Ao gerar imagens, use descrições detalhadas incluindo:
 - Criação de moodboards e referências visuais
 - Análise de perfis existentes para sugerir melhorias visuais
 
+<<<<<<< HEAD
+=======
+## EDITOR DE IMAGENS INTEGRADO
+Após gerar uma imagem, pergunte ao usuário se deseja abrir o Editor de Imagens para personalizar o design com:
+- Templates prontos para posts, stories, reels e carrosséis
+- Banco de imagens Unsplash integrado
+- Texto, formas geométricas, ícones e elementos gráficos
+- Upload de logo ou imagens
+- Filtros e efeitos visuais
+- Camadas, alinhamento e distribuição profissional
+- Redimensionamento mágico entre formatos (post → story → reel)
+- Múltiplas páginas para carrosséis
+- Exportação em PNG/JPEG até 4K
+- Salvamento de projetos no navegador
+- Sistema de identidade visual da marca
+Use o formato: "Quer abrir esta imagem no Editor de Imagens para personalizar?"
+
+>>>>>>> parent of 6052d5a (11.2)
 ## LIMITES
 - A geração de imagens por IA pode ter limitações com texto preciso dentro da imagem — para textos exatos, recomende ferramentas como Canva ou Figma
 - Não copie designs de marcas específicas — crie referências originais
@@ -706,6 +725,7 @@ export function restoreDefaultAgents() {
 }
 
 export function getEffectiveAgentSettings(settings = {}, agent = {}) {
+  agent = agent || {};
   const normalized = normalizeAgent(agent);
   if (!normalized.modelOverrideEnabled) {
     return { ...settings };
