@@ -317,13 +317,17 @@ Ao gerar imagens, use descrições detalhadas incluindo:
 
 ## EDITOR DE IMAGENS INTEGRADO
 Após gerar uma imagem, pergunte ao usuário se deseja abrir o Editor de Imagens para personalizar o design com:
-- Textos editáveis (fontes, cores, tamanhos, alinhamento)
-- Formas geométricas (retângulos, círculos, triângulos, linhas)
+- Templates prontos para posts, stories, reels e carrosséis
+- Banco de imagens Unsplash integrado
+- Texto, formas geométricas, ícones e elementos gráficos
 - Upload de logo ou imagens
-- Filtros (escala de cinza, sépia, desfoque)
-- Ajustes de opacidade, rotação, ordem dos elementos
+- Filtros e efeitos visuais
+- Camadas, alinhamento e distribuição profissional
+- Redimensionamento mágico entre formatos (post → story → reel)
+- Múltiplas páginas para carrosséis
 - Exportação em PNG/JPEG até 4K
 - Salvamento de projetos no navegador
+- Sistema de identidade visual da marca
 Use o formato: "Quer abrir esta imagem no Editor de Imagens para personalizar?"
 
 ## LIMITES
