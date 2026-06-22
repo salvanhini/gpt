@@ -63,7 +63,6 @@ function resolveEndpoint(provider, settings, bodyObject) {
   if (provider === "openrouter") {
     headers["HTTP-Referer"] = globalThis.location?.href || "";
     headers["X-Title"] = "FEMIC GPT";
-    headers["X-OpenRouter-Cache"] = "true";
   }
 
   return {
