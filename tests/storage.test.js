@@ -10,6 +10,7 @@ import {
   parseBackupPayload,
   reconcileAppData,
 } from "../js/storage.js";
+import { NO_AGENT_ID } from "../js/agents.js";
 
 function createMemoryStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -253,4 +254,22 @@ test("reconcileAppData preserves model guidance collapsed state in view", () => 
   });
 
   assert.equal(reconciled.view.modelGuidanceCollapsed, true);
+});
+
+test("reconcileAppData preserves NO_AGENT_ID as active agent and keeps its chats", () => {
+  const reconciled = reconcileAppData({
+    agents: [{ id: "agent-a", name: "A" }],
+    chats: [createChat(NO_AGENT_ID, "no-agent-1")],
+    view: {
+      activeAgentId: NO_AGENT_ID,
+      activeChatId: "chat-no-agent-1",
+    },
+    defaultAgents: createDefaultAgents,
+    createChat: (agentId) => createChat(agentId, "fallback"),
+  });
+
+  assert.equal(reconciled.activeAgentId, NO_AGENT_ID);
+  assert.equal(reconciled.activeChatId, "chat-no-agent-1");
+  assert.equal(reconciled.chats.length, 1);
+  assert.equal(reconciled.chats[0].agentId, NO_AGENT_ID);
 });

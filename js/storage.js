@@ -1,3 +1,5 @@
+import { NO_AGENT_ID } from "./agents.js";
+
 export const STORAGE_KEYS = {
   chats: "femicgpt:chats",
   agents: "femicgpt:agents",
@@ -102,7 +104,7 @@ function normalizeChats(rawChats, validAgentIds) {
         return false;
       }
 
-      if (!validAgentIds.has(chat.agentId)) {
+      if (!validAgentIds.has(chat.agentId) && chat.agentId !== NO_AGENT_ID) {
         return false;
       }
 
@@ -125,6 +127,7 @@ export function reconcileAppData({
   const nextAgents = normalizedAgents.length ? normalizedAgents : defaultAgents();
 
   const validAgentIds = new Set(nextAgents.map((agent) => agent.id));
+  validAgentIds.add(NO_AGENT_ID);
   const nextChats = normalizeChats(chats, validAgentIds);
   const nextView = view && typeof view === "object" ? view : {};
 
