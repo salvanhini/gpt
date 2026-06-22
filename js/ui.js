@@ -1,7 +1,5 @@
 let scrollListenerBound = false;
 
-import { renderPostsTab } from "./ui-posts.js";
-
 function formatCostValue(cost) {
   if (cost === 0) return "$0.00";
   if (cost < 0.01) return "<$0.01";
@@ -556,7 +554,7 @@ function renderInstagramCreativePanel(state) {
           <span class="h-1.5 w-1.5 rounded-full bg-femic-cyan"></span>
           Instagram
         </span>
-        <select class="editor-input" style="width:auto;min-width:100px;padding:3px 6px;font-size:11px" data-action="select-instagram-brand" name="selectedBrandId">
+        <select style="width:auto;min-width:100px;padding:3px 6px;font-size:11px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569" data-action="select-instagram-brand" name="selectedBrandId">
           ${brands.length
             ? brands.map((brand) => `
               <option value="${escapeHtml(brand.id)}" ${brand.id === state.selectedBrandId ? "selected" : ""}>${escapeHtml(brand.name)}</option>
@@ -564,18 +562,18 @@ function renderInstagramCreativePanel(state) {
             : `<option value="">Sem marca</option>`
           }
         </select>
-        <select class="editor-input" style="width:auto;min-width:90px;padding:3px 6px;font-size:11px" data-action="select-instagram-format" name="instagramFormat">
+        <select style="width:auto;min-width:90px;padding:3px 6px;font-size:11px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569" data-action="select-instagram-format" name="instagramFormat">
           ${(state.instagramFormats || []).map((format) => `
             <option value="${escapeHtml(format.id)}" ${format.id === state.instagramFormat ? "selected" : ""}>${escapeHtml(format.label)}</option>
           `).join("")}
         </select>
-        <select class="editor-input" style="width:auto;min-width:50px;padding:3px 6px;font-size:11px" data-action="creative-field" data-field="variationCount">
+        <select style="width:auto;min-width:50px;padding:3px 6px;font-size:11px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569" data-action="creative-field" data-field="variationCount">
           ${["1", "2", "3", "4"].map((value) => `<option value="${value}" ${String(draft.variationCount || "3") === value ? "selected" : ""}>${value}x</option>`).join("")}
         </select>
-        <button type="button" class="editor-btn editor-btn-sm" style="padding:3px 8px;font-size:10px" data-action="toggle-creative-brief">
+        <button type="button" style="padding:3px 8px;font-size:10px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px" data-action="toggle-creative-brief">
           ${isCollapsed ? "📝 Briefing" : "📝 ▲ Briefing"}
         </button>
-        <button type="button" class="editor-btn editor-btn-sm" style="padding:3px 8px;font-size:10px" data-action="open-brand-modal">
+        <button type="button" style="padding:3px 8px;font-size:10px;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px" data-action="open-brand-modal">
           ✦ Marca
         </button>
       </div>
@@ -608,7 +606,7 @@ function renderInstagramCreativePanel(state) {
                 `).join("")}
               </select>
             </div>
-            <button type="button" class="editor-btn editor-btn-sm" style="padding:5px 8px;font-size:10px;white-space:nowrap" data-action="save-current-template">💾</button>
+            <button type="button" style="padding:5px 8px;font-size:10px;white-space:nowrap;border-radius:6px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7);color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:4px" data-action="save-current-template">💾</button>
           </label>
         </div>
         ${activeBrand ? `
@@ -732,14 +730,6 @@ function renderMessage(message, state) {
         >
           Baixar imagem
         </a>
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-soft hover:bg-sky-50"
-          data-action="open-editor-from-message"
-          data-image-url="${escapeHtml(message.meta.imageUrl)}"
-        >
-          ✎ Editor
-        </button>
       </div>
     `
     : showTypingDots
@@ -2040,9 +2030,6 @@ export function renderApp(state) {
           <button type="button" class="sidebar-icon-action" data-action="toggle-board-view" title="Board de conversas">
             <span>📋</span>
           </button>
-          <button type="button" class="sidebar-icon-action" data-action="toggle-posts-view" title="Posts">
-            <span>📱</span>
-          </button>
           <button type="button" class="sidebar-icon-action" data-action="open-memory" title="Memoria persistente">
             <span>🧠</span>
           </button>
@@ -2093,8 +2080,6 @@ export function renderApp(state) {
       <main class="app-main relative min-w-0">
         ${state.viewMode === "board"
           ? renderBoardView(state)
-          : state.viewMode === "posts"
-          ? renderPostsTab(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${renderActiveAgentSummary(state)}
@@ -2270,15 +2255,6 @@ export function bindUIHandlers(handlers) {
     if (action === "filter-by-category") handlers.onFilterByCategory(target.dataset.category);
     if (action === "change-image-size") handlers.onChangeImageSize(target.dataset.imageSize);
     if (action === "toggle-board-view") handlers.onToggleBoardView();
-    if (action === "toggle-posts-view") handlers.onTogglePostsView?.();
-    if (action === "posts-filter") handlers.onPostsFilter?.(target.dataset.filter || "");
-    if (action === "delete-post") handlers.onDeletePost?.(target.dataset.postId);
-    if (action === "download-post") handlers.onDownloadPost?.(target.dataset.postId);
-    if (action === "edit-post") handlers.onEditPost?.(target.dataset.postId);
-    if (action === "new-post-ai") handlers.onNewPostAI?.();
-    if (action === "new-post-upload") handlers.onNewPostUpload?.();
-    if (action === "new-post-project") handlers.onNewPostProject?.();
-    if (action === "open-editor-from-message") handlers.onOpenEditorFromMessage?.(target.dataset.imageUrl);
     if (action === "toggle-pubmed-mode") handlers.onTogglePubMedMode();
     if (action === "toggle-creative-brief") handlers.onToggleCreativeBrief?.();
     if (action === "toggle-web-search-mode") handlers.onToggleWebSearchMode();

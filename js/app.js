@@ -112,11 +112,6 @@ import {
 import { sendEmail } from "./emailService.js";
 import { sendWhatsApp } from "./whatsappService.js";
 import { exportChatAsPDF } from "./pdfGenerator.js";
-import { EditorUI } from "./ui-editor.js";
-import { listarPostsSalvos, criarPost, removerPost } from "./posts-service.js";
-import { listarProjetosEditor, deletarProjetoEditor } from "./editorStorage.js";
-import { renderPostsTab } from "./ui-posts.js";
-
 let bootSettingsFallbacks = [];
 
 const state = {
@@ -183,11 +178,6 @@ const state = {
   contacts: [],
   emailHistory: [],
   whatsappHistory: [],
-  editorOpen: false,
-  editorImageUrl: "",
-  editorOptions: {},
-  posts: [],
-  postsFilter: "",
   currentAudio: null,
   currentAudioUrl: null,
   availableVoice: null,
@@ -200,18 +190,6 @@ const state = {
   imageProviderOptions: IMAGE_PROVIDER_OPTIONS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
-
-const editorUI = new EditorUI();
-
-async function loadPosts() {
-  try {
-    const filtros = {};
-    if (state.postsFilter) filtros.tipo = state.postsFilter;
-    state.posts = await listarPostsSalvos(filtros);
-  } catch {
-    state.posts = [];
-  }
-}
 
 function loadSettings() {
   const raw = readStorageJson(localStorage, STORAGE_KEYS.settings, {});
@@ -1336,16 +1314,6 @@ function handleToggleBoardView() {
   persistAndRender();
 }
 
-function handleTogglePostsView() {
-  if (state.viewMode === "posts") {
-    state.viewMode = "chat";
-  } else {
-    state.viewMode = "posts";
-    loadPosts();
-  }
-  persistAndRender();
-}
-
 function handleTogglePubMedMode() {
   state.pubmedMode = !state.pubmedMode;
   persistAndRender();
@@ -2089,7 +2057,6 @@ Ola! Estou a caminho. Chego em instantes.`;
     onToggleMessageCategoryPicker: handleToggleMessageCategoryPicker,
     onFilterByCategory: handleFilterByCategory,
     onToggleBoardView: handleToggleBoardView,
-    onTogglePostsView: handleTogglePostsView,
     onSearchChats: handleSearchChats,
     onTogglePubMedMode: handleTogglePubMedMode,
     onToggleCreativeBrief: () => {
@@ -2219,189 +2186,6 @@ Ola! Estou a caminho. Chego em instantes.`;
     onSendEmailNow: handleSendEmailNow,
     onOpenWhatsAppCompose: handleOpenWhatsAppCompose,
     onSendWhatsAppNow: handleSendWhatsAppNow,
-    onOpenEditor: (imageUrl, opts) => {
-      if (!state.editorOpen) {
-        state.editorOpen = true;
-        state.editorImageUrl = imageUrl;
-        state.editorOptions = opts || {};
-        editorUI.onSendToChat = (dataUrl, format) => {
-          const activeChat = getActiveChat();
-          if (activeChat) {
-            addMessage(activeChat.id, {
-              role: "assistant",
-              content: "Imagem personalizada do editor:",
-              meta: {
-                kind: "image",
-                imageUrl: dataUrl,
-                provider: "editor",
-                editorCreated: true,
-              },
-            });
-            saveChats(state.chats);
-            persistAndRender();
-          }
-        };
-        editorUI.onClose = () => {
-          state.editorOpen = false;
-          state.editorImageUrl = "";
-          state.editorOptions = {};
-        };
-        editorUI.abrirEditor(imageUrl, opts);
-      }
-    },
-    onCloseEditor: () => {
-      editorUI.fecharEditor();
-      state.editorOpen = false;
-      state.editorImageUrl = "";
-      state.editorOptions = {};
-    },
-    onPostsFilter: (filter) => {
-      state.postsFilter = filter;
-      loadPosts();
-      render();
-    },
-    onDeletePost: async (postId) => {
-      if (!confirm("Excluir este post?")) return;
-      try {
-        await removerPost(postId);
-        showToast("Post excluido.", "success");
-        loadPosts();
-        render();
-      } catch {
-        showToast("Erro ao excluir post.", "error");
-      }
-    },
-    onDownloadPost: (postId) => {
-      const post = state.posts.find((p) => p.id === postId);
-      if (!post || !post.dataURL) return;
-      const link = document.createElement("a");
-      link.download = `${post.nome || "post"}.${post.formato || "png"}`;
-      link.href = post.dataURL;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    },
-    onEditPost: (postId) => {
-      const post = state.posts.find((p) => p.id === postId);
-      if (!post) return;
-      state.editorOpen = true;
-      state.editorImageUrl = post.dataURL;
-      state.editorOptions = { formato: post.tipo || "quadrado" };
-      editorUI.onSendToChat = (dataUrl, format) => {
-        const activeChat = getActiveChat();
-        if (activeChat) {
-          addMessage(activeChat.id, {
-            role: "assistant",
-            content: "Imagem personalizada do editor:",
-            meta: { kind: "image", imageUrl: dataUrl, provider: "editor", editorCreated: true },
-          });
-          saveChats(state.chats);
-          persistAndRender();
-        }
-      };
-      editorUI.onClose = () => {
-        state.editorOpen = false;
-        state.editorImageUrl = "";
-        state.editorOptions = {};
-      };
-      editorUI.abrirEditor(post.dataURL, { formato: post.tipo || "quadrado" });
-    },
-    onNewPostAI: () => {
-      state.viewMode = "chat";
-      state.imageMode = true;
-      persistAndRender();
-      showToast("Ative o modo imagem e peca para gerar.", "info");
-    },
-    onNewPostUpload: () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const url = URL.createObjectURL(file);
-        state.viewMode = "chat";
-        state.editorOpen = true;
-        state.editorImageUrl = url;
-        state.editorOptions = { formato: "quadrado" };
-        editorUI.onSendToChat = (dataUrl, format) => {
-          const activeChat = getActiveChat();
-          if (activeChat) {
-            addMessage(activeChat.id, {
-              role: "assistant",
-              content: "Imagem personalizada do editor:",
-              meta: { kind: "image", imageUrl: dataUrl, provider: "editor", editorCreated: true },
-            });
-            saveChats(state.chats);
-            persistAndRender();
-          }
-        };
-        editorUI.onClose = () => {
-          state.editorOpen = false;
-          state.editorImageUrl = "";
-          state.editorOptions = {};
-        };
-        editorUI.abrirEditor(url, { formato: "quadrado" });
-      };
-      input.click();
-    },
-    onNewPostProject: async () => {
-      try {
-        const projetos = await listarProjetosEditor();
-        if (!projetos.length) { showToast("Nenhum projeto salvo.", "info"); return; }
-        const nomes = projetos.map((p, i) => `${i + 1}. ${p.nome}`).join("\n");
-        const idx = prompt(`Projetos salvos:\n${nomes}\n\nDigite o numero:`);
-        if (!idx) return;
-        const index = parseInt(idx, 10) - 1;
-        if (isNaN(index) || index < 0 || index >= projetos.length) { showToast("Numero invalido.", "error"); return; }
-        state.editorOpen = true;
-        state.editorImageUrl = "";
-        state.editorOptions = { formato: "quadrado", projetoId: projetos[index].id };
-        editorUI.onSendToChat = (dataUrl, format) => {
-          const activeChat = getActiveChat();
-          if (activeChat) {
-            addMessage(activeChat.id, {
-              role: "assistant",
-              content: "Imagem personalizada do editor:",
-              meta: { kind: "image", imageUrl: dataUrl, provider: "editor", editorCreated: true },
-            });
-            saveChats(state.chats);
-            persistAndRender();
-          }
-        };
-        editorUI.onClose = () => {
-          state.editorOpen = false;
-          state.editorImageUrl = "";
-          state.editorOptions = {};
-        };
-        editorUI.abrirEditor("", { formato: "quadrado", projetoId: projetos[index].id });
-      } catch {
-        showToast("Erro ao carregar projetos.", "error");
-      }
-    },
-    onOpenEditorFromMessage: (imageUrl) => {
-      state.editorOpen = true;
-      state.editorImageUrl = imageUrl;
-      state.editorOptions = { formato: "quadrado" };
-      editorUI.onSendToChat = (dataUrl, format) => {
-        const activeChat = getActiveChat();
-        if (activeChat) {
-          addMessage(activeChat.id, {
-            role: "assistant",
-            content: "Imagem personalizada do editor:",
-            meta: { kind: "image", imageUrl: dataUrl, provider: "editor", editorCreated: true },
-          });
-          saveChats(state.chats);
-          persistAndRender();
-        }
-      };
-      editorUI.onClose = () => {
-        state.editorOpen = false;
-        state.editorImageUrl = "";
-        state.editorOptions = {};
-      };
-      editorUI.abrirEditor(imageUrl, { formato: "quadrado" });
-    },
   });
 
   document.addEventListener("click", (event) => {
@@ -2421,7 +2205,6 @@ Ola! Estou a caminho. Chego em instantes.`;
   });
 
   render();
-  loadPosts();
 
   if (state.settingsFallbacks.length) {
     state.settingsFallbacks.forEach((fallback) => {
