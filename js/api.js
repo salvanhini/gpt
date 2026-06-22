@@ -110,6 +110,7 @@ export const IMAGE_SIZE_OPTIONS = [
 export const IMAGE_PROVIDER_OPTIONS = [
   { value: "pollinations", label: "Pollinations.ai (Gratis)" },
   { value: "fal-ai", label: "fal.ai (requer chave)" },
+  { value: "pixazo", label: "Pixazo.ai (Flux Schnell)" },
 ];
 
 const IMAGE_SIZE_DIMENSIONS = {
@@ -274,6 +275,7 @@ export function getDefaultSettings() {
     groqKey: "",
     geminiKey: "",
     falKey: "",
+    pixazoKey: "",
     imageProvider: DEFAULT_IMAGE_PROVIDER,
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
@@ -1073,6 +1075,10 @@ export async function generateImage({ prompt, settings }) {
     return generateImageFalAI({ prompt, settings });
   }
 
+  if (provider === "pixazo") {
+    return generateImagePixazo({ prompt, settings });
+  }
+
   return generateImagePollinations({ prompt, settings });
 }
 
@@ -1146,6 +1152,53 @@ async function generateImageFalAI({ prompt, settings }) {
 
   if (!imageUrl || typeof imageUrl !== "string") {
     throw new Error("A fal.ai nao retornou uma imagem valida.");
+  }
+
+  return {
+    url: imageUrl,
+    prompt,
+    raw: data,
+  };
+}
+
+async function generateImagePixazo({ prompt, settings }) {
+  if (!settings.pixazoKey) {
+    throw new Error("Adicione sua chave da Pixazo.ai nas configuracoes.");
+  }
+
+  const sizeKey = settings.imageSize || "square";
+  const dims = IMAGE_SIZE_DIMENSIONS[sizeKey] || IMAGE_SIZE_DIMENSIONS.square;
+
+  let response;
+  try {
+    response = await fetch("https://gateway.pixazo.ai/flux-1-schnell/v1/getData", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "Ocp-Apim-Subscription-Key": settings.pixazoKey,
+      },
+      body: JSON.stringify({
+        prompt,
+        num_steps: 4,
+        height: dims.height,
+        width: dims.width,
+      }),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar a Pixazo.ai. Verifique internet e chave.");
+  }
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao gerar imagem na Pixazo.ai."));
+  }
+
+  const imageUrl = data?.output;
+
+  if (!imageUrl || typeof imageUrl !== "string") {
+    throw new Error("A Pixazo.ai nao retornou uma imagem valida.");
   }
 
   return {

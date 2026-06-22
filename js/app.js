@@ -1,5 +1,6 @@
 import {
   BRASIL_AGENT_ID,
+  NO_AGENT_ID,
   createAgent,
   deleteAgent,
   duplicateAgent,
@@ -110,7 +111,7 @@ import {
 } from "./communicationStorage.js";
 import { sendEmail } from "./emailService.js";
 import { sendWhatsApp } from "./whatsappService.js";
-import { exportChatAsPDF, exportMessageAsPDF } from "./pdfGenerator.js";
+import { exportChatAsPDF } from "./pdfGenerator.js";
 
 let bootSettingsFallbacks = [];
 
@@ -333,21 +334,46 @@ function buildUserErrorMessage(error, fallback) {
 }
 
 function smartClassify(message) {
-  const lower = message.toLowerCase();
-  const res = { webSearch: false, modelTier: "default" };
+  const lower = message.toLowerCase().trim();
 
-  const palavrasWeb = ["noticias", "noticia", "hoje", "ultimas", "ultimo", "preco", "cotacao", "tendencia", "lancamento", "atualizacao", "agora", "recem", "previsao", "tempo", "clima", "jogo", "resultado"];
-  if (palavrasWeb.some((p) => lower.includes(p))) {
-    res.webSearch = true;
+  // ── Web Search Detection ──
+  const webKeywords = [
+    "noticias", "noticia", "hoje", "ultimas", "ultimo", "lancamento",
+    "novidade", "novidades", "recente", "recem", "atualizacao",
+    "atualizado", "nova", "novo", "novas", "novos",
+    "preco", "preço", "cotacao", "cotação", "valor", "custo",
+    "quanto custa", "previsao", "previsão",
+    "tempo", "clima", "temperatura", "chuva",
+    "jogo", "jogos", "resultado", "campeonato", "partida", "placar",
+    "tendencia", "tendência", "moda", "viral", "tendencias",
+    "pesquisa sobre", "o que é", "o que e", "quem é", "quem e",
+    "como funciona", "significado",
+    "busque", "procure", "encontre", "pesquise",
+    "busca na web", "busca na internet", "pesquisa na internet",
+  ];
+  const useWebSearch = webKeywords.some((kw) => lower.includes(kw));
+
+  // ── Model Tier Detection ──
+  let modelTier = "default";
+  const len = message.length;
+
+  if (len <= 80 && !lower.includes("```") && !lower.includes("codigo")) {
+    modelTier = "fast";
   }
 
-  if (message.length < 50 && !message.includes("?")) {
-    res.modelTier = "fast";
-  } else if (message.length > 500 || lower.includes("codigo") || lower.includes("```")) {
-    res.modelTier = "deep";
+  const deepKeywords = [
+    "analise", "análise", "analise detalhadamente", "analise profundamente",
+    "explique detalhadamente", "explique profundamente",
+    "compare", "comparação", "comparacao",
+    "código", "codigo", "```", "refatore", "reescreva",
+    "debug", "debugue",
+    "arquitetura", "projete um",
+  ];
+  if (len > 500 || deepKeywords.some((kw) => lower.includes(kw))) {
+    modelTier = "deep";
   }
 
-  return res;
+  return { useWebSearch, modelTier };
 }
 
 function addAssistantErrorMessage(chatId, error) {
@@ -590,10 +616,10 @@ function addWebSearchMessage(chatId, searchResult) {
   });
 }
 
-async function resolveWebSearchForMessage(message) {
+async function resolveWebSearchForMessage(message, settingsOverride) {
   return runWebSearchQuery({
     messages: buildTextPayload(message),
-    settings: getActiveSettings(),
+    settings: settingsOverride || getActiveSettings(),
   });
 }
 
@@ -629,7 +655,6 @@ async function handleSendMessage(rawMessage) {
     ? null
     : buildTextPayload(message);
   state.isLoading = true;
-  let modeloOriginal;
 
   try {
     addMessage(activeChat.id, {
@@ -857,33 +882,37 @@ async function handleSendMessage(rawMessage) {
         return;
       }
 
-      // Modo automatico: classifica a pergunta para rotear modelo e web search
+      // Smart mode: classifica e roteia sem mutar o estado global
+      let activeSettings = getActiveSettings();
+      let smartWebSearch = false;
+      let actualProvider = activeSettings.textProvider;
+      let actualModel = activeSettings.textModel || activeSettings.groqModel || activeSettings.deepSeekModel || "";
+
       if (state.smartMode && !isBrasilAgent) {
-        const classe = smartClassify(message);
-        if (classe.webSearch && !state.webSearchMode) {
-          state.webSearchMode = true;
-        }
-        if (classe.modelTier === "fast" && !state.webSearchMode) {
-          modeloOriginal = {
-            provider: state.settings.textProvider,
-            model: state.settings.textModel || state.settings.groqModel || state.settings.deepSeekModel,
-          };
-          if (state.settings.groqKey) {
-            state.settings.textProvider = "groq";
-            state.settings.groqModel = "llama-3.1-8b-instant";
+        const { useWebSearch, modelTier } = smartClassify(message);
+        smartWebSearch = useWebSearch;
+
+        if (modelTier === "fast" && !smartWebSearch) {
+          if (activeSettings.groqKey) {
+            activeSettings.textProvider = "groq";
+            activeSettings.groqModel = "llama-3.1-8b-instant";
           } else {
-            state.settings.textProvider = "openrouter";
-            state.settings.textModel = "qwen/qwen3.7-plus";
+            activeSettings.textProvider = "openrouter";
+            activeSettings.textModel = "qwen/qwen3.7-plus";
           }
+          actualProvider = activeSettings.textProvider;
+          actualModel = activeSettings.groqModel || activeSettings.textModel || "";
         }
       }
 
-      if (state.webSearchMode) {
-        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
+      const shouldSearch = smartWebSearch || state.webSearchMode;
+
+      if (shouldSearch) {
+        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
       } else {
         const sendResult = await sendTextMessage({
           messages: textPayload,
-          settings: getActiveSettings(),
+          settings: activeSettings,
           webSearchMode: false,
           thinkingEnabled: state.thinkingEnabled,
         });
@@ -892,23 +921,19 @@ async function handleSendMessage(rawMessage) {
           content: sendResult.content,
           meta: {
             kind: "text",
-            provider: getActiveTextProviderLabel(),
+            provider: getTextProviderDisplayName(actualProvider),
             cachedTokens: sendResult.cachedTokens || 0,
             promptTokens: sendResult.promptTokens || 0,
             completionTokens: sendResult.completionTokens || 0,
-            model: getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().geminiModel || "",
+            model: actualModel,
           },
         });
         if (sendResult.promptTokens && sendResult.completionTokens) {
-          trackCost(getActiveSettings().textModel || getActiveSettings().groqModel || getActiveSettings().deepSeekModel || getActiveSettings().geminiModel || "", sendResult.promptTokens, sendResult.completionTokens);
+          trackCost(actualModel, sendResult.promptTokens, sendResult.completionTokens);
         }
 
         // Detectar e executar acao de email
         const emailActionMatch = sendResult.content.match(/\[ENVIAR_EMAIL\]\s*\n([\s\S]*?)\n\[\/ENVIAR_EMAIL\]\s*\n([\s\S]*)/);
-        console.log("[DEBUG] emailActionMatch:", !!emailActionMatch, "content length:", sendResult.content.length);
-        if (!emailActionMatch) {
-          console.log("[DEBUG] Conteudo da resposta (primeiros 500 chars):", sendResult.content.substring(0, 500));
-        }
         if (emailActionMatch) {
           const headerBlock = emailActionMatch[1];
           const bodyText = emailActionMatch[2].trim();
@@ -921,7 +946,6 @@ async function handleSendMessage(rawMessage) {
             const emailName = nameMatch ? nameMatch[1].trim() : "";
             const emailSubject = subjectMatch ? subjectMatch[1].trim() : "";
             const emailSender = senderMatch ? senderMatch[1].trim() : "marco";
-            console.log("[DEBUG] Enviando email:", { emailTo, emailName, emailSubject, emailSender, bodyLength: bodyText.length });
             try {
               const emailResult = await sendEmail({
                 toEmail: emailTo,
@@ -931,7 +955,6 @@ async function handleSendMessage(rawMessage) {
                 sender: emailSender,
                 settings: state.settings,
               });
-              console.log("[DEBUG] Email enviado com sucesso:", emailResult);
               await addEmailRecord({
                 to: emailTo,
                 toName: emailName,
@@ -947,7 +970,6 @@ async function handleSendMessage(rawMessage) {
               });
               showToast(`Email enviado para ${emailTo}.`, "success");
             } catch (emailError) {
-              console.log("[DEBUG] Erro ao enviar email:", emailError.message);
               addMessage(activeChat.id, {
                 role: "assistant",
                 content: `Erro ao enviar email: ${emailError.message}`,
@@ -957,20 +979,47 @@ async function handleSendMessage(rawMessage) {
             }
           }
         }
+
+        // Detectar e executar acao de WhatsApp
+        const whatsappActionMatch = sendResult.content.match(/\[ENVIAR_WHATSAPP\]\s*\n([\s\S]*?)\n\[\/ENVIAR_WHATSAPP\]\s*\n([\s\S]*)/);
+        if (whatsappActionMatch) {
+          const headerBlock = whatsappActionMatch[1];
+          const bodyText = whatsappActionMatch[2].trim();
+          const numeroMatch = headerBlock.match(/Numero:\s*(.+)/);
+          if (numeroMatch) {
+            const whatsappNumber = numeroMatch[1].trim();
+            try {
+              const whatsappResult = await sendWhatsApp({
+                to: whatsappNumber,
+                message: bodyText,
+                settings: state.settings,
+              });
+              await addWhatsAppRecord({
+                to: whatsappNumber,
+                message: bodyText,
+                status: "sent",
+              });
+              state.whatsappHistory = await loadWhatsAppHistory();
+              addMessage(activeChat.id, {
+                role: "assistant",
+                content: `Mensagem WhatsApp enviada com sucesso para ${whatsappNumber}!`,
+                meta: { kind: "text", provider: "whatsapp-system", sourceType: "whatsapp-send", whatsappSent: true },
+              });
+              showToast(`WhatsApp enviado para ${whatsappNumber}.`, "success");
+            } catch (whatsappError) {
+              addMessage(activeChat.id, {
+                role: "assistant",
+                content: `Erro ao enviar WhatsApp: ${whatsappError.message}`,
+                meta: { kind: "text", provider: "whatsapp-system", sourceType: "whatsapp-send", failed: true },
+              });
+              showToast(whatsappError.message || "Erro ao enviar WhatsApp.", "error");
+            }
+          }
+        }
       }
     }
 
     resetAttachments();
-
-    // Restaura modelo original se o modo automatico tiver alterado
-    if (modeloOriginal) {
-      state.settings.textProvider = modeloOriginal.provider;
-      if (modeloOriginal.provider === "groq") {
-        state.settings.groqModel = modeloOriginal.model;
-      } else {
-        state.settings.textModel = modeloOriginal.model;
-      }
-    }
 
     // Auto-extract memory facts from conversation
     if (activeChat?.messages?.length > 2) {

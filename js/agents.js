@@ -8,6 +8,7 @@ export const BRASIL_AGENT_ID = "agent-brasil-consultor";
 export const ANVISA_AGENT_ID = "agent-anvisa-regulatory";
 export const MARKETING_DESIGNER_ID = "agent-marketing-designer";
 export const DECORATOR_ID = "agent-decorator";
+export const NO_AGENT_ID = "no-agent";
 
 const AGENT_PARAMETER_DEFAULTS = {
   modelOverrideEnabled: false,

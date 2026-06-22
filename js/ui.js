@@ -1,3 +1,5 @@
+let scrollListenerBound = false;
+
 function formatCostValue(cost) {
   if (cost === 0) return "$0.00";
   if (cost < 0.01) return "<$0.01";
@@ -360,7 +362,7 @@ function renderChatCard(chat, state) {
               <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                class="inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border ${chat.pinned ? "border-amber-300 bg-amber-50 text-amber-600" : "border-slate-200/80 bg-white text-slate-500"} shadow-sm hover:border-amber-200 hover:text-amber-500"
+                class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-md border ${chat.pinned ? "border-amber-300 bg-amber-50 text-amber-600" : "border-slate-200/80 bg-white text-slate-500"} shadow-sm hover:border-amber-200 hover:text-amber-500"
                 data-action="toggle-pin-chat"
                 data-chat-id="${chat.id}"
                 title="${chat.pinned ? "Desafixar conversa" : "Fixar conversa"}"
@@ -388,66 +390,6 @@ function renderChatCard(chat, state) {
       </div>
       ${renderCategoryPicker(chat, state)}
     </div>
-  `;
-}
-
-function renderActiveChatHeader(state) {
-  const chat = state.chats.find((item) => item.id === state.activeChatId);
-  if (!chat) {
-    return "";
-  }
-
-  const category = getCategoryById(chat.category);
-  const dailyCost = state.dailyCost || 0;
-  const monthlyCost = state.monthlyCost || 0;
-
-  return `
-    <section class="active-chat-header mb-3 flex items-center justify-between gap-3 rounded-[1.2rem] border border-white/70 bg-white/88 px-4 py-3 shadow-sm">
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <h3 class="truncate text-base font-semibold tracking-tight text-slate-900">${escapeHtml(chat.title)}</h3>
-          <button
-            type="button"
-            class="active-chat-rename inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-500 shadow-sm hover:border-sky-200 hover:text-femic-cyan"
-            data-action="rename-chat"
-            data-chat-id="${chat.id}"
-            title="Renomear conversa"
-          >✎</button>
-          <button
-            type="button"
-            class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${chat.pinned ? "border-amber-300 bg-amber-50 text-amber-500" : "border-slate-200 bg-white text-slate-400"} hover:border-amber-200 hover:text-amber-500"
-            data-action="toggle-pin-chat"
-            data-chat-id="${chat.id}"
-            title="${chat.pinned ? "Desafixar conversa" : "Fixar conversa"}"
-          >📌</button>
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-sky-200 hover:text-sky-500"
-            data-action="export-chat-pdf"
-            title="Exportar conversa como PDF"
-          >📄</button>
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-rose-200 hover:text-rose-500"
-            data-action="clear-chat"
-            title="Limpar historico da conversa"
-          >🗑️</button>
-        </div>
-        <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-          <span>${chat.titleMode === "manual" ? "Nome definido por você" : "Nome automático"}</span>
-          <span>•</span>
-          <span>${formatRelativeDay(chat.updatedAt)} às ${formatTime(chat.updatedAt)}</span>
-          <span>•</span>
-          <span class="text-slate-400">💬 ${chat.messages.length} msgs · ~${Math.ceil((chat.messages || []).reduce((t, m) => t + (m.content || "").length, 0) * 0.25)} tokens${(() => {
-            const totalCached = (chat.messages || []).reduce((t, m) => t + (m.meta?.cachedTokens || 0), 0);
-            return totalCached > 0 ? ` <span class="text-emerald-600">(${totalCached} cached)</span>` : "";
-          })()}</span>
-          ${dailyCost > 0 ? `<span class="text-slate-400">•</span><span class="text-slate-400">💰 Hoje: ${escapeHtml(formatCostValue(dailyCost))}</span>` : ""}
-          ${monthlyCost > 0 ? `<span class="text-slate-400">· Mês: ${escapeHtml(formatCostValue(monthlyCost))}</span>` : ""}
-        </div>
-      </div>
-      ${chat.category ? `<span class="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style="background:${category.color}18; color:${category.color}; border:1px solid ${category.color}22;">${escapeHtml(category.label)}</span>` : ""}
-    </section>
   `;
 }
 
@@ -582,6 +524,12 @@ function renderActiveAgentSummary(state) {
           >
             ${isCollapsed ? "▾" : "▴"}
           </button>
+          <button
+            type="button"
+            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-sky-200 hover:text-sky-500"
+            data-action="export-chat-pdf"
+            title="Exportar conversa como PDF"
+          >📄</button>
         </div>
       </div>
       ${isCollapsed ? "" : `<div class="mt-3 flex flex-wrap gap-2">
@@ -1191,82 +1139,6 @@ function renderBoardView(state) {
   `;
 }
 
-function renderContactsModal(state) {
-  if (!state.modals.contacts) return "";
-  const editContact = state.modalPayload?.contact || null;
-  const contacts = state.contacts || [];
-  return `
-    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="contacts">
-      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="contacts">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-xl font-semibold text-slate-900">${editContact ? "Editar Contato" : "Contatos"}</h3>
-            <p class="mt-1 text-sm text-slate-500">${editContact ? "Editando contato existente." : "Gerencie seus contatos para email e WhatsApp."}</p>
-          </div>
-          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="contacts">✕</button>
-        </div>
-        ${editContact ? `
-        <form data-form="contact" class="space-y-3">
-          <input type="hidden" name="id" value="${editContact.id}" />
-          <label class="block">
-            <span class="mb-1 block text-xs font-medium text-slate-700">Nome</span>
-            <input class="modal-input" name="name" type="text" value="${escapeHtml(editContact.name || "")}" placeholder="Nome do contato" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs font-medium text-slate-700">Email</span>
-            <input class="modal-input" name="email" type="email" value="${escapeHtml(editContact.email || "")}" placeholder="email@exemplo.com" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs font-medium text-slate-700">Telefone (WhatsApp)</span>
-            <input class="modal-input" name="phone" type="text" value="${escapeHtml(editContact.phone || "")}" placeholder="5511999999999" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs font-medium text-slate-700">Tags (separadas por virgula)</span>
-            <input class="modal-input" name="tags" type="text" value="${escapeHtml((editContact.tags || []).join(", "))}" placeholder="cliente, parceiro" />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-xs font-medium text-slate-700">Anotacoes</span>
-            <textarea class="modal-textarea" name="notes" placeholder="Observacoes sobre o contato">${escapeHtml(editContact.notes || "")}</textarea>
-          </label>
-          <div class="flex gap-2">
-            <button type="submit" class="rounded-full bg-femic-navy px-5 py-2 text-xs font-semibold text-white hover:opacity-90">Salvar</button>
-            <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="contacts">Cancelar</button>
-          </div>
-        </form>
-        ` : `
-        <div class="mb-3 flex gap-2">
-          <button type="button" class="rounded-full bg-femic-navy px-4 py-2 text-xs font-semibold text-white hover:opacity-90" data-action="open-contact-form">Novo Contato</button>
-          <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="contacts">Fechar</button>
-        </div>
-        ${contacts.length ? `
-        <div class="space-y-2 max-h-80 overflow-auto">
-          ${contacts.map((c) => `
-            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
-              <div class="min-w-0 flex-1">
-                <div class="font-medium text-slate-900">${escapeHtml(c.name || "(sem nome)")}</div>
-                <div class="mt-0.5 text-xs text-slate-500">
-                  ${c.email ? `<span>${escapeHtml(c.email)}</span>` : ""}
-                  ${c.email && c.phone ? " · " : ""}
-                  ${c.phone ? `<span>${escapeHtml(c.phone)}</span>` : ""}
-                </div>
-                ${c.tags?.length ? `<div class="mt-1 flex flex-wrap gap-1">${c.tags.map((t) => `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">${escapeHtml(t)}</span>`).join("")}</div>` : ""}
-              </div>
-              <div class="flex shrink-0 gap-1">
-                <button type="button" class="rounded-lg border border-sky-200 px-2 py-1 text-[10px] font-semibold text-sky-600 hover:bg-sky-50" data-action="open-email-compose" data-contact-id="${c.id}">Email</button>
-                <button type="button" class="rounded-lg border border-emerald-200 px-2 py-1 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-50" data-action="open-whatsapp-compose" data-contact-id="${c.id}">WhatsApp</button>
-                <button type="button" class="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50" data-action="open-contact-form" data-contact-id="${c.id}">Editar</button>
-                <button type="button" class="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50" data-action="delete-contact" data-contact-id="${c.id}">Excluir</button>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-        ` : '<p class="text-sm text-slate-400">Nenhum contato salvo ainda.</p>'}
-        `}
-      </div>
-    </div>
-  `;
-}
-
 function renderEmailComposeModal(state) {
   if (!state.modals.emailCompose) return "";
   const contact = state.modalPayload?.contact || null;
@@ -1353,70 +1225,6 @@ function renderWhatsAppComposeModal(state) {
             <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600" data-action="close-modal" data-modal="whatsappCompose">Cancelar</button>
           </div>
         </form>
-      </div>
-    </div>
-  `;
-}
-
-function renderEmailHistoryModal(state) {
-  if (!state.modals.emailHistory) return "";
-  const history = state.emailHistory || [];
-  return `
-    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="emailHistory">
-      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="emailHistory">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-xl font-semibold text-slate-900">Historico de Emails</h3>
-            <p class="mt-1 text-sm text-slate-500">Ultimos emails enviados.</p>
-          </div>
-          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="emailHistory">✕</button>
-        </div>
-        ${history.length ? `
-        <div class="space-y-2 max-h-80 overflow-auto">
-          ${history.map((item) => `
-            <div class="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-slate-900">${escapeHtml(item.subject || "(sem assunto)")}</span>
-                <span class="text-xs text-slate-400">${new Date(item.sentAt).toLocaleString("pt-BR")}</span>
-              </div>
-              <div class="mt-1 text-xs text-slate-500">Para: ${escapeHtml(item.to)}${item.toName ? ` (${escapeHtml(item.toName)})` : ""}</div>
-              <div class="mt-1 text-xs text-slate-600 line-clamp-2">${escapeHtml(item.body || "").slice(0, 200)}</div>
-            </div>
-          `).join("")}
-        </div>
-        ` : '<p class="text-sm text-slate-400">Nenhum email enviado ainda.</p>'}
-      </div>
-    </div>
-  `;
-}
-
-function renderWhatsAppHistoryModal(state) {
-  if (!state.modals.whatsappHistory) return "";
-  const history = state.whatsappHistory || [];
-  return `
-    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="whatsappHistory">
-      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel w-full max-w-2xl" data-modal-surface="whatsappHistory">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-xl font-semibold text-slate-900">Historico WhatsApp</h3>
-            <p class="mt-1 text-sm text-slate-500">Ultimas mensagens enviadas.</p>
-          </div>
-          <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="whatsappHistory">✕</button>
-        </div>
-        ${history.length ? `
-        <div class="space-y-2 max-h-80 overflow-auto">
-          ${history.map((item) => `
-            <div class="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-slate-900">${escapeHtml(item.toName || item.to)}</span>
-                <span class="text-xs text-slate-400">${new Date(item.sentAt).toLocaleString("pt-BR")}</span>
-              </div>
-              <div class="mt-1 text-xs text-slate-500">${escapeHtml(item.to)}</div>
-              <div class="mt-1 text-xs text-slate-600 line-clamp-2">${escapeHtml(item.message || "")}</div>
-            </div>
-          `).join("")}
-        </div>
-        ` : '<p class="text-sm text-slate-400">Nenhuma mensagem enviada ainda.</p>'}
       </div>
     </div>
   `;
@@ -1563,7 +1371,11 @@ function renderSettingsModal(state) {
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (fal.ai)</span>
                   <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (so para fal.ai)" />
                 </label>
-                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuito e nao precisa de chave. fal.ai requer chave de API.</div>
+                <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Pixazo.ai)</span>
+                  <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (so para Pixazo.ai)" />
+                </label>
+                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuito e nao precisa de chave. fal.ai e Pixazo.ai requerem chave de API.</div>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
                   <div class="flex flex-wrap gap-1.5">
@@ -2293,6 +2105,16 @@ export function renderApp(state) {
           <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal" title="Novo agente">＋</button>
           </div>
           <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
+            <button
+              type="button"
+              class="agent-icon-card ${state.activeAgentId === "no-agent" ? "active" : ""}"
+              data-action="select-agent"
+              data-agent-id="no-agent"
+              title="Conversa sem agente (chat normal)"
+              aria-label="Nenhum agente"
+            >
+              <span class="agent-icon-glyph" style="font-size:18px;">💬</span>
+            </button>
             ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
           </div>
         </section>
@@ -2412,13 +2234,16 @@ export function renderApp(state) {
       btn.classList.toggle("hidden", isNearBottom);
       btn.classList.toggle("flex", !isNearBottom);
     }
-    messagesPanel.addEventListener("scroll", () => {
-      const b = document.querySelector(".scroll-to-bottom-btn");
-      if (!b) return;
-      const nearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
-      b.classList.toggle("hidden", nearBottom);
-      b.classList.toggle("flex", !nearBottom);
-    }, { passive: true });
+    if (!scrollListenerBound) {
+      scrollListenerBound = true;
+      messagesPanel.addEventListener("scroll", () => {
+        const b = document.querySelector(".scroll-to-bottom-btn");
+        if (!b) return;
+        const nearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
+        b.classList.toggle("hidden", nearBottom);
+        b.classList.toggle("flex", !nearBottom);
+      }, { passive: true });
+    }
   }
 }
 
@@ -2531,9 +2356,6 @@ export function bindUIHandlers(handlers) {
     }
     if (formType === "brand") {
       handlers.onSaveBrand(Object.fromEntries(data.entries()));
-    }
-    if (formType === "contact") {
-      handlers.onSaveContact(Object.fromEntries(data.entries()));
     }
     if (formType === "email-compose") {
       const entries = Object.fromEntries(data.entries());
