@@ -734,7 +734,7 @@ function renderMessage(message, state) {
     `
     : showTypingDots
       ? `<div class="typing-dots text-slate-500"><span>●</span> <span>●</span> <span>●</span></div>`
-      : `<div class="markdown-body">${renderMarkdown(message.content)}</div>`;
+      : `<div class="markdown-body">${renderMarkdown(message.content)}${message.meta?.streaming ? '<span class="streaming-cursor"></span>' : ""}</div>`;
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
@@ -2188,6 +2188,54 @@ export function renderApp(state) {
       }, { passive: true });
     }
   }
+
+  if (globalThis.hljs) {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.markdown-body pre code:not(.hljs)').forEach(el => {
+        try { globalThis.hljs.highlightElement(el); } catch {}
+      });
+    });
+  }
+
+  try {
+    const chatWorkspace = app?.querySelector?.(".chat-workspace");
+    if (chatWorkspace && !chatWorkspace._dropBound) {
+      chatWorkspace._dropBound = true;
+      let dragCounter = 0;
+      const dropOverlay = document.createElement("div");
+      dropOverlay.className = "drop-overlay hidden";
+      dropOverlay.innerHTML = '<div class="drop-overlay-content"><span style="font-size:2rem">📁</span><span>Solte os arquivos aqui</span></div>';
+      chatWorkspace.appendChild(dropOverlay);
+      chatWorkspace.style.position = "relative";
+
+      chatWorkspace.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter++;
+        dropOverlay.classList.remove("hidden");
+      });
+      chatWorkspace.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.add("hidden"); }
+      });
+      chatWorkspace.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      chatWorkspace.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = 0;
+        dropOverlay.classList.add("hidden");
+        const files = e.dataTransfer?.files;
+        if (files?.length) handlers.onAttachFiles(files);
+      });
+    }
+  } catch {
+    // Drag & drop nao disponivel neste ambiente
+  }
 }
 
 export function bindUIHandlers(handlers) {
@@ -2379,9 +2427,42 @@ export function bindUIHandlers(handlers) {
   });
 
   app.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey && event.target.id === "composer-input") {
+    const target = event.target;
+    const isMod = event.ctrlKey || event.metaKey;
+
+    if (event.key === "Enter" && !event.shiftKey && target.id === "composer-input") {
       event.preventDefault();
-      handlers.onSendMessage(event.target.value);
+      handlers.onSendMessage(target.value);
+      return;
+    }
+
+    if (event.key === "Escape" && !target.closest("[contenteditable]")) {
+      const openModal = document.querySelector(".modal-overlay:not(.hidden), [data-modal-surface]:not(.hidden)");
+      if (openModal) {
+        const closeBtn = openModal.querySelector('[data-action="close-modal"]');
+        if (closeBtn) closeBtn.click();
+      }
+      return;
+    }
+
+    if (isMod && event.key === "k") {
+      event.preventDefault();
+      const searchInput = document.querySelector('[data-action="search-chats"]');
+      if (searchInput) searchInput.focus();
+      return;
+    }
+
+    if (isMod && (event.key === "n" || event.key === "N")) {
+      event.preventDefault();
+      const createBtn = document.querySelector('[data-action="create-chat"]');
+      if (createBtn) createBtn.click();
+      return;
+    }
+
+    if (event.key === "/" && !target.closest("input, textarea, [contenteditable]")) {
+      event.preventDefault();
+      const composer = document.getElementById("composer-input");
+      if (composer) composer.focus();
     }
   });
 }

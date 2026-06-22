@@ -35,6 +35,7 @@ import {
   updateChatCategory,
   updateMessageCategory,
   updateChatTitle,
+  updateMessageContent,
 } from "./chat.js";
 import {
   DEEPSEEK_MODELS,
@@ -112,6 +113,9 @@ import {
 import { sendEmail } from "./emailService.js";
 import { sendWhatsApp } from "./whatsappService.js";
 import { exportChatAsPDF } from "./pdfGenerator.js";
+
+const DRAFT_STORAGE_KEY = "femicgpt:draft";
+let draftSaveTimer = null;
 let bootSettingsFallbacks = [];
 
 const state = {
@@ -671,6 +675,7 @@ async function handleSendMessage(rawMessage) {
     });
 
     state.draftMessage = "";
+    try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
     persistAndRender();
     if (isBrasilAgent) {
       const inferred = inferBrasilLookupType(message);
@@ -912,30 +917,68 @@ async function handleSendMessage(rawMessage) {
       if (shouldSearch) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
       } else {
-        const sendResult = await sendTextMessage({
-          messages: textPayload,
-          settings: activeSettings,
-          webSearchMode: false,
-          thinkingEnabled: state.thinkingEnabled,
-        });
-        addMessage(activeChat.id, {
-          role: "assistant",
-          content: sendResult.content,
-          meta: {
-            kind: "text",
-            provider: getTextProviderDisplayName(actualProvider),
-            cachedTokens: sendResult.cachedTokens || 0,
-            promptTokens: sendResult.promptTokens || 0,
-            completionTokens: sendResult.completionTokens || 0,
-            model: actualModel,
-          },
-        });
-        if (sendResult.promptTokens && sendResult.completionTokens) {
-          trackCost(actualModel, sendResult.promptTokens, sendResult.completionTokens);
+        const isStreamable = !state.thinkingEnabled && !shouldSearch && activeSettings.textProvider !== "deepseek" && activeSettings.textProvider !== "gemini";
+
+        let responseContent;
+
+        if (isStreamable) {
+          const msgId = crypto.randomUUID();
+          addMessage(activeChat.id, {
+            id: msgId,
+            role: "assistant",
+            content: "",
+            meta: { kind: "text", streaming: true, provider: getTextProviderDisplayName(actualProvider), model: actualModel },
+          });
+          persistAndRender();
+
+          let fullContent = "";
+          try {
+            await sendTextMessage({
+              messages: textPayload,
+              settings: activeSettings,
+              webSearchMode: false,
+              thinkingEnabled: false,
+              onChunk: (chunk) => {
+                fullContent += chunk;
+                updateMessageContent(activeChat.id, msgId, fullContent);
+                render();
+              },
+            });
+          } catch (err) {
+            if (!fullContent) throw err;
+            fullContent += `\n\n*[Erro ao continuar a geracao: ${err.message}]*`;
+          }
+
+          updateMessageContent(activeChat.id, msgId, fullContent, { meta: { streaming: false } });
+          saveChats(state.chats);
+          persistAndRender();
+          responseContent = fullContent;
+        } else {
+          const sendResult = await sendTextMessage({
+            messages: textPayload,
+            settings: activeSettings,
+            webSearchMode: false,
+            thinkingEnabled: state.thinkingEnabled,
+          });
+          addMessage(activeChat.id, {
+            role: "assistant",
+            content: sendResult.content,
+            meta: {
+              kind: "text",
+              provider: getTextProviderDisplayName(actualProvider),
+              cachedTokens: sendResult.cachedTokens || 0,
+              promptTokens: sendResult.promptTokens || 0,
+              completionTokens: sendResult.completionTokens || 0,
+              model: actualModel,
+            },
+          });
+          if (sendResult.promptTokens && sendResult.completionTokens) {
+            trackCost(actualModel, sendResult.promptTokens, sendResult.completionTokens);
+          }
+          responseContent = sendResult.content;
         }
 
-        // Detectar e executar acao de email
-        const emailActionMatch = sendResult.content.match(/\[ENVIAR_EMAIL\]\s*\n([\s\S]*?)\n\[\/ENVIAR_EMAIL\]\s*\n([\s\S]*)/);
+        const emailActionMatch = responseContent.match(/\[ENVIAR_EMAIL\]\s*\n([\s\S]*?)\n\[\/ENVIAR_EMAIL\]\s*\n([\s\S]*)/);
         if (emailActionMatch) {
           const headerBlock = emailActionMatch[1];
           const bodyText = emailActionMatch[2].trim();
@@ -982,8 +1025,7 @@ async function handleSendMessage(rawMessage) {
           }
         }
 
-        // Detectar e executar acao de WhatsApp
-        const whatsappActionMatch = sendResult.content.match(/\[ENVIAR_WHATSAPP\]\s*\n([\s\S]*?)\n\[\/ENVIAR_WHATSAPP\]\s*\n([\s\S]*)/);
+        const whatsappActionMatch = responseContent.match(/\[ENVIAR_WHATSAPP\]\s*\n([\s\S]*?)\n\[\/ENVIAR_WHATSAPP\]\s*\n([\s\S]*)/);
         if (whatsappActionMatch) {
           const headerBlock = whatsappActionMatch[1];
           const bodyText = whatsappActionMatch[2].trim();
@@ -1902,6 +1944,12 @@ function initialize() {
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);
   }
+
+  try {
+    const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (savedDraft) state.draftMessage = savedDraft;
+  } catch {}
+
   bindUIHandlers({
     onSelectAgent: handleSelectAgent,
     onDeleteAgent: handleDeleteAgent,
@@ -2099,6 +2147,10 @@ Ola! Estou a caminho. Chego em instantes.`;
     onBrandLogoUpload: handleBrandLogoUpload,
     onDraftChange: (value) => {
       state.draftMessage = value;
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(() => {
+        try { localStorage.setItem(DRAFT_STORAGE_KEY, value); } catch {}
+      }, 500);
     },
     onToggleSidebar: () => {
       state.mobileSidebarOpen = !state.mobileSidebarOpen;

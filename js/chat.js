@@ -73,6 +73,20 @@ export function addMessage(chatId, message) {
   return chat;
 }
 
+export function updateMessageContent(chatId, messageId, content, extra = {}) {
+  const chats = loadChats();
+  const chat = chats.find((item) => item.id === chatId);
+  if (!chat) return;
+
+  const message = chat.messages.find((item) => item.id === messageId);
+  if (!message) return;
+
+  message.content = content;
+  if (extra.meta) Object.assign(message.meta, extra.meta);
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+}
+
 export function updateChat(chatId, partial) {
   const chats = loadChats();
   const chat = chats.find((item) => item.id === chatId);

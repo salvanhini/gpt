@@ -866,7 +866,71 @@ async function chatFetch(url, headers, body) {
   return data;
 }
 
-export async function sendTextMessage({ messages, settings, webSearchMode = false, thinkingEnabled = false }) {
+async function chatFetchStream(url, headers, body, onChunk) {
+  const controller = new AbortController();
+  const watchdog = setTimeout(() => controller.abort(), 60000);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(watchdog);
+    if (err.name === "AbortError") throw new Error("A API demorou muito para responder. Tente novamente.");
+    throw new Error("Sem conexao com a API. Verifique internet.");
+  }
+
+  clearTimeout(watchdog);
+
+  if (!response.ok) {
+    let errorData = null;
+    try { errorData = await response.json(); } catch {}
+    if (response.status === 429) throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
+    if (response.status === 401) throw new Error("Chave de API invalida. Verifique nas configuracoes.");
+    throw new Error(extractErrorMessage(errorData, "Falha na API."));
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Streaming nao suportado pelo navegador.");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed?.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch {
+          // Ignorar linhas JSON mal formatadas
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function sendTextMessage({ messages, settings, webSearchMode = false, thinkingEnabled = false, onChunk }) {
   // Cache: verifica resposta repetida antes de chamar a API
   const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
   const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
@@ -891,23 +955,37 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
     resultado = await sendGeminiMessage({ messages, settings });
   } else {
     const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode, thinkingEnabled });
-    const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
-    const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 
-    const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
-    if (!content) {
-      throw new Error("A resposta da OpenRouter veio vazia.");
+    if (onChunk && !webSearchMode && !thinkingEnabled) {
+      bodyObj.stream = true;
+      const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
+      const fullContent = [];
+      await chatFetchStream(endpoint.url, endpoint.headers, endpoint.body, (chunk) => {
+        fullContent.push(chunk);
+        onChunk(chunk);
+      });
+      const content = fullContent.join("");
+      if (!content) throw new Error("A resposta da OpenRouter veio vazia.");
+      resultado = { content, raw: null, cachedTokens: 0, promptTokens: 0, completionTokens: 0 };
+    } else {
+      const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
+      const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
+
+      const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
+      if (!content) {
+        throw new Error("A resposta da OpenRouter veio vazia.");
+      }
+
+      const usage = data?.usage;
+      const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
+      resultado = {
+        content,
+        raw: data,
+        cachedTokens,
+        promptTokens: usage?.prompt_tokens || 0,
+        completionTokens: usage?.completion_tokens || 0,
+      };
     }
-
-    const usage = data?.usage;
-    const cachedTokens = usage?.prompt_tokens_details?.cached_tokens || 0;
-    resultado = {
-      content,
-      raw: data,
-      cachedTokens,
-      promptTokens: usage?.prompt_tokens || 0,
-      completionTokens: usage?.completion_tokens || 0,
-    };
   }
 
   if (chaveCache) salvarCache(chaveCache, resultado.content);
