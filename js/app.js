@@ -489,6 +489,8 @@ function persistAndRender() {
 }
 
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
+  messages = messages || [];
+  settings = settings || {};
   const maxHistoryMessages = Math.max(4, Number(settings.usageLimits?.maxHistoryMessages) || 30);
 
   const mapear = (msg) => ({
@@ -1033,8 +1035,6 @@ async function handleSendMessage(rawMessage) {
     refreshFromStorage();
     persistAndRender();
     incrementUsage("textMessages");
-    pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
-
     // Atualiza resumo acumulativo se houver mensagens demais
     const chat = getActiveChat();
     if (chat?.messages?.length > 40 && chat.summary !== false) {
@@ -1692,7 +1692,7 @@ async function handleAttachFiles(fileList) {
 
 function handleCopyMessage(messageId) {
   const chat = getActiveChat();
-  const message = chat?.messages.find((item) => item.id === messageId);
+  const message = chat?.messages?.find((item) => item.id === messageId);
   if (!message) {
     return;
   }

@@ -1993,6 +1993,7 @@ export function renderApp(state) {
         scrollHeight: previousMessagesPanel.scrollHeight,
       })
     : true;
+  scrollListenerBound = false;
   const sidebarOpenClass = state.mobileSidebarOpen ? "open" : "";
   const collapsedClass = state.sidebarCollapsed ? "sidebar-collapsed" : "";
   const activeAgent = state.activeAgent;
@@ -2175,19 +2176,13 @@ export function renderApp(state) {
   if (messagesPanel && keepAtBottom) {
     messagesPanel.scrollTop = messagesPanel.scrollHeight;
   }
-  if (messagesPanel) {
-    const btn = document.querySelector(".scroll-to-bottom-btn");
-    if (btn) {
-      const isNearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
-      btn.classList.toggle("hidden", isNearBottom);
-      btn.classList.toggle("flex", !isNearBottom);
-    }
+  if (messagesPanel && !state.viewMode?.startsWith("board")) {
     if (!scrollListenerBound) {
       scrollListenerBound = true;
       messagesPanel.addEventListener("scroll", () => {
         const b = document.querySelector(".scroll-to-bottom-btn");
         if (!b) return;
-        const nearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 100;
+        const nearBottom = messagesPanel.scrollTop + messagesPanel.clientHeight >= messagesPanel.scrollHeight - 50;
         b.classList.toggle("hidden", nearBottom);
         b.classList.toggle("flex", !nearBottom);
       }, { passive: true });
@@ -2405,7 +2400,10 @@ export function showToast(message, type = "info") {
   element.textContent = message;
   stack.appendChild(element);
 
-  window.setTimeout(() => {
-    element.remove();
+  const toastTimer = setTimeout(() => {
+    if (element.isConnected) {
+      element.remove();
+    }
   }, 3800);
+  element._toastTimer = toastTimer;
 }

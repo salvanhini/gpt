@@ -26,7 +26,11 @@ export function loadChats() {
 }
 
 export function saveChats(chats) {
-  localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+  try {
+    localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+  } catch {
+    // Storage quota excedida ou modo privado
+  }
   return chats;
 }
 

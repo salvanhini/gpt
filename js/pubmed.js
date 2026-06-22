@@ -94,7 +94,12 @@ export function buildPubMedContext(articles = []) {
 }
 
 export async function searchPubMed(query, { retmax = 5 } = {}) {
-  const response = await fetch(buildPubMedSearchUrl(query, { retmax }));
+  let response;
+  try {
+    response = await fetch(buildPubMedSearchUrl(query, { retmax }));
+  } catch {
+    throw new Error("Nao foi possivel conectar a PubMed. Verifique sua conexao.");
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error("Falha ao consultar a PubMed.");
@@ -107,7 +112,12 @@ export async function fetchPubMedSummaries(pmids = []) {
     return [];
   }
 
-  const response = await fetch(buildPubMedSummaryUrl(pmids));
+  let response;
+  try {
+    response = await fetch(buildPubMedSummaryUrl(pmids));
+  } catch {
+    throw new Error("Nao foi possivel carregar metadados da PubMed.");
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error("Falha ao carregar metadados da PubMed.");
@@ -123,7 +133,12 @@ export async function fetchPubMedAbstracts(pmids = []) {
     return {};
   }
 
-  const response = await fetch(buildPubMedFetchUrl(pmids));
+  let response;
+  try {
+    response = await fetch(buildPubMedFetchUrl(pmids));
+  } catch {
+    throw new Error("Nao foi possivel carregar abstracts da PubMed.");
+  }
   const xmlText = await response.text().catch(() => "");
   if (!response.ok) {
     throw new Error("Falha ao carregar abstracts da PubMed.");

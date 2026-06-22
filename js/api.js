@@ -217,6 +217,7 @@ const GROQ_BROWSER_SEARCH_MODELS = new Set([
 ]);
 
 function buildOpenRouterSearchMessages(messages = []) {
+  messages = messages || [];
   const searchInstruction = {
     role: "system",
     content:
@@ -370,6 +371,7 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
 }
 
 export function getModelSelectionDetails(settings = {}) {
+  settings = settings || {};
   const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
   const model = findModelByProvider(provider, settings);
 
@@ -385,6 +387,7 @@ export function getModelSelectionDetails(settings = {}) {
 }
 
 function getLatestUserQuery(messages = []) {
+  messages = messages || [];
   const latestUserMessage = [...messages].reverse().find((message) => message?.role === "user");
   return String(latestUserMessage?.content || "").trim();
 }
@@ -405,6 +408,7 @@ function normalizeAssistantContent(content) {
 }
 
 function buildGroqSearchMessages(messages = []) {
+  messages = messages || [];
   const searchInstruction = {
     role: "system",
     content:
@@ -428,6 +432,7 @@ function buildGroqSearchMessages(messages = []) {
 }
 
 function getGroqModelForRequest(settings, webSearchMode = false) {
+  settings = settings || {};
   const selectedModel = settings.groqModel || DEFAULT_GROQ_MODEL;
   if (!webSearchMode) {
     return selectedModel;
@@ -438,7 +443,8 @@ function getGroqModelForRequest(settings, webSearchMode = false) {
     : DEFAULT_GROQ_MODEL;
 }
 
-export function buildGroqRequestBody({ messages, settings, webSearchMode = false }) {
+export function buildGroqRequestBody(opts) {
+  const { messages, settings, webSearchMode = false } = opts || {};
   const body = {
     model: getGroqModelForRequest(settings, webSearchMode),
     messages: webSearchMode ? buildGroqSearchMessages(messages) : messages,
@@ -453,7 +459,8 @@ export function buildGroqRequestBody({ messages, settings, webSearchMode = false
   return body;
 }
 
-export function buildOpenRouterRequestBody({ messages, settings, webSearchMode = false, thinkingEnabled = false }) {
+export function buildOpenRouterRequestBody(opts) {
+  const { messages, settings, webSearchMode = false, thinkingEnabled = false } = opts || {};
   const body = {
     model: settings.textModel || DEFAULT_TEXT_MODEL,
     messages: webSearchMode ? buildOpenRouterSearchMessages(messages) : messages,
@@ -1105,7 +1112,12 @@ async function generateImagePollinations({ prompt, settings }) {
     throw new Error("O Pollinations.ai retornou uma imagem invalida.");
   }
 
-  const imageUrl = URL.createObjectURL(blob);
+  const imageUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
   return {
     url: imageUrl,

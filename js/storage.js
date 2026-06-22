@@ -23,7 +23,11 @@ export function readStorageJson(storage, key, fallback = null) {
 }
 
 export function writeStorageJson(storage, key, value) {
-  storage.setItem(key, JSON.stringify(value));
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage quota excedida ou modo privado — ignorar silenciosamente
+  }
   return value;
 }
 

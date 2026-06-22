@@ -86,7 +86,12 @@ export function formatCnpjSummary(result) {
 }
 
 async function requestJson(url, fallbackMessage) {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new Error("Nao foi possivel conectar ao servidor. Verifique sua conexao com a internet.");
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(data?.message || fallbackMessage);

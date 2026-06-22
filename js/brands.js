@@ -53,7 +53,11 @@ export function loadBrands() {
 }
 
 export function saveBrands(brands) {
-  localStorage.setItem(BRANDS_KEY, JSON.stringify(brands));
+  try {
+    localStorage.setItem(BRANDS_KEY, JSON.stringify(brands));
+  } catch {
+    // Storage quota excedida ou modo privado
+  }
   return brands;
 }
 

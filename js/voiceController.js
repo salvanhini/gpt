@@ -115,7 +115,7 @@ export function createVoiceController({
     }
 
     const chat = getActiveChat();
-    const message = chat?.messages.find((item) => item.id === messageId);
+    const message = chat?.messages?.find((item) => item.id === messageId);
     if (!message) {
       return;
     }

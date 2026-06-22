@@ -42,6 +42,7 @@ export function isInstagramAgent(agentId) {
 }
 
 export function buildCreativeBrief(draft = {}) {
+  draft = draft || {};
   const objective = String(draft.objective || "").trim();
   const headline = String(draft.headline || "").trim();
   const supportingText = String(draft.supportingText || "").trim();
@@ -59,7 +60,8 @@ export function buildCreativeBrief(draft = {}) {
     .join("\n");
 }
 
-export function buildInstagramImagePrompt({ brand, formatId, draft, customPrompt = "" }) {
+export function buildInstagramImagePrompt(opts) {
+  const { brand, formatId, draft, customPrompt = "" } = opts || {};
   const format = getInstagramFormatById(formatId);
   const brandName = brand?.name?.trim() || "Brand";
   const primaryColor = brand?.primaryColor?.trim() || "#1D4ED8";
@@ -94,7 +96,8 @@ export function buildInstagramImagePrompt({ brand, formatId, draft, customPrompt
     .join("\n");
 }
 
-export function buildInstagramVariationPrompt({ basePrompt, variationIndex, totalVariations }) {
+export function buildInstagramVariationPrompt(opts) {
+  const { basePrompt, variationIndex, totalVariations } = opts || {};
   return [
     basePrompt,
     `Variation ${variationIndex} of ${totalVariations}.`,
@@ -103,7 +106,8 @@ export function buildInstagramVariationPrompt({ basePrompt, variationIndex, tota
   ].join("\n");
 }
 
-export function buildInstagramCopyPrompt({ brand, formatId, draft, variationCount = 1 }) {
+export function buildInstagramCopyPrompt(opts) {
+  const { brand, formatId, draft, variationCount = 1 } = opts || {};
   const format = getInstagramFormatById(formatId);
   const brief = buildCreativeBrief(draft);
   return [
@@ -124,7 +128,8 @@ export function buildInstagramCopyPrompt({ brand, formatId, draft, variationCoun
   ].join("\n");
 }
 
-export function buildInstagramCopyFallback({ brand, draft }) {
+export function buildInstagramCopyFallback(opts) {
+  const { brand, draft } = opts || {};
   const headline = String(draft.headline || "").trim();
   const supportingText = String(draft.supportingText || "").trim();
   const cta = String(draft.cta || "").trim();
