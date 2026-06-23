@@ -193,6 +193,7 @@ export function getDefaultAgents() {
       emoji: "🇧🇷",
       description:
         "Consulta CEP e CNPJ com dados nacionais organizados em linguagem clara e objetiva.",
+      defaultImageMode: "off",
       systemPrompt: `Você é o Consultor Brasil do FEMIC GPT, uma IA especializada em consultar, interpretar e apresentar dados brasileiros obtidos através de APIs públicas nacionais.
 
 ## IDENTIDADE

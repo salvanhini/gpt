@@ -427,7 +427,7 @@ function applyAgentModeDefaults(agentId) {
     return;
   }
 
-  if (!isInstagramAgent(agentId) && agentId !== BRASIL_AGENT_ID) {
+  if (!isInstagramAgent(agentId)) {
     if (agent.defaultImageMode === "on") state.imageMode = true;
     if (agent.defaultImageMode === "off") state.imageMode = false;
   }
@@ -940,15 +940,22 @@ async function handleSendMessage(rawMessage) {
       if (shouldSearch) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
       } else {
+        const msgId = crypto.randomUUID();
+        addMessage(activeChat.id, {
+          id: msgId,
+          role: "assistant",
+          content: "",
+          meta: { kind: "text", provider: getTextProviderDisplayName(actualProvider), model: actualModel },
+        });
+        persistAndRender();
+
         const sendResult = await sendTextMessage({
           messages: textPayload,
           settings: activeSettings,
           webSearchMode: false,
           thinkingEnabled: state.thinkingEnabled,
         });
-        addMessage(activeChat.id, {
-          role: "assistant",
-          content: sendResult.content,
+        updateMessageContent(activeChat.id, msgId, sendResult.content, {
           meta: {
             kind: "text",
             provider: getTextProviderDisplayName(actualProvider),
@@ -1457,6 +1464,11 @@ function handleSaveSettings(formValues) {
     deepSeekEnabled: formValues.deepSeekEnabled === "on" || formValues.deepSeekEnabled === true,
     groqEnabled: formValues.groqEnabled === "on" || formValues.groqEnabled === true,
     geminiEnabled: formValues.geminiEnabled === "on" || formValues.geminiEnabled === true,
+    textProvider: formValues.textProvider?.trim() || state.settings.textProvider || getDefaultSettings().textProvider,
+    textModel: formValues.textModel?.trim() || state.settings.textModel || getDefaultSettings().textModel,
+    deepSeekModel: formValues.deepSeekModel?.trim() || state.settings.deepSeekModel || getDefaultSettings().deepSeekModel,
+    groqModel: formValues.groqModel?.trim() || state.settings.groqModel || getDefaultSettings().groqModel,
+    geminiModel: formValues.geminiModel?.trim() || state.settings.geminiModel || getDefaultSettings().geminiModel,
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
