@@ -955,6 +955,12 @@ async function handleSendMessage(rawMessage) {
           persistAndRender();
 
           let fullContent = "";
+          let streamingFallbackTimer = setTimeout(() => {
+            if (!fullContent) {
+              console.warn("[STREAM] sem chunks apos 10s, forçando fallback");
+              throw new Error("Streaming nao respondeu. Usando modo normal.");
+            }
+          }, 10000);
           try {
             await sendTextMessage({
               messages: textPayload,
@@ -962,12 +968,16 @@ async function handleSendMessage(rawMessage) {
               webSearchMode: false,
               thinkingEnabled: false,
               onChunk: (chunk) => {
+                clearTimeout(streamingFallbackTimer);
+                streamingFallbackTimer = null;
+                console.log("[STREAM] chunk recebido:", chunk.slice(0, 50));
                 fullContent += chunk;
                 updateMessageContent(activeChat.id, msgId, fullContent);
                 updateStreamingBubble(msgId, fullContent);
               },
             });
           } catch (err) {
+            if (streamingFallbackTimer) clearTimeout(streamingFallbackTimer);
             if (!fullContent) throw err;
             fullContent += `\n\n*[Erro ao continuar a geracao: ${err.message}]*`;
           }

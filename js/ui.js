@@ -790,9 +790,9 @@ function renderMessage(message, state, index = 0) {
 
 export function updateStreamingBubble(msgId, content) {
   const article = document.querySelector(`[data-msg-id="${msgId}"]`);
-  if (!article) return;
+  if (!article) { console.warn("[STREAM] artigo nao encontrado:", msgId); return; }
   const body = article.querySelector(".markdown-body");
-  if (!body) return;
+  if (!body) { console.warn("[STREAM] .markdown-body nao encontrado no artigo"); return; }
   body.innerHTML = renderMarkdown(content);
   if (globalThis.hljs) {
     requestAnimationFrame(() => {
