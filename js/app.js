@@ -1469,6 +1469,9 @@ function handleSaveSettings(formValues) {
     deepSeekModel: formValues.deepSeekModel?.trim() || state.settings.deepSeekModel || getDefaultSettings().deepSeekModel,
     groqModel: formValues.groqModel?.trim() || state.settings.groqModel || getDefaultSettings().groqModel,
     geminiModel: formValues.geminiModel?.trim() || state.settings.geminiModel || getDefaultSettings().geminiModel,
+    openRouterSelectedModels: formValues.openRouterSelectedModels !== undefined
+      ? formValues.openRouterSelectedModels
+      : state.settings.openRouterSelectedModels || [],
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
     openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
@@ -1938,6 +1941,10 @@ function initialize() {
     syncActivePointers();
     voiceController.syncSpeechVoice();
     initLightbox();
+    try {
+      const saved = readStorageJson(localStorage, STORAGE_KEYS.openRouterModels);
+      if (saved) state.openRouterAvailableModels = saved;
+    } catch { console.warn("[FEMIC GPT] Erro ao restaurar modelos OpenRouter"); }
     pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);
@@ -2218,6 +2225,7 @@ Ola! Estou a caminho. Chego em instantes.`;
       try {
         const models = await fetchOpenRouterModels(key);
         state.openRouterAvailableModels = models;
+        writeStorageJson(localStorage, STORAGE_KEYS.openRouterModels, models);
         persistAndRender();
         showToast(`${models.length} modelos encontrados.`, "success");
       } catch (err) {

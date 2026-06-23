@@ -190,6 +190,7 @@ function renderQuickModelOptions(state) {
         `,
       );
     }
+    if (selectedModels.length > 0) return [];
     return (state.modelOptions || []).map(
       (model) => `
         <option value="openrouter::${escapeHtml(model.value)}" ${current === `openrouter::${model.value}` ? "selected" : ""}>

@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
   brands: "femicgpt:brands",
   settings: "femicgpt:settings",
   view: "femicgpt:view",
+  openRouterModels: "femicgpt:openrouter_models",
 };
 
 export const BACKUP_SCHEMA_VERSION = 2;
