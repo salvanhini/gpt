@@ -704,7 +704,7 @@ function renderMessage(message, state, index = 0) {
 
   const alignment = isUser ? "items-end" : "items-start";
   const label = isUser ? "Você" : "FEMIC GPT";
-  const showTypingDots = message.role === "assistant" && !message.content && state.isLoading && !message.meta?.streaming;
+  const showTypingDots = message.role === "assistant" && !message.content && state.isLoading;
   const searchImages = Array.isArray(message.meta?.searchImages) && message.meta.searchImages.length > 0
     ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.slice(0, 5).map((img) =>
         typeof img === "string"
@@ -751,7 +751,7 @@ function renderMessage(message, state, index = 0) {
     `
     : showTypingDots
       ? `<div class="typing-dots text-slate-500"><span>●</span> <span>●</span> <span>●</span></div>`
-      : `<div class="markdown-body">${renderMarkdown(message.content)}${message.meta?.streaming ? '<span class="streaming-cursor"></span>' : ""}</div>${searchImages}`;
+      : `<div class="markdown-body">${renderMarkdown(message.content)}</div>${searchImages}`;
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
@@ -786,21 +786,6 @@ function renderMessage(message, state, index = 0) {
       </div>
     </article>
   `;
-}
-
-export function updateStreamingBubble(msgId, content) {
-  const article = document.querySelector(`[data-msg-id="${msgId}"]`);
-  if (!article) { console.warn("[STREAM] artigo nao encontrado:", msgId); return; }
-  const body = article.querySelector(".markdown-body");
-  if (!body) { console.warn("[STREAM] .markdown-body nao encontrado no artigo"); return; }
-  body.innerHTML = renderMarkdown(content);
-  if (globalThis.hljs) {
-    requestAnimationFrame(() => {
-      body.querySelectorAll("pre code:not(.hljs)").forEach((el) => {
-        try { globalThis.hljs.highlightElement(el); } catch { console.warn("[FEMIC GPT] Erro no highlight.js (streaming)"); }
-      });
-    });
-  }
 }
 
 let lightboxBound = false;

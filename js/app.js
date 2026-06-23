@@ -94,7 +94,7 @@ import {
   writeStorageJson,
   normalizeSettingsWithFallback,
 } from "./storage.js";
-import { bindUIHandlers, renderApp, showToast, updateStreamingBubble, initLightbox } from "./ui.js";
+import { bindUIHandlers, renderApp, showToast, initLightbox } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
@@ -940,76 +940,28 @@ async function handleSendMessage(rawMessage) {
       if (shouldSearch) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
       } else {
-        const isStreamable = !state.thinkingEnabled && !shouldSearch && activeSettings.textProvider !== "deepseek" && activeSettings.textProvider !== "gemini";
-
-        let responseContent;
-
-        if (isStreamable) {
-          const msgId = crypto.randomUUID();
-          addMessage(activeChat.id, {
-            id: msgId,
-            role: "assistant",
-            content: "",
-            meta: { kind: "text", streaming: true, provider: getTextProviderDisplayName(actualProvider), model: actualModel },
-          });
-          persistAndRender();
-
-          let fullContent = "";
-          let streamingFallbackTimer = setTimeout(() => {
-            if (!fullContent) {
-              console.warn("[STREAM] sem chunks apos 10s, forçando fallback");
-              throw new Error("Streaming nao respondeu. Usando modo normal.");
-            }
-          }, 10000);
-          try {
-            await sendTextMessage({
-              messages: textPayload,
-              settings: activeSettings,
-              webSearchMode: false,
-              thinkingEnabled: false,
-              onChunk: (chunk) => {
-                clearTimeout(streamingFallbackTimer);
-                streamingFallbackTimer = null;
-                console.log("[STREAM] chunk recebido:", chunk.slice(0, 50));
-                fullContent += chunk;
-                updateMessageContent(activeChat.id, msgId, fullContent);
-                updateStreamingBubble(msgId, fullContent);
-              },
-            });
-          } catch (err) {
-            if (streamingFallbackTimer) clearTimeout(streamingFallbackTimer);
-            if (!fullContent) throw err;
-            fullContent += `\n\n*[Erro ao continuar a geracao: ${err.message}]*`;
-          }
-
-          updateMessageContent(activeChat.id, msgId, fullContent, { meta: { streaming: false } });
-          saveChats(state.chats);
-          persistAndRender();
-          responseContent = fullContent;
-        } else {
-          const sendResult = await sendTextMessage({
-            messages: textPayload,
-            settings: activeSettings,
-            webSearchMode: false,
-            thinkingEnabled: state.thinkingEnabled,
-          });
-          addMessage(activeChat.id, {
-            role: "assistant",
-            content: sendResult.content,
-            meta: {
-              kind: "text",
-              provider: getTextProviderDisplayName(actualProvider),
-              cachedTokens: sendResult.cachedTokens || 0,
-              promptTokens: sendResult.promptTokens || 0,
-              completionTokens: sendResult.completionTokens || 0,
-              model: actualModel,
-            },
-          });
-          if (sendResult.promptTokens && sendResult.completionTokens) {
-            trackCost(actualModel, sendResult.promptTokens, sendResult.completionTokens);
-          }
-          responseContent = sendResult.content;
+        const sendResult = await sendTextMessage({
+          messages: textPayload,
+          settings: activeSettings,
+          webSearchMode: false,
+          thinkingEnabled: state.thinkingEnabled,
+        });
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: sendResult.content,
+          meta: {
+            kind: "text",
+            provider: getTextProviderDisplayName(actualProvider),
+            cachedTokens: sendResult.cachedTokens || 0,
+            promptTokens: sendResult.promptTokens || 0,
+            completionTokens: sendResult.completionTokens || 0,
+            model: actualModel,
+          },
+        });
+        if (sendResult.promptTokens && sendResult.completionTokens) {
+          trackCost(actualModel, sendResult.promptTokens, sendResult.completionTokens);
         }
+        const responseContent = sendResult.content;
 
         const emailActionMatch = responseContent.match(/\[ENVIAR_EMAIL\]\s*\n([\s\S]*?)\n\[\/ENVIAR_EMAIL\]\s*\n([\s\S]*)/);
         if (emailActionMatch) {

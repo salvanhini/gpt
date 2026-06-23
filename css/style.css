@@ -1469,19 +1469,6 @@ button {
 }
 .drop-overlay.hidden { display: none; }
 
-.streaming-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1.1em;
-  background: #0ea5e9;
-  margin-left: 1px;
-  vertical-align: text-bottom;
-  animation: stream-blink 0.8s step-end infinite;
-}
-@keyframes stream-blink {
-  50% { opacity: 0; }
-}
-
 .markdown-body pre {
   border-radius: 0.75rem;
   overflow-x: auto;
