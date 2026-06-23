@@ -148,6 +148,13 @@ export const DEEPSEEK_MODELS = [
 
 export const GROQ_MODELS = [
   {
+    value: "openai/gpt-oss-20b",
+    label: "GPT OSS 20B",
+    description: "Ultra rapido e leve para chat simples.",
+    badges: ["Rapido", "Web", "Economico", "Texto"],
+    helperText: "Melhor para perguntas rapidas, chat simples e tarefas do dia a dia.",
+  },
+  {
     value: "openai/gpt-oss-120b",
     label: "GPT OSS 120B",
     description: "Mais inteligente com busca web integrada.",
@@ -183,6 +190,7 @@ function findModelByProvider(provider, settings = {}) {
 }
 
 const GROQ_BROWSER_SEARCH_MODELS = new Set([
+  "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
 ]);
 
