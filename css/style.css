@@ -1546,6 +1546,30 @@ button {
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 
+/* Day divider */
+.day-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+.day-divider::before,
+.day-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #cbd5e1, transparent);
+}
+.day-divider span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* Skeleton loaders */
 .skeleton {
   background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
@@ -1595,4 +1619,67 @@ button {
 @keyframes progress-slide {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
+}
+
+/* Shortcuts overlay */
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 31, 54, 0.6);
+  backdrop-filter: blur(6px);
+  animation: lb-fade-in 0.2s ease forwards;
+}
+.shortcuts-panel {
+  background: white;
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  max-width: 380px;
+  width: 90vw;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+  animation: lb-zoom-in 0.25s ease forwards;
+}
+.shortcuts-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--femic-navy);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--femic-text);
+}
+.shortcut-key {
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.35rem;
+  text-align: center;
+  color: var(--femic-navy);
+  border: 1px solid #e2e8f0;
+}
+.shortcuts-close {
+  display: block;
+  margin: 1rem auto 0;
+  padding: 0.5rem 1.5rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--femic-navy);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.shortcuts-close:hover {
+  background: #214876;
 }

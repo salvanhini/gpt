@@ -1,6 +1,5 @@
 import {
   BRASIL_AGENT_ID,
-  NO_AGENT_ID,
   createAgent,
   deleteAgent,
   duplicateAgent,
@@ -684,7 +683,7 @@ async function handleSendMessage(rawMessage) {
     });
 
     state.draftMessage = "";
-    try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch {}
+    try { localStorage.removeItem(DRAFT_STORAGE_KEY); } catch { console.warn("[FEMIC GPT] Erro ao limpar draft"); }
     persistAndRender();
     if (isBrasilAgent) {
       const inferred = inferBrasilLookupType(message);
@@ -1968,12 +1967,13 @@ function initialize() {
     pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);
+    showToast("Erro ao inicializar. Recarregue a pagina.", "error");
   }
 
   try {
     const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
     if (savedDraft) state.draftMessage = savedDraft;
-  } catch {}
+  } catch { console.warn("[FEMIC GPT] Erro ao ler rascunho"); }
 
   bindUIHandlers({
     onSelectAgent: handleSelectAgent,
@@ -2174,7 +2174,7 @@ Ola! Estou a caminho. Chego em instantes.`;
       state.draftMessage = value;
       clearTimeout(draftSaveTimer);
       draftSaveTimer = setTimeout(() => {
-        try { localStorage.setItem(DRAFT_STORAGE_KEY, value); } catch {}
+        try { localStorage.setItem(DRAFT_STORAGE_KEY, value); } catch { console.warn("[FEMIC GPT] Erro ao salvar rascunho"); }
       }, 500);
     },
     onToggleSidebar: () => {

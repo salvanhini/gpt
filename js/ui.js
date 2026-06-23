@@ -704,7 +704,7 @@ function renderMessage(message, state, index = 0) {
 
   const alignment = isUser ? "items-end" : "items-start";
   const label = isUser ? "Você" : "FEMIC GPT";
-  const showTypingDots = message.role === "assistant" && !message.content && state.isLoading;
+  const showTypingDots = message.role === "assistant" && !message.content && state.isLoading && !message.meta?.streaming;
   const searchImages = Array.isArray(message.meta?.searchImages) && message.meta.searchImages.length > 0
     ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.slice(0, 5).map((img) =>
         typeof img === "string"
@@ -797,7 +797,7 @@ export function updateStreamingBubble(msgId, content) {
   if (globalThis.hljs) {
     requestAnimationFrame(() => {
       body.querySelectorAll("pre code:not(.hljs)").forEach((el) => {
-        try { globalThis.hljs.highlightElement(el); } catch {}
+        try { globalThis.hljs.highlightElement(el); } catch { console.warn("[FEMIC GPT] Erro no highlight.js (streaming)"); }
       });
     });
   }
@@ -837,6 +837,28 @@ function closeLightbox() {
   if (el) el.remove();
 }
 
+function showShortcutsOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "shortcuts-overlay";
+  overlay.innerHTML = `
+    <div class="shortcuts-panel">
+      <h3 class="shortcuts-title">Atalhos do Teclado</h3>
+      <div class="shortcuts-grid">
+        <span class="shortcut-key">Ctrl+K</span><span>Buscar conversas</span>
+        <span class="shortcut-key">Ctrl+N</span><span>Nova conversa</span>
+        <span class="shortcut-key">?</span><span>Mostrar atalhos</span>
+        <span class="shortcut-key">Esc</span><span>Fechar modais</span>
+        <span class="shortcut-key">/</span><span>Focar no chat</span>
+      </div>
+      <button class="shortcuts-close" data-action="close-shortcuts">Fechar</button>
+    </div>
+  `;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.closest("[data-action='close-shortcuts']")) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
 function renderTyping() {
   return `
     <article class="flex items-start gap-2">
@@ -870,6 +892,21 @@ function renderSkeletonMessages(count = 3) {
       </div>
     </article>
   `).join("");
+}
+
+function formatFullDate(value) {
+  const d = new Date(value);
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function getDayLabel(value) {
+  const date = new Date(value);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+  if (diffDays < 7) return `${diffDays} dias atrás`;
+  return formatFullDate(value);
 }
 
 function renderMessages(state) {
@@ -920,7 +957,21 @@ function renderMessages(state) {
     `;
   }
 
-  return messages.map((message, index) => renderMessage(message, state, index)).join("");
+  let lastDayKey = "";
+  const rendered = [];
+  messages.forEach((message, index) => {
+    const dayKey = message.createdAt
+      ? new Date(message.createdAt).toISOString().slice(0, 10)
+      : "";
+    if (dayKey && dayKey !== lastDayKey) {
+      if (lastDayKey) {
+        rendered.push(`<div class="day-divider"><span>${escapeHtml(getDayLabel(message.createdAt))}</span></div>`);
+      }
+      lastDayKey = dayKey;
+    }
+    rendered.push(renderMessage(message, state, index));
+  });
+  return rendered.join("");
 }
 
 const ASPECT_RATIO_PREVIEWS = {
@@ -2267,13 +2318,13 @@ export function renderApp(state) {
   if (globalThis.hljs) {
     requestAnimationFrame(() => {
       document.querySelectorAll('.markdown-body pre code:not(.hljs)').forEach(el => {
-        try { globalThis.hljs.highlightElement(el); } catch {}
+        try { globalThis.hljs.highlightElement(el); } catch { console.warn("[FEMIC GPT] Erro no highlight.js (render)"); }
       });
     });
   }
 
   try {
-    const chatWorkspace = app?.querySelector?.(".chat-workspace");
+    const chatWorkspace = app?.querySelector(".chat-workspace");
     if (chatWorkspace && !chatWorkspace._dropBound) {
       chatWorkspace._dropBound = true;
       let dragCounter = 0;
@@ -2513,10 +2564,18 @@ export function bindUIHandlers(handlers) {
 
     if (event.key === "Escape" && !target.closest("[contenteditable]")) {
       const openModal = document.querySelector(".modal-overlay:not(.hidden), [data-modal-surface]:not(.hidden)");
+      const shortcuts = document.querySelector(".shortcuts-overlay");
+      if (shortcuts) { shortcuts.remove(); return; }
       if (openModal) {
         const closeBtn = openModal.querySelector('[data-action="close-modal"]');
         if (closeBtn) closeBtn.click();
       }
+      return;
+    }
+
+    if (event.key === "?" && !target.closest("input, textarea, [contenteditable]")) {
+      event.preventDefault();
+      if (!document.querySelector(".shortcuts-overlay")) showShortcutsOverlay(handlers);
       return;
     }
 

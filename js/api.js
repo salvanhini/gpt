@@ -874,7 +874,7 @@ async function chatFetchStream(url, headers, body, onChunk) {
 
   if (!response.ok) {
     let errorData = null;
-    try { errorData = await response.json(); } catch {}
+    try { errorData = await response.json(); } catch { console.warn("[FEMIC GPT] Erro ao ler resposta da API"); }
     if (response.status === 429) throw new Error("Muitas requisicoes por minuto. Aguarde e tente novamente.");
     if (response.status === 401) throw new Error("Chave de API invalida. Verifique nas configuracoes.");
     throw new Error(extractErrorMessage(errorData, "Falha na API."));
