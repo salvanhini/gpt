@@ -696,7 +696,7 @@ function renderMessageCategoryBadge(message) {
   `;
 }
 
-function renderMessage(message, state) {
+function renderMessage(message, state, index = 0) {
   const isUser = message.role === "user";
   const bubbleBase = isUser
     ? "bg-gradient-to-br from-sky-100 to-cyan-50 border-sky-200 ml-auto"
@@ -708,11 +708,20 @@ function renderMessage(message, state) {
   const searchImages = Array.isArray(message.meta?.searchImages) && message.meta.searchImages.length > 0
     ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.slice(0, 5).map((img) =>
         typeof img === "string"
-          ? `<img src="${escapeHtml(img)}" alt="Imagem da busca" class="h-20 w-20 rounded-lg object-cover border border-slate-200" loading="lazy" />`
+          ? `<img src="${escapeHtml(img)}" alt="Imagem da busca" class="search-img-thumb h-20 w-20 rounded-lg object-cover border border-slate-200" loading="lazy" data-lightbox-src="${escapeHtml(img)}" />`
           : ""
       ).join("")}</div>`
     : "";
-  const content = message.meta?.kind === "image"
+  const content = message.meta?.kind === "image" && message.meta?.generating
+    ? `
+      <div class="image-generating">
+        <div class="text-sm text-slate-500">Gerando imagem...</div>
+        <div class="image-progress-track">
+          <div class="image-progress-bar"></div>
+        </div>
+      </div>
+    `
+    : message.meta?.kind === "image"
     ? `
       <div class="image-preview p-3">
         <img src="${escapeHtml(message.meta.imageUrl)}" alt="${escapeHtml(message.content)}" class="h-auto w-full rounded-xl object-cover" />
@@ -754,7 +763,7 @@ function renderMessage(message, state) {
     : "";
 
   return `
-    <article class="message-enter flex ${alignment} gap-2">
+    <article class="message-enter flex ${alignment} gap-2" data-msg-id="${escapeHtml(message.id || "")}" style="animation-delay: ${Math.min(index * 60, 600)}ms">
       ${isUser ? "" : `<div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-femic-mist text-xs font-bold shadow-soft">AI</div>`}
       <div class="message-bubble rounded-2xl border ${bubbleBase} px-2.5 py-1.5" style="${isUser ? "" : "background:rgba(255,255,255,0.92);"}">
         <div class="mb-1 flex items-center justify-between gap-3">
@@ -779,6 +788,55 @@ function renderMessage(message, state) {
   `;
 }
 
+export function updateStreamingBubble(msgId, content) {
+  const article = document.querySelector(`[data-msg-id="${msgId}"]`);
+  if (!article) return;
+  const body = article.querySelector(".markdown-body");
+  if (!body) return;
+  body.innerHTML = renderMarkdown(content);
+  if (globalThis.hljs) {
+    requestAnimationFrame(() => {
+      body.querySelectorAll("pre code:not(.hljs)").forEach((el) => {
+        try { globalThis.hljs.highlightElement(el); } catch {}
+      });
+    });
+  }
+}
+
+let lightboxBound = false;
+export function initLightbox() {
+  if (lightboxBound) return;
+  lightboxBound = true;
+  document.addEventListener("click", (e) => {
+    const img = e.target.closest("[data-lightbox-src]");
+    if (!img) return;
+    e.preventDefault();
+    const src = img.dataset.lightboxSrc || img.src;
+    openLightbox(src);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeLightbox();
+  });
+}
+
+function openLightbox(src) {
+  if (document.querySelector(".lightbox-overlay")) return;
+  const overlay = document.createElement("div");
+  overlay.className = "lightbox-overlay";
+  overlay.innerHTML = `<button class="lightbox-close" title="Fechar">&times;</button><img src="${src}" alt="Imagem ampliada" />`;
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target.classList.contains("lightbox-close")) {
+      closeLightbox();
+    }
+  });
+  document.body.appendChild(overlay);
+}
+
+function closeLightbox() {
+  const el = document.querySelector(".lightbox-overlay");
+  if (el) el.remove();
+}
+
 function renderTyping() {
   return `
     <article class="flex items-start gap-2">
@@ -801,6 +859,19 @@ export function shouldAutoScroll({
   return scrollTop + clientHeight >= scrollHeight - threshold;
 }
 
+function renderSkeletonMessages(count = 3) {
+  return Array.from({ length: count }, () => `
+    <article class="flex items-start gap-2 message-enter">
+      <div class="skeleton skeleton-avatar"></div>
+      <div class="flex-1 space-y-2">
+        <div class="skeleton skeleton-line" style="width:40%"></div>
+        <div class="skeleton skeleton-line" style="width:90%"></div>
+        <div class="skeleton skeleton-line" style="width:70%"></div>
+      </div>
+    </article>
+  `).join("");
+}
+
 function renderMessages(state) {
   const chat = state.chats.find((item) => item.id === state.activeChatId);
   const messages = chat?.messages || [];
@@ -809,6 +880,9 @@ function renderMessages(state) {
   const activeAgentDescription = guide?.title || state.activeAgent?.description || "IA flexível para organizar ideias, documentos e respostas em um só workspace.";
 
   if (messages.length === 0) {
+    if (state.isLoading) {
+      return renderSkeletonMessages(3);
+    }
     return `
       <div class="welcome-panel glass-panel flex min-h-[320px] flex-col justify-between rounded-[1.75rem] border border-white/80 px-5 py-5 shadow-panel sm:px-7 sm:py-6">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -842,28 +916,11 @@ function renderMessages(state) {
             </div>
           </div>
         </div>
-        <div class="mt-6 grid gap-3 sm:grid-cols-3">
-          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
-            <div class="text-lg">${escapeHtml((guide?.highlights || ["✍️"])[0] === "Escrita e revisao" ? "✍️" : (state.activeAgent?.emoji || "✦"))}</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Comece por aqui"])[0])}</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Use o composer abaixo para enviar sua primeira mensagem."])[0])}</p>
-          </div>
-          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
-            <div class="text-lg">📎</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Traga contexto"])[1] || "Traga contexto")}</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Anexe um arquivo para aprofundar a resposta."])[1] || "Anexe um arquivo para aprofundar a resposta.")}</p>
-          </div>
-          <div class="rounded-2xl border border-white/80 bg-white/70 p-4 shadow-sm">
-            <div class="text-lg">📋</div>
-            <div class="mt-2 text-sm font-semibold text-slate-900">${escapeHtml((guide?.highlights || ["Organize no board"])[2] || "Organize no board")}</div>
-            <p class="mt-1 text-xs leading-5 text-slate-500">${escapeHtml((guide?.examples || ["Use categorias e busca para manter conversas importantes à mão."])[2] || "Use categorias e busca para manter conversas importantes à mão.")}</p>
-          </div>
-        </div>
       </div>
     `;
   }
 
-  return messages.map((message) => renderMessage(message, state)).join("");
+  return messages.map((message, index) => renderMessage(message, state, index)).join("");
 }
 
 const ASPECT_RATIO_PREVIEWS = {
@@ -2499,10 +2556,13 @@ export function showToast(message, type = "info") {
   element.textContent = message;
   stack.appendChild(element);
 
-  const toastTimer = setTimeout(() => {
-    if (element.isConnected) {
-      element.remove();
-    }
-  }, 3800);
-  element._toastTimer = toastTimer;
+  const dismiss = () => {
+    clearTimeout(element._toastTimer);
+    if (!element.isConnected) return;
+    element.classList.add("toast-out");
+    setTimeout(() => element.remove(), 300);
+  };
+
+  element.addEventListener("click", dismiss);
+  element._toastTimer = setTimeout(dismiss, 3800);
 }

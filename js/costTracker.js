@@ -11,9 +11,7 @@ const MODEL_PRICES = {
   "deepseek-reasoner": { input: 0.55, output: 2.19 },
 
   // Groq models (free tier - $0)
-  "openai/gpt-oss-20b": { input: 0, output: 0 },
   "openai/gpt-oss-120b": { input: 0, output: 0 },
-  "llama-3.1-8b-instant": { input: 0, output: 0 },
 
   // Qwen DashScope models
   "qwen-plus": { input: 0.08, output: 0.24 },

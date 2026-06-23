@@ -17,7 +17,7 @@ test("buildGroqRequestBody enables browser search when web search mode is active
   const settings = {
     ...getDefaultSettings(),
     textProvider: "groq",
-    groqModel: "openai/gpt-oss-20b",
+    groqModel: "openai/gpt-oss-120b",
   };
 
   const body = buildGroqRequestBody({
@@ -26,7 +26,7 @@ test("buildGroqRequestBody enables browser search when web search mode is active
     webSearchMode: true,
   });
 
-  assert.equal(body.model, "openai/gpt-oss-20b");
+  assert.equal(body.model, "openai/gpt-oss-120b");
   assert.equal(body.tool_choice, "required");
   assert.deepEqual(body.tools, [{ type: "browser_search" }]);
   assert.equal(body.messages[0].role, "system");
@@ -46,7 +46,7 @@ test("buildGroqRequestBody falls back to a browser-search-compatible model", () 
     webSearchMode: true,
   });
 
-  assert.equal(body.model, "openai/gpt-oss-20b");
+  assert.equal(body.model, "openai/gpt-oss-120b");
 });
 
 test("buildOpenRouterRequestBody enables web search server tool", () => {

@@ -6,6 +6,7 @@ export function buildChatMessages({
   attachmentContext = "",
   referenceContext = "",
   userMessage = "",
+  imageDataUrls = [],
 }) {
   const payload = [];
 
@@ -44,10 +45,23 @@ export function buildChatMessages({
     });
   }
 
-  payload.push({
-    role: "user",
-    content: userMessage,
-  });
+  if (imageDataUrls.length > 0) {
+    payload.push({
+      role: "user",
+      content: [
+        { type: "text", text: userMessage },
+        ...imageDataUrls.map((img) => ({
+          type: "image_url",
+          image_url: { url: img.dataUrl },
+        })),
+      ],
+    });
+  } else {
+    payload.push({
+      role: "user",
+      content: userMessage,
+    });
+  }
 
   return payload;
 }

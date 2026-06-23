@@ -95,7 +95,7 @@ import {
   writeStorageJson,
   normalizeSettingsWithFallback,
 } from "./storage.js";
-import { bindUIHandlers, renderApp, showToast } from "./ui.js";
+import { bindUIHandlers, renderApp, showToast, updateStreamingBubble, initLightbox } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
@@ -537,6 +537,9 @@ function buildTextPayload(userMessage) {
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
   const memoryContext = buildMemoryContext();
+  const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+    .filter((f) => f.imageDataUrl)
+    .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -546,6 +549,7 @@ function buildTextPayload(userMessage) {
     attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
     referenceContext: memoryContext,
     userMessage,
+    imageDataUrls,
   });
 }
 
@@ -553,6 +557,9 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const history = compactHistoryForPayload(activeChat?.messages || []);
+  const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+    .filter((f) => f.imageDataUrl)
+    .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -562,6 +569,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
     attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
     referenceContext,
     userMessage,
+    imageDataUrls,
   });
 }
 
@@ -852,6 +860,22 @@ async function handleSendMessage(rawMessage) {
           });
         }
       } else {
+        const progressMsgId = crypto.randomUUID();
+        addMessage(activeChat.id, {
+          id: progressMsgId,
+          role: "assistant",
+          content: instagramPayload?.creativeBrief || message,
+          meta: {
+            kind: "image",
+            generating: true,
+            provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
+            brandId: instagramPayload?.brand.id || null,
+            instagramFormat: instagramPayload?.format.id || null,
+            creativeBrief: instagramPayload?.creativeBrief || null,
+          },
+        });
+        persistAndRender();
+
         const image = await generateImage({
           prompt: instagramPayload?.prompt || message,
           settings: {
@@ -860,11 +884,10 @@ async function handleSendMessage(rawMessage) {
           },
         });
 
-        addMessage(activeChat.id, {
-          role: "assistant",
-          content: instagramPayload?.creativeBrief || message,
+        updateMessageContent(activeChat.id, progressMsgId, instagramPayload?.creativeBrief || message, {
           meta: {
             kind: "image",
+            generating: false,
             imageUrl: image.url,
             provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
             brandId: instagramPayload?.brand.id || null,
@@ -903,7 +926,7 @@ async function handleSendMessage(rawMessage) {
         if (modelTier === "fast" && !smartWebSearch) {
           if (activeSettings.groqKey) {
             activeSettings.textProvider = "groq";
-            activeSettings.groqModel = "llama-3.1-8b-instant";
+            activeSettings.groqModel = "openai/gpt-oss-120b";
           } else {
             activeSettings.textProvider = "openrouter";
             activeSettings.textModel = "qwen/qwen3.7-plus";
@@ -942,7 +965,7 @@ async function handleSendMessage(rawMessage) {
               onChunk: (chunk) => {
                 fullContent += chunk;
                 updateMessageContent(activeChat.id, msgId, fullContent);
-                render();
+                updateStreamingBubble(msgId, fullContent);
               },
             });
           } catch (err) {
@@ -1941,6 +1964,7 @@ function initialize() {
     ensureSeedData();
     syncActivePointers();
     voiceController.syncSpeechVoice();
+    initLightbox();
     pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);

@@ -9,7 +9,7 @@ const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "groq";
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
-const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_IMAGE_PROVIDER = "pollinations";
 const DEFAULT_IMAGE_MODEL_POLLINATIONS = "flux";
@@ -148,25 +148,11 @@ export const DEEPSEEK_MODELS = [
 
 export const GROQ_MODELS = [
   {
-    value: "openai/gpt-oss-20b",
-    label: "GPT OSS 20B",
-    description: "Ultra rapido e leve para chat simples.",
-    badges: ["Rapido", "Web", "Economico", "Texto"],
-    helperText: "Melhor para perguntas rapidas, chat simples e tarefas do dia a dia.",
-  },
-  {
     value: "openai/gpt-oss-120b",
     label: "GPT OSS 120B",
     description: "Mais inteligente com busca web integrada.",
     badges: ["Qualidade", "Web", "Raciocinio", "Texto"],
     helperText: "Melhor para pesquisas, analises e tarefas que precisam de mais raciocinio.",
-  },
-  {
-    value: "llama-3.1-8b-instant",
-    label: "Llama 3.1 8B Instant",
-    description: "Muito rapido e economico.",
-    badges: ["Rapido", "Economico", "Texto"],
-    helperText: "Melhor para tarefas simples e respostas instantaneas.",
   },
 ];
 
@@ -177,20 +163,6 @@ export const GEMINI_MODELS = [
     description: "Modelo mais recente e rapido do Google.",
     badges: ["Rapido", "Multimodal", "Texto", "Web"],
     helperText: "Melhor para respostas rapidas, analise de imagens e tarefas gerais.",
-  },
-  {
-    value: "gemini-2.5-flash",
-    label: "Gemini 2.5 Flash",
-    description: "Modelo rapido e versatile do Google.",
-    badges: ["Rapido", "Multimodal", "Texto"],
-    helperText: "Boa opcao para tarefas do dia a dia e analise de conteudo.",
-  },
-  {
-    value: "gemini-1.5-flash",
-    label: "Gemini 1.5 Flash",
-    description: "Modelo anterior rapido do Google.",
-    badges: ["Rapido", "Economico", "Multimodal", "Texto"],
-    helperText: "Opcao economica para tarefas simples.",
   },
 ];
 
@@ -211,7 +183,6 @@ function findModelByProvider(provider, settings = {}) {
 }
 
 const GROQ_BROWSER_SEARCH_MODELS = new Set([
-  "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
 ]);
 
@@ -1000,9 +971,13 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
 }
 
 async function sendDeepSeekMessage({ messages, settings, thinkingEnabled = false }) {
+  const strippedMessages = messages.map((m) => ({
+    ...m,
+    content: stripImageParts(m.content),
+  }));
   const bodyObj = {
     model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
-    messages,
+    messages: strippedMessages,
     stream: false,
   };
 
@@ -1031,7 +1006,11 @@ async function sendDeepSeekMessage({ messages, settings, thinkingEnabled = false
 }
 
 async function sendGroqMessage({ messages, settings, webSearchMode = false, onChunk }) {
-  const bodyObj = buildGroqRequestBody({ messages, settings, webSearchMode });
+  const strippedMessages = messages.map((m) => ({
+    ...m,
+    content: stripImageParts(m.content),
+  }));
+  const bodyObj = buildGroqRequestBody({ messages: strippedMessages, settings, webSearchMode });
 
   if (onChunk && !webSearchMode) {
     bodyObj.stream = true;
@@ -1066,6 +1045,32 @@ async function sendGroqMessage({ messages, settings, webSearchMode = false, onCh
   };
 }
 
+function messageContentToGeminiParts(content) {
+  if (typeof content === "string") return [{ text: content }];
+  if (!Array.isArray(content)) return [{ text: String(content || "") }];
+  return content
+    .map((part) => {
+      if (part.type === "image_url" && part.image_url?.url) {
+        const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
+      }
+      if (part.type === "text" && part.text) return { text: part.text };
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function stripImageParts(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((p) => p.type === "text" && p.text)
+      .map((p) => p.text)
+      .join("\n");
+  }
+  return String(content || "");
+}
+
 async function sendGeminiMessage({ messages, settings }) {
   const model = settings.geminiModel || DEFAULT_GEMINI_MODEL;
   const apiKey = settings.geminiKey;
@@ -1074,7 +1079,7 @@ async function sendGeminiMessage({ messages, settings }) {
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content || "" }],
+      parts: messageContentToGeminiParts(m.content),
     }));
 
   const systemInstruction = messages
