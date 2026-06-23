@@ -617,6 +617,7 @@ function addWebSearchMessage(chatId, searchResult) {
       webSearch: true,
       isFallback: Boolean(searchResult.isFallback),
       citations: searchResult.citations || [],
+      searchImages: searchResult.images || [],
       ...(searchResult.failed ? { failed: true } : {}),
     },
   });

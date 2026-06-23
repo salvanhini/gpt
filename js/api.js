@@ -606,12 +606,13 @@ function buildTavilySearchBody(query, maxResults = 5) {
     search_depth: "basic",
     include_answer: false,
     include_raw_content: false,
+    include_images: true,
     max_results: maxResults,
   };
 }
 
 function normalizeTavilyResults(data) {
-  return (Array.isArray(data?.results) ? data.results : [])
+  const results = (Array.isArray(data?.results) ? data.results : [])
     .filter((r) => r?.url && (r?.content || r?.title))
     .slice(0, 5)
     .map((r) => ({
@@ -620,6 +621,10 @@ function normalizeTavilyResults(data) {
       snippet: r.content || r.snippet || "",
       provider: "Tavily",
     }));
+
+  const images = Array.isArray(data?.images) ? data.images.slice(0, 5) : [];
+
+  return { results, images };
 }
 
 async function searchTavily(query, settings) {
@@ -646,7 +651,7 @@ async function searchTavily(query, settings) {
     throw new Error(extractErrorMessage(data, "Falha ao consultar a Tavily."));
   }
 
-  const results = normalizeTavilyResults(data);
+  const { results, images } = normalizeTavilyResults(data);
   if (!results.length) {
     throw new Error("A Tavily nao retornou resultados suficientes.");
   }
@@ -654,6 +659,7 @@ async function searchTavily(query, settings) {
   return {
     provider: "Tavily",
     citations: results,
+    images,
     raw: data,
   };
 }
@@ -762,6 +768,7 @@ async function collectWebSearchSources({ query, settings }) {
         webSearch: true,
         isFallback: result.isFallback || false,
         citations: result.citations,
+        images: result.images || [],
         raw: result.raw,
       };
       setCachedWebSearch(query, normalizedResult);
@@ -934,7 +941,7 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
   // Cache: verifica resposta repetida antes de chamar a API
   const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
   const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
-  if (chaveCache) {
+  if (chaveCache && !onChunk) {
     const cached = lerCache(chaveCache);
     if (cached) return { content: cached, fromCache: true };
   }
@@ -947,7 +954,7 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
     }
     resultado = await sendDeepSeekMessage({ messages, settings, thinkingEnabled });
   } else if (settings.textProvider === "groq") {
-    resultado = await sendGroqMessage({ messages, settings, webSearchMode });
+    resultado = await sendGroqMessage({ messages, settings, webSearchMode, onChunk });
   } else if (settings.textProvider === "gemini") {
     if (webSearchMode) {
       throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
@@ -1023,8 +1030,22 @@ async function sendDeepSeekMessage({ messages, settings, thinkingEnabled = false
   };
 }
 
-async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
+async function sendGroqMessage({ messages, settings, webSearchMode = false, onChunk }) {
   const bodyObj = buildGroqRequestBody({ messages, settings, webSearchMode });
+
+  if (onChunk && !webSearchMode) {
+    bodyObj.stream = true;
+    const endpoint = resolveEndpoint("groq", settings, bodyObj);
+    const fullContent = [];
+    await chatFetchStream(endpoint.url, endpoint.headers, endpoint.body, (chunk) => {
+      fullContent.push(chunk);
+      onChunk(chunk);
+    });
+    const content = fullContent.join("");
+    if (!content) throw new Error("A resposta da Groq veio vazia.");
+    return { content, raw: null, cachedTokens: 0, promptTokens: 0, completionTokens: 0 };
+  }
+
   const endpoint = resolveEndpoint("groq", settings, bodyObj);
   const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
 

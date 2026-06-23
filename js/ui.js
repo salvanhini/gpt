@@ -1,4 +1,5 @@
 let scrollListenerBound = false;
+const chatScrollPositions = {};
 
 function formatCostValue(cost) {
   if (cost === 0) return "$0.00";
@@ -704,6 +705,13 @@ function renderMessage(message, state) {
   const alignment = isUser ? "items-end" : "items-start";
   const label = isUser ? "Você" : "FEMIC GPT";
   const showTypingDots = message.role === "assistant" && !message.content && state.isLoading;
+  const searchImages = Array.isArray(message.meta?.searchImages) && message.meta.searchImages.length > 0
+    ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.slice(0, 5).map((img) =>
+        typeof img === "string"
+          ? `<img src="${escapeHtml(img)}" alt="Imagem da busca" class="h-20 w-20 rounded-lg object-cover border border-slate-200" loading="lazy" />`
+          : ""
+      ).join("")}</div>`
+    : "";
   const content = message.meta?.kind === "image"
     ? `
       <div class="image-preview p-3">
@@ -734,7 +742,7 @@ function renderMessage(message, state) {
     `
     : showTypingDots
       ? `<div class="typing-dots text-slate-500"><span>●</span> <span>●</span> <span>●</span></div>`
-      : `<div class="markdown-body">${renderMarkdown(message.content)}${message.meta?.streaming ? '<span class="streaming-cursor"></span>' : ""}</div>`;
+      : `<div class="markdown-body">${renderMarkdown(message.content)}${message.meta?.streaming ? '<span class="streaming-cursor"></span>' : ""}</div>${searchImages}`;
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
@@ -1986,6 +1994,11 @@ function renderAgentModal(state) {
 export function renderApp(state) {
   const app = document.getElementById("app");
   const previousMessagesPanel = document.getElementById("messages-panel");
+  const oldChatId = previousMessagesPanel?.dataset?.chatId || null;
+  const newChatId = state.activeChatId || null;
+  if (previousMessagesPanel && oldChatId) {
+    chatScrollPositions[oldChatId] = previousMessagesPanel.scrollTop;
+  }
   const keepAtBottom = previousMessagesPanel
     ? shouldAutoScroll({
         scrollTop: previousMessagesPanel.scrollTop,
@@ -2085,7 +2098,7 @@ export function renderApp(state) {
         <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${renderActiveAgentSummary(state)}
 
-          <section id="messages-panel" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
+          <section id="messages-panel" data-chat-id="${escapeHtml(state.activeChatId || "")}" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
             <div class="timeline-end-spacer" aria-hidden="true"></div>
             <button
@@ -2173,8 +2186,13 @@ export function renderApp(state) {
 
   document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help || state.modals.emailCompose || state.modals.whatsappCompose);
   const messagesPanel = document.getElementById("messages-panel");
-  if (messagesPanel && keepAtBottom) {
-    messagesPanel.scrollTop = messagesPanel.scrollHeight;
+  if (messagesPanel) {
+    const chatChanged = oldChatId && oldChatId !== newChatId;
+    if (chatChanged && chatScrollPositions[newChatId] != null) {
+      messagesPanel.scrollTop = chatScrollPositions[newChatId];
+    } else if (keepAtBottom) {
+      messagesPanel.scrollTop = messagesPanel.scrollHeight;
+    }
   }
   if (messagesPanel && !state.viewMode?.startsWith("board")) {
     if (!scrollListenerBound) {
