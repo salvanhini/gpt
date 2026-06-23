@@ -37,9 +37,7 @@ import {
   updateMessageContent,
 } from "./chat.js";
 import {
-  DEEPSEEK_MODELS,
   fetchOpenRouterModels,
-  generateSpeechAudio,
   generateImage,
   getDefaultSettings,
   getTextProviderDisplayName,
@@ -61,7 +59,7 @@ import {
   isSpeechRecognitionSupported,
   pickPortugueseVoice,
 } from "./audio.js";
-import { processFiles } from "./fileProcessor.js";
+import { processFiles, buildCombinedContext } from "./fileProcessor.js";
 import {
   formatCepSummary,
   formatCnpjSummary,
@@ -98,7 +96,7 @@ import { bindUIHandlers, renderApp, showToast, initLightbox } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
-import { getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
+import { addMemoryFact, getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
 import {
   loadContacts,
   addContact,
@@ -111,9 +109,23 @@ import {
 } from "./communicationStorage.js";
 import { sendEmail } from "./emailService.js";
 import { sendWhatsApp } from "./whatsappService.js";
-import { exportChatAsPDF } from "./pdfGenerator.js";
+import { gerarRelatorioPremium, gerarPDFFromContent, exportChatAsPremiumPDF, exportMessageAsPremiumPDF } from "./reportGenerator.js";
+import {
+  exportChatAsDOCX,
+  exportChatAsCSV,
+  exportChatAsJSON,
+  exportChatAsExcel,
+  exportChatAsPowerPoint,
+  exportChatAsWord,
+  exportTasksAsDOCX,
+  exportTasksAsCSV,
+  exportTasksAsExcel,
+  exportMessageAsDOCX,
+} from "./exportManager.js";
+import { initTaskSystem, getPendingTasks, getTasksByType, addTask, completeTask, deleteTask, parseTaskCommand, checkOverdueTasks } from "./taskSystem.js";
 
 const DRAFT_STORAGE_KEY = "femicgpt:draft";
+const IMAGE_PROVIDER_LABELS = { "fal-ai": "fal.ai", pixazo: "Pixazo.ai", wavespeed: "WaveSpeed.ai", pollinations: "Pollinations.ai" };
 let draftSaveTimer = null;
 let bootSettingsFallbacks = [];
 
@@ -138,7 +150,6 @@ const state = {
   smartMode: false,
   pubmedResultLimit: 5,
   webSearchMode: false,
-  thinkingEnabled: false,
   modelGuidanceCollapsed: false,
   agentSummaryCollapsed: true,
   creativeBriefCollapsed: true,
@@ -167,12 +178,14 @@ const state = {
     memory: false,
     emailCompose: false,
     whatsappCompose: false,
+    tasks: false,
   },
   modalPayload: {},
   draftMessage: "",
   mobileSidebarOpen: false,
   sidebarCollapsed: false,
   archivedChats: [],
+  tasks: [],
   showArchived: false,
   recognition: null,
   mediaRecorder: null,
@@ -185,7 +198,6 @@ const state = {
   currentAudioUrl: null,
   availableVoice: null,
   modelOptions: OPENROUTER_MODELS,
-  deepSeekModelOptions: DEEPSEEK_MODELS,
   groqModelOptions: GROQ_MODELS,
   geminiModelOptions: GEMINI_MODELS,
   openRouterAvailableModels: [],
@@ -200,7 +212,6 @@ function loadSettings() {
     raw,
     getDefaultSettings(),
     OPENROUTER_MODELS,
-    DEEPSEEK_MODELS,
     GROQ_MODELS,
   );
 
@@ -319,7 +330,6 @@ function loadImportedSettings(rawSettings) {
     rawSettings,
     getDefaultSettings(),
     OPENROUTER_MODELS,
-    DEEPSEEK_MODELS,
     GROQ_MODELS,
   );
 
@@ -389,6 +399,64 @@ function addAssistantErrorMessage(chatId, error) {
       failed: true,
     },
   });
+}
+
+async function generateFileFromContent(format, fileName, content) {
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 100);
+
+  if (format === "pdf") {
+    return await gerarPDFFromContent(content, fileName);
+  }
+
+  if (format === "xlsx") {
+    const singleMsg = [{ role: "assistant", content, createdAt: new Date().toISOString() }];
+    await exportChatAsExcel(singleMsg, fileName);
+    return { fileName: `${safeFileName}.xlsx`, blobUrl: null, directDownload: true };
+  }
+
+  if (format === "csv") {
+    const singleMsg = [{ role: "assistant", content, createdAt: new Date().toISOString() }];
+    exportChatAsCSV(singleMsg, fileName);
+    return { fileName: `${safeFileName}.csv`, blobUrl: null, directDownload: true };
+  }
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const blobUrl = URL.createObjectURL(blob);
+  return { fileName: `${safeFileName}.txt`, blobUrl };
+}
+
+function updateMessageMeta(chatId, messageId, metaUpdate) {
+  const chats = loadChats();
+  const chat = chats.find((c) => c.id === chatId);
+  if (!chat) return;
+  const message = chat.messages.find((m) => m.id === messageId);
+  if (!message) return;
+  Object.assign(message.meta, metaUpdate);
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+}
+
+let pesquisaCheckInterval = null;
+
+async function checkAndAutoExecutePesquisa() {
+  try {
+    state.tasks = await getPendingTasks();
+    const pesquisaOverdue = (await getTasksByType("pesquisa").catch(() => []))
+      .filter((t) => new Date(t.dataExecucao) <= new Date());
+    for (const task of pesquisaOverdue) {
+      await completeTask(task.id);
+      state.webSearchMode = true;
+      showToast(`🔍 Pesquisa automatica: "${task.texto.slice(0, 50)}"`, "info");
+      await handleSendMessage(task.texto);
+    }
+    state.tasks = await getPendingTasks();
+    persistAndRender();
+  } catch {}
+}
+
+function startPesquisaWatcher() {
+  if (pesquisaCheckInterval) clearInterval(pesquisaCheckInterval);
+  pesquisaCheckInterval = setInterval(checkAndAutoExecutePesquisa, 60000);
 }
 
 function ensureSeedData() {
@@ -606,7 +674,7 @@ function getActiveTextProviderLabel() {
 
 function canUseWebSearch() {
   const provider = getActiveSettings().textProvider;
-  return provider !== "deepseek" && provider !== "gemini";
+  return provider !== "gemini";
 }
 
 function resetAttachments() {
@@ -646,6 +714,21 @@ async function handleSendMessage(rawMessage) {
     if (!isInstagramMode || state.isLoading) {
       return;
     }
+  }
+
+  const taskMatch = parseTaskCommand(message);
+  if (taskMatch) {
+    try {
+      await addTask(taskMatch.texto, taskMatch.recorrencia, taskMatch.tipo);
+      const label = taskMatch.recorrencia === "unica" ? "unica" : taskMatch.recorrencia;
+      const tipoLabel = taskMatch.tipo === "pesquisa" ? "🔍 pesquisa" : "lembrete";
+      showToast(`Tarefa criada: "${taskMatch.texto.slice(0, 60)}" (${label}, ${tipoLabel})`, "success");
+      state.tasks = await getPendingTasks();
+      persistAndRender();
+    } catch (e) {
+      showToast("Erro ao criar tarefa.", "error");
+    }
+    return;
   }
 
   const activeChat = getActiveChat();
@@ -849,7 +932,7 @@ async function handleSendMessage(rawMessage) {
             meta: {
               kind: "image",
               imageUrl: image.url,
-              provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
+              provider: IMAGE_PROVIDER_LABELS[getActiveSettings().imageProvider] || "Pollinations.ai",
               brandId: instagramPayload.brand.id,
               instagramFormat: instagramPayload.format.id,
               creativeBrief: instagramPayload.creativeBrief,
@@ -867,7 +950,7 @@ async function handleSendMessage(rawMessage) {
           meta: {
             kind: "image",
             generating: true,
-            provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
+            provider: IMAGE_PROVIDER_LABELS[getActiveSettings().imageProvider] || "Pollinations.ai",
             brandId: instagramPayload?.brand.id || null,
             instagramFormat: instagramPayload?.format.id || null,
             creativeBrief: instagramPayload?.creativeBrief || null,
@@ -888,7 +971,7 @@ async function handleSendMessage(rawMessage) {
             kind: "image",
             generating: false,
             imageUrl: image.url,
-            provider: getActiveSettings().imageProvider === "fal-ai" ? "fal.ai" : "Pollinations.ai",
+            provider: IMAGE_PROVIDER_LABELS[getActiveSettings().imageProvider] || "Pollinations.ai",
             brandId: instagramPayload?.brand.id || null,
             instagramFormat: instagramPayload?.format.id || null,
             creativeBrief: instagramPayload?.creativeBrief || null,
@@ -916,7 +999,7 @@ async function handleSendMessage(rawMessage) {
       let activeSettings = getActiveSettings();
       let smartWebSearch = false;
       let actualProvider = activeSettings.textProvider;
-      let actualModel = activeSettings.textModel || activeSettings.groqModel || activeSettings.deepSeekModel || "";
+      let actualModel = activeSettings.textModel || activeSettings.groqModel || "";
 
       if (state.smartMode && !isBrasilAgent) {
         const { useWebSearch, modelTier } = smartClassify(message);
@@ -953,7 +1036,6 @@ async function handleSendMessage(rawMessage) {
           messages: textPayload,
           settings: activeSettings,
           webSearchMode: false,
-          thinkingEnabled: state.thinkingEnabled,
         });
         updateMessageContent(activeChat.id, msgId, sendResult.content, {
           meta: {
@@ -1052,13 +1134,73 @@ async function handleSendMessage(rawMessage) {
             }
           }
         }
+
+        const fileActionMatch = responseContent.match(/\[CRIAR_ARQUIVO:(\w+)\]\s*\n([\s\S]*?)\n\[\/CRIAR_ARQUIVO\]/);
+        if (fileActionMatch) {
+          const format = fileActionMatch[1].toLowerCase();
+          const headerBlock = fileActionMatch[2];
+          const fileContent = responseContent.split(/\[\/CRIAR_ARQUIVO\]/)[1]?.trim() || "";
+
+          // Detect JSON metadata → route to reportGenerator
+          const trimmedHeader = headerBlock.trim();
+          if (format === "pdf" && trimmedHeader.startsWith("{") && trimmedHeader.endsWith("}")) {
+            try {
+              const metadata = JSON.parse(trimmedHeader);
+              const { gerarRelatorioPremium } = await import("./reportGenerator.js");
+              await gerarRelatorioPremium(metadata, fileContent || "");
+              showToast("Relatorio premium gerado com sucesso!", "success");
+            } catch (reportError) {
+              showToast(reportError.message || "Erro ao gerar relatorio.", "error");
+            }
+          } else {
+            const titleMatch = headerBlock.match(/titulo:\s*(.+)/i);
+            const fileName = titleMatch ? titleMatch[1].trim() : "arquivo";
+
+            if (fileContent) {
+              try {
+                const result = await generateFileFromContent(format, fileName, fileContent);
+                updateMessageMeta(activeChat.id, msgId, {
+                  fileExport: { format, fileName: result.fileName, blobUrl: result.blobUrl },
+                });
+                showToast(`Arquivo ${format.toUpperCase()} gerado com sucesso!`, "success");
+              } catch (fileError) {
+                showToast(fileError.message || "Erro ao gerar arquivo.", "error");
+              }
+            }
+          }
+        }
+
+        const taskActionMatch = responseContent.match(/\[CRIAR_TAREFA\]\s*\n([\s\S]*?)\n\[\/CRIAR_TAREFA\]/);
+        if (taskActionMatch) {
+          const headerBlock = taskActionMatch[1];
+          const textMatch = headerBlock.match(/texto:\s*(.+)/i);
+          const recMatch = headerBlock.match(/recorrencia:\s*(.+)/i);
+          const tipoMatch = headerBlock.match(/tipo:\s*(.+)/i);
+          const taskText = textMatch ? textMatch[1].trim() : "";
+          const taskRec = recMatch ? recMatch[1].trim().toLowerCase() : "unica";
+          const taskTipo = tipoMatch ? tipoMatch[1].trim().toLowerCase() : "manual";
+          if (taskText) {
+            try {
+              await addTask(taskText, taskRec, taskTipo);
+              state.tasks = await getPendingTasks();
+              showToast(`Tarefa criada: "${taskText.slice(0, 60)}" (${taskRec})`, "success");
+              addMessage(activeChat.id, {
+                role: "assistant",
+                content: `Tarefa criada com sucesso: "${taskText}" (${taskRec}${taskTipo === "pesquisa" ? ", com pesquisa" : ""}).`,
+                meta: { kind: "text", provider: "local", taskCreated: true },
+              });
+            } catch (taskError) {
+              showToast(taskError.message || "Erro ao criar tarefa.", "error");
+            }
+          }
+        }
       }
     }
 
     resetAttachments();
 
     // Auto-extract memory facts from conversation
-    if (activeChat?.messages?.length > 2) {
+    if (activeChat?.messages?.length >= 1) {
       autoExtractAndStore(activeChat.messages);
     }
   } catch (error) {
@@ -1215,11 +1357,6 @@ function handleQuickModelChange(value) {
     return;
   }
 
-  if (provider === "deepseek" && state.settings.deepSeekEnabled === false) {
-    showToast("DeepSeek esta desabilitado. Ative nas configuracoes.", "error");
-    return;
-  }
-
   if (provider === "groq" && state.settings.groqEnabled === false) {
     showToast("Groq esta desabilitado. Ative nas configuracoes.", "error");
     return;
@@ -1233,9 +1370,7 @@ function handleQuickModelChange(value) {
   state.settings = {
     ...state.settings,
     textProvider: provider,
-    ...(provider === "deepseek"
-      ? { deepSeekModel: model }
-      : provider === "groq"
+    ...(provider === "groq"
         ? { groqModel: model }
         : provider === "gemini"
           ? { geminiModel: model }
@@ -1364,12 +1499,6 @@ function handleToggleSmartMode() {
   persistAndRender();
 }
 
-function handleToggleThinkingMode() {
-  state.thinkingEnabled = !state.thinkingEnabled;
-  showToast(state.thinkingEnabled ? "Thinking mode ativado" : "Thinking mode desativado");
-  persistAndRender();
-}
-
 function handleTogglePinChat(chatId) {
   const chat = state.chats.find((c) => c.id === chatId);
   if (!chat) return;
@@ -1447,7 +1576,6 @@ function handleSaveSettings(formValues) {
   state.settings = {
     ...state.settings,
     openRouterKey: formValues.openRouterKey?.trim() || state.settings.openRouterKey || "",
-    deepSeekKey: formValues.deepSeekKey?.trim() || state.settings.deepSeekKey || "",
     groqKey: formValues.groqKey?.trim() || state.settings.groqKey || "",
     geminiKey: formValues.geminiKey?.trim() || state.settings.geminiKey || "",
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
@@ -1461,20 +1589,19 @@ function handleSaveSettings(formValues) {
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,
-    deepSeekEnabled: formValues.deepSeekEnabled === "on" || formValues.deepSeekEnabled === true,
     groqEnabled: formValues.groqEnabled === "on" || formValues.groqEnabled === true,
     geminiEnabled: formValues.geminiEnabled === "on" || formValues.geminiEnabled === true,
     textProvider: formValues.textProvider?.trim() || state.settings.textProvider || getDefaultSettings().textProvider,
     textModel: formValues.textModel?.trim() || state.settings.textModel || getDefaultSettings().textModel,
-    deepSeekModel: formValues.deepSeekModel?.trim() || state.settings.deepSeekModel || getDefaultSettings().deepSeekModel,
     groqModel: formValues.groqModel?.trim() || state.settings.groqModel || getDefaultSettings().groqModel,
     geminiModel: formValues.geminiModel?.trim() || state.settings.geminiModel || getDefaultSettings().geminiModel,
     openRouterSelectedModels: formValues.openRouterSelectedModels !== undefined
       ? formValues.openRouterSelectedModels
       : state.settings.openRouterSelectedModels || [],
+    wavespeedImageModel: formValues.wavespeedImageModel || state.settings.wavespeedImageModel || "system",
+    wavespeedKey: formValues.wavespeedKey?.trim() || state.settings.wavespeedKey || "",
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
-    openAITtsModel: formValues.openAITtsModel?.trim() || getDefaultSettings().openAITtsModel,
-    openAITtsVoice: formValues.openAITtsVoice?.trim() || getDefaultSettings().openAITtsVoice,
+    whisperModel: formValues.whisperModel || getDefaultSettings().whisperModel,
     usageLimits: {
       tavilyDailyLimit: Math.max(0, Number(formValues.tavilyDailyLimit) || 30),
       braveDailyLimit: Math.max(0, Number(formValues.braveDailyLimit) || 65),
@@ -1613,7 +1740,6 @@ function handleSaveAgent(formValues) {
     modelOverrideEnabled: formValues.modelOverrideEnabled === "on",
     textProvider: formValues.textProvider?.toString() || "",
     textModel: formValues.textModel?.toString() || "",
-    deepSeekModel: formValues.deepSeekModel?.toString() || "",
     groqModel: formValues.groqModel?.toString() || "",
     geminiModel: formValues.geminiModel?.toString() || "",
     defaultImageMode: formValues.defaultImageMode?.toString() || "inherit",
@@ -1724,8 +1850,14 @@ function handleEditAgent(agentId) {
 
 async function handleAttachFiles(fileList) {
   try {
-    state.pendingAttachmentContext = await processFiles(fileList);
-    showToast("Arquivos preparados para o próximo envio.", "success");
+    const newProcessed = await processFiles(fileList);
+    const existing = state.pendingAttachmentContext?.files || [];
+    const merged = [...existing, ...newProcessed.files];
+    state.pendingAttachmentContext = {
+      files: merged,
+      combinedContext: buildCombinedContext(merged),
+    };
+    showToast(`${merged.length} arquivo(s) pronto(s) para envio.`, "success");
     persistAndRender();
   } catch (error) {
     showToast(error.message || "Falha ao processar arquivos.", "error");
@@ -1883,7 +2015,6 @@ const voiceController = createVoiceController({
   render,
   getActiveChat,
   showToast,
-  generateSpeechAudio,
   transcribeAudio,
   getSpeechSynthesis,
   createSpeechRecognition,
@@ -1945,6 +2076,26 @@ function initialize() {
       const saved = readStorageJson(localStorage, STORAGE_KEYS.openRouterModels);
       if (saved) state.openRouterAvailableModels = saved;
     } catch { console.warn("[FEMIC GPT] Erro ao restaurar modelos OpenRouter"); }
+    initTaskSystem().then(async () => {
+      try { state.tasks = await getPendingTasks(); } catch { state.tasks = []; }
+      const overdue = await checkOverdueTasks().catch(() => []);
+      if (overdue.length > 0) {
+        showToast(`${overdue.length} tarefa(s) atrasada(s). Clique para revisar.`, "info", () => {
+          setModal("tasks", true);
+        });
+      }
+      await checkAndAutoExecutePesquisa();
+      startPesquisaWatcher();
+    }).catch(() => {});
+
+    // Extract memory facts from all chats (one-time on load)
+    try {
+      const allChats = loadChats();
+      for (const chat of allChats) {
+        if (chat.messages?.length >= 1) autoExtractAndStore(chat.messages);
+      }
+    } catch { /* ignore */ }
+
     pruneStorage().catch((err) => console.error("[FEMIC GPT] Erro na poda:", err));
   } catch (error) {
     console.error("[FEMIC GPT] Erro na inicializacao:", error);
@@ -1968,6 +2119,80 @@ function initialize() {
       setModal("settings", true);
     },
     onOpenHelp: () => setModal("help", true),
+    onOpenTasks: async () => {
+      try {
+        state.tasks = await getPendingTasks();
+      } catch { state.tasks = []; }
+      setModal("tasks", true);
+    },
+    onCompleteTask: async (taskId) => {
+      try {
+        await completeTask(Number(taskId));
+        state.tasks = await getPendingTasks();
+        persistAndRender();
+      } catch { console.warn("[TASK] Erro ao concluir tarefa"); }
+    },
+    onDeleteTask: async (taskId) => {
+      try {
+        await deleteTask(Number(taskId));
+        state.tasks = await getPendingTasks();
+        persistAndRender();
+      } catch { console.warn("[TASK] Erro ao excluir tarefa"); }
+    },
+    onExportTasksDOCX: async () => {
+      const tasks = state.tasks || [];
+      if (tasks.length === 0) {
+        showToast("Nenhuma tarefa para exportar.", "info");
+        return;
+      }
+      try {
+        await exportTasksAsDOCX(tasks);
+        showToast("Tarefas exportadas em DOCX.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar tarefas.", "error");
+      }
+    },
+    onExportTasksCSV: () => {
+      const tasks = state.tasks || [];
+      if (tasks.length === 0) {
+        showToast("Nenhuma tarefa para exportar.", "info");
+        return;
+      }
+      try {
+        exportTasksAsCSV(tasks);
+        showToast("Tarefas exportadas em CSV.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar tarefas.", "error");
+      }
+    },
+    onExportTasksExcel: async () => {
+      const tasks = state.tasks || [];
+      if (tasks.length === 0) {
+        showToast("Nenhuma tarefa para exportar.", "info");
+        return;
+      }
+      try {
+        await exportTasksAsExcel(tasks);
+        showToast("Tarefas exportadas em Excel.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar tarefas.", "error");
+      }
+    },
+    onExecuteTask: async (taskId) => {
+      const tasks = state.tasks || [];
+      const task = tasks.find((t) => t.id === Number(taskId));
+      if (!task) { showToast("Tarefa nao encontrada.", "error"); return; }
+      try {
+        await completeTask(Number(taskId));
+        state.tasks = await getPendingTasks();
+        state.webSearchMode = true;
+        persistAndRender();
+        showToast(`Executando pesquisa: "${task.texto.slice(0, 60)}"`, "info");
+        await handleSendMessage(task.texto);
+      } catch (error) {
+        showToast(error.message || "Erro ao executar tarefa.", "error");
+      }
+    },
     onOpenMemory: () => setModal("memory", true),
     onApplyGlobalPromptTemplate: () => {
       const template = `## IDENTIDADE E COMPORTAMENTO
@@ -2057,7 +2282,124 @@ Voce:
 Numero: 5511999998888
 [/ENVIAR_WHATSAPP]
 
-Ola! Estou a caminho. Chego em instantes.`;
+Ola! Estou a caminho. Chego em instantes.
+
+### GERACAO DE ARQUIVOS
+
+Quando o usuario pedir para criar um arquivo (PDF, planilha, CSV, TXT), responda com o conteudo formatado e use este bloco:
+
+[CRIAR_ARQUIVO:pdf]
+titulo: Titulo do Arquivo
+[/CRIAR_ARQUIVO]
+
+O conteudo do arquivo deve vir DEPOIS do bloco de fechamento.
+
+Formatos disponiveis: pdf, xlsx, csv, txt
+- PDF: para documentos formatados, relatorios, textos longos, artigos
+- XLSX: para tabelas, dados estruturados, listas com colunas
+- CSV: para dados tabulares simples, exportacao de dados
+- TXT: para texto simples, anotacoes
+
+Exemplo:
+Usuario: "Crie um PDF sobre tereos de mama"
+Voce:
+[CRIAR_ARQUIVO:pdf]
+titulo: Tereos de Mama
+[/CRIAR_ARQUIVO]
+
+# Tereos de Mama
+
+## O que e
+A mastectomia e a remocao total ou parcial da mama...
+
+## Indicacoes
+- Cancer de mama
+- Prevencao em casos de alto risco
+...
+
+### CRIACAO DE TAREFAS COM PESQUISA
+
+Quando o usuario pedir para criar uma tarefa ou lembrete que envolva pesquisa, use este bloco:
+
+[CRIAR_TAREFA]
+texto: Descricao da tarefa
+recorrencia: unica
+tipo: pesquisa
+[/CRIAR_TAREFA]
+
+- texto: descricao da tarefa (obrigatorio)
+- recorrencia: unica, diaria, semanal ou mensal (opcional, padrao: unica)
+- tipo: manual (apenas lembrete) ou pesquisa (executa busca na data agendada) (opcional, padrao: manual)
+
+Exemplos:
+Usuario: "pesquise precos de GPU toda semana"
+Voce:
+[CRIAR_TAREFA]
+texto: Pesquisar precos de GPU
+recorrencia: semanal
+tipo: pesquisa
+[/CRIAR_TAREFA]
+
+Tarefa criada! Toda semana vou pesquisar os precos de GPU para voce.
+
+Usuario: "me lembre de revisar o relatorio amanha"
+Voce:
+[CRIAR_TAREFA]
+texto: Revisar relatorio mensal
+recorrencia: unica
+tipo: manual
+[/CRIAR_TAREFA]
+
+Tarefa criada! Vou lembrar voce de revisar o relatorio.
+
+### RELATORIOS PREMIUM
+
+### GERACAO DE PDF
+
+TODOS os PDFs gerados pelo sistema usam o modelo PREMIUM (capa profissional, layout premium, tipografia Inter).
+
+OPCAO 1 — PDF SIMPLES (titulo + conteudo):
+[CRIAR_ARQUIVO:pdf]
+titulo: Titulo do Documento
+[/CRIAR_ARQUIVO]
+
+O conteudo em markdown vem APOS o bloco.
+
+OPCAO 2 — PDF COM DADOS (grafico, tabela, imagem):
+[CRIAR_ARQUIVO:pdf]
+{
+  "titulo": "Titulo do Relatorio",
+  "subtitulo": "Subtitulo opcional",
+  "imagem": "stock-market",
+  "corTema": "blue",
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Titulo do Grafico",
+    "labels": ["Jan","Fev","Mar"],
+    "datasets": [
+      {"label":"Serie","data":[100,200,150],"cor":"#3B82F6"}
+    ]
+  },
+  "tabela": {
+    "titulo": "Tabela de Dados",
+    "cabecalho": ["Indicador","Valor","Var"],
+    "linhas": [["Item 1","R$ 1.000","+5%"],["Item 2","R$ 2.500","-2%"]]
+  }
+}
+[/CRIAR_ARQUIVO]
+
+O CONTEUDO EM MARKDOWN DEVE VIR APOS O BLOCO.
+
+REGRAS:
+- Sempre use [CRIAR_ARQUIVO:pdf] para gerar PDFs
+- Use OPCAO 1 quando o usuario pedir um PDF simples (curriculo, resumo, documento)
+- Use OPCAO 2 quando pedir graficos, tabelas ou imagens
+- corTema: blue | green | purple | amber | teal
+- imagem: palavra em ingles relevante para buscar foto (ex: "stock-market", "healthy-food", "artificial-intelligence")
+- grafico.tipo: "bar" | "line" | "doughnut"
+- grafico.datasets[].cor: cor hexadecimal (ex: "#3B82F6")
+- Dados do grafico DEVEM ser numeros reais
+- Se nao houver dados para grafico/tabela, use OPCAO 1`;
       const textarea = document.querySelector('textarea[name="globalSystemPrompt"]');
       if (textarea) {
         textarea.value = template;
@@ -2089,10 +2431,112 @@ Ola! Estou a caminho. Chego em instantes.`;
         return;
       }
       try {
-        await exportChatAsPDF(chat.messages, chat.title);
+        await exportChatAsPremiumPDF(chat.messages, chat.title);
         showToast("PDF exportado com sucesso.", "success");
       } catch (error) {
         showToast(error.message || "Erro ao exportar PDF.", "error");
+      }
+    },
+    onExportChatDOCX: async () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        await exportChatAsDOCX(chat.messages, chat.title);
+        showToast("DOCX exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar DOCX.", "error");
+      }
+    },
+    onExportChatCSV: () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        exportChatAsCSV(chat.messages, chat.title);
+        showToast("CSV exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar CSV.", "error");
+      }
+    },
+    onExportChatJSON: () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        exportChatAsJSON(chat.messages, chat.title);
+        showToast("JSON exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar JSON.", "error");
+      }
+    },
+    onExportChatExcel: async () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        await exportChatAsExcel(chat.messages, chat.title);
+        showToast("Excel exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar Excel.", "error");
+      }
+    },
+    onExportChatPowerPoint: async () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        await exportChatAsPowerPoint(chat.messages, chat.title);
+        showToast("PowerPoint exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar PowerPoint.", "error");
+      }
+    },
+    onExportChatWord: async () => {
+      const chat = getActiveChat();
+      if (!chat || chat.messages.length === 0) {
+        showToast("A conversa esta vazia.", "info");
+        return;
+      }
+      try {
+        await exportChatAsWord(chat.messages, chat.title);
+        showToast("Documento exportado com sucesso.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar documento.", "error");
+      }
+    },
+    onExportMessagePDF: async (messageId) => {
+      const chat = getActiveChat();
+      if (!chat) { showToast("Nenhuma conversa ativa.", "info"); return; }
+      const message = chat.messages.find((m) => m.id === messageId);
+      if (!message) { showToast("Mensagem nao encontrada.", "error"); return; }
+      try {
+        await exportMessageAsPremiumPDF(message, chat.title);
+        showToast("PDF exportado.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar PDF.", "error");
+      }
+    },
+    onExportMessageDOCX: async (messageId) => {
+      const chat = getActiveChat();
+      if (!chat) { showToast("Nenhuma conversa ativa.", "info"); return; }
+      const message = chat.messages.find((m) => m.id === messageId);
+      if (!message) { showToast("Mensagem nao encontrada.", "error"); return; }
+      try {
+        await exportMessageAsDOCX(message, chat.title);
+        showToast("DOCX exportado.", "success");
+      } catch (error) {
+        showToast(error.message || "Erro ao exportar DOCX.", "error");
       }
     },
     onClearChat: () => {
@@ -2119,16 +2563,11 @@ Ola! Estou a caminho. Chego em instantes.`;
     },
     onToggleWebSearchMode: handleToggleWebSearchMode,
     onToggleSmartMode: handleToggleSmartMode,
-    onToggleThinkingMode: handleToggleThinkingMode,
     onTogglePinChat: handleTogglePinChat,
     onToggleShowArchived: handleToggleShowArchived,
     onRestoreArchived: handleRestoreArchived,
     onDeleteArchived: handleDeleteArchived,
     onToggleModelGuidance: handleToggleModelGuidance,
-    onToggleAgentSummary: () => {
-      state.agentSummaryCollapsed = !state.agentSummaryCollapsed;
-      persistAndRender();
-    },
     onChangePubMedResultLimit: handleChangePubMedResultLimit,
     onClearAttachments: () => {
       resetAttachments();
@@ -2169,6 +2608,16 @@ Ola! Estou a caminho. Chego em instantes.`;
     onRemoveMemoryFact: (factId) => {
       removeMemoryFact(factId);
       showToast("Fato removido da memoria.", "success");
+      persistAndRender();
+    },
+    onAddMemoryFact: (text) => {
+      if (!text || !text.trim()) { showToast("Digite um fato para adicionar.", "info"); return; }
+      const added = addMemoryFact(text.trim(), "manual");
+      if (added) {
+        showToast("Fato adicionado a memoria.", "success");
+      } else {
+        showToast("Esse fato ja existe na memoria.", "info");
+      }
       persistAndRender();
     },
     onExportData: () => {

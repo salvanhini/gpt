@@ -32,18 +32,16 @@ export function writeStorageJson(storage, key, value) {
   return value;
 }
 
-export function normalizeSettings(raw, defaults, openRouterModels, deepSeekModels, groqModels = [], qwenModels = []) {
+export function normalizeSettings(raw, defaults, openRouterModels, groqModels = []) {
   return normalizeSettingsWithFallback(
     raw,
     defaults,
     openRouterModels,
-    deepSeekModels,
     groqModels,
-    qwenModels,
   ).settings;
 }
 
-export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, deepSeekModels, groqModels = [], qwenModels = []) {
+export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, groqModels = []) {
   const settings = {
     ...defaults,
     ...(raw && typeof raw === "object" ? raw : {}),
@@ -60,16 +58,6 @@ export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, d
     settings.textModel = defaults.textModel;
   }
 
-  if (!deepSeekModels.some((model) => model.value === settings.deepSeekModel)) {
-    fallbacks.push({
-      provider: "deepseek",
-      settingKey: "deepSeekModel",
-      previousValue: settings.deepSeekModel,
-      nextValue: defaults.deepSeekModel,
-    });
-    settings.deepSeekModel = defaults.deepSeekModel;
-  }
-
   if (!groqModels.some((model) => model.value === settings.groqModel)) {
     fallbacks.push({
       provider: "groq",
@@ -80,7 +68,7 @@ export function normalizeSettingsWithFallback(raw, defaults, openRouterModels, d
     settings.groqModel = defaults.groqModel;
   }
 
-  if (!["openrouter", "deepseek", "groq", "gemini"].includes(settings.textProvider)) {
+  if (!["openrouter", "groq", "gemini"].includes(settings.textProvider)) {
     settings.textProvider = defaults.textProvider;
   }
 

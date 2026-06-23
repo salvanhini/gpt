@@ -14,8 +14,8 @@ const AGENT_PARAMETER_DEFAULTS = {
   modelOverrideEnabled: false,
   textProvider: "",
   textModel: "",
-  deepSeekModel: "",
   groqModel: "",
+  geminiModel: "",
   defaultImageMode: "inherit",
   defaultWebSearchMode: "inherit",
   defaultPubmedMode: "inherit",
@@ -23,7 +23,7 @@ const AGENT_PARAMETER_DEFAULTS = {
 };
 
 const MODE_DEFAULTS = new Set(["inherit", "on", "off"]);
-const TEXT_PROVIDERS = new Set(["", "openrouter", "deepseek", "groq"]);
+const TEXT_PROVIDERS = new Set(["", "openrouter", "groq", "gemini"]);
 
 export function normalizeAgent(agent = {}) {
   agent = agent || {};
@@ -630,7 +630,6 @@ export function createAgent(data) {
     modelOverrideEnabled: Boolean(data.modelOverrideEnabled),
     textProvider: data.textProvider || "",
     textModel: data.textModel || "",
-    deepSeekModel: data.deepSeekModel || "",
     groqModel: data.groqModel || "",
     defaultImageMode: data.defaultImageMode || "inherit",
     defaultWebSearchMode: data.defaultWebSearchMode || "inherit",
@@ -723,7 +722,6 @@ export function getEffectiveAgentSettings(settings = {}, agent = {}) {
     ...settings,
     textProvider: normalized.textProvider || settings.textProvider,
     textModel: normalized.textModel || settings.textModel,
-    deepSeekModel: normalized.deepSeekModel || settings.deepSeekModel,
     groqModel: normalized.groqModel || settings.groqModel,
     geminiModel: normalized.geminiModel || settings.geminiModel,
   };

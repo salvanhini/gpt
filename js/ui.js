@@ -102,10 +102,6 @@ function getVisibleChats(state) {
 
 function getProviderLabel(state) {
   const settings = state.effectiveSettings || state.settings || {};
-  if (settings.textProvider === "deepseek") {
-    return settings.deepSeekModel || "DeepSeek";
-  }
-
   if (settings.textProvider === "groq") {
     return (settings.groqModel || "").split("/").pop() || "Groq";
   }
@@ -114,10 +110,6 @@ function getProviderLabel(state) {
 }
 
 function getQuickModelValue(state) {
-  if (state.settings.textProvider === "deepseek") {
-    return `deepseek::${state.settings.deepSeekModel}`;
-  }
-
   if (state.settings.textProvider === "groq") {
     return `groq::${state.settings.groqModel}`;
   }
@@ -133,17 +125,13 @@ function getActiveModelDetails(state) {
   const settings = state.effectiveSettings || state.settings || {};
   const provider = settings.textProvider || "openrouter";
   const collection =
-    provider === "deepseek"
-      ? state.deepSeekModelOptions || []
-      : provider === "groq"
+    provider === "groq"
         ? state.groqModelOptions || []
         : provider === "gemini"
           ? state.geminiModelOptions || []
           : state.modelOptions || [];
   const selectedValue =
-    provider === "deepseek"
-      ? settings.deepSeekModel
-      : provider === "groq"
+    provider === "groq"
         ? settings.groqModel
         : provider === "gemini"
           ? settings.geminiModel
@@ -151,8 +139,7 @@ function getActiveModelDetails(state) {
   const model = collection.find((item) => item.value === selectedValue) || collection[0] || null;
 
   return {
-    providerLabel:
-      provider === "deepseek" ? "DeepSeek" : provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "OpenRouter",
+      providerLabel: provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "OpenRouter",
     label: model?.label || "Modelo padrão",
     helperText: model?.helperText || model?.description || "Modelo pronto para uso geral.",
     badges: Array.isArray(model?.badges) ? model.badges : [],
@@ -169,6 +156,16 @@ function isBrasilAgent(state) {
 
 function getInstagramFormatById(state, formatId) {
   return (state.instagramFormats || []).find((item) => item.id === formatId) || state.instagramFormats?.[0] || null;
+}
+
+function getImageProviderLabel(provider) {
+  const map = {
+    pollinations: "Pollinations.ai",
+    "fal-ai": "fal.ai (Flux Schnell)",
+    pixazo: "Pixazo.ai",
+    wavespeed: "Wavespeed.ai (Flux 2 Klein)",
+  };
+  return map[provider] || provider || "Desconhecido";
 }
 
 function renderQuickModelOptions(state) {
@@ -199,13 +196,6 @@ function renderQuickModelOptions(state) {
       `,
     );
   })() : [];
-  const deepSeek = settings.deepSeekEnabled !== false ? (state.deepSeekModelOptions || []).map(
-    (model) => `
-      <option value="deepseek::${escapeHtml(model.value)}" ${current === `deepseek::${model.value}` ? "selected" : ""}>
-        DeepSeek · ${escapeHtml(model.label)}
-      </option>
-    `,
-  ) : [];
   const groq = settings.groqEnabled !== false ? (state.groqModelOptions || []).map(
     (model) => `
       <option value="groq::${escapeHtml(model.value)}" ${current === `groq::${model.value}` ? "selected" : ""}>
@@ -221,7 +211,7 @@ function renderQuickModelOptions(state) {
     `,
   ) : [];
 
-  return [...openRouter, ...deepSeek, ...groq, ...gemini].join("");
+  return [...openRouter, ...groq, ...gemini].join("");
 }
 
 function renderModelGuidance(state) {
@@ -471,76 +461,6 @@ function renderWebSearchControls(state) {
   `;
 }
 
-function renderActiveAgentSummary(state) {
-  const agent = state.activeAgent;
-  if (!agent) {
-    return "";
-  }
-
-  const isCollapsed = Boolean(state.agentSummaryCollapsed);
-
-  const guide = AGENT_GUIDES[agent.id] || {
-    badge: "Agente ativo",
-    title: agent.description || "Pronto para ajudar.",
-    highlights: ["Conversa organizada", "Respostas com contexto", "Fluxo guiado pelo chat"],
-    examples: ["Comece com uma pergunta clara", "Anexe um arquivo se precisar de contexto", "Use o board para organizar conversas"],
-  };
-
-  return `
-    <section class="agent-summary-panel ${isCollapsed ? "is-collapsed" : ""} mb-3 rounded-[1.45rem] border border-white/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(240,248,255,0.92))] px-4 py-3 shadow-soft">
-      <div class="agent-summary-header flex ${isCollapsed ? "items-center justify-between gap-3" : "flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"}">
-        <div class="min-w-0 flex-1">
-          ${isCollapsed
-            ? `<div class="flex min-w-0 items-center gap-2.5">
-                <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-100 bg-white text-[0.95rem] shadow-sm">${escapeHtml(agent.emoji || "🤖")}</span>
-                <div class="min-w-0 flex items-center gap-1.5">
-                  <h2 class="truncate text-sm font-semibold tracking-tight text-slate-900">${escapeHtml(agent.name)}</h2>
-                  ${state.webSearchMode ? `<span class="inline-flex h-2 w-2 shrink-0 rounded-full bg-amber-400" title="Busca Web ativa"></span>` : ""}
-                  ${isScienceAgent(state) && state.pubmedMode ? `<span class="inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-400" title="PubMed ativa"></span>` : ""}
-                </div>
-              </div>`
-            : `<div class="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-femic-navy">
-                <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 text-sm">${escapeHtml(agent.emoji || "🤖")}</span>
-                <span>${escapeHtml(guide.badge)}</span>
-              </div>
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold tracking-tight text-slate-950">${escapeHtml(agent.name)}</h2>
-                <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(getProviderLabel(state))}</span>
-                ${state.webSearchMode ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">Busca Web hibrida</span>` : ""}
-                ${isScienceAgent(state) && state.pubmedMode ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-semibold text-sky-700">PubMed</span>` : ""}
-              </div>`
-          }
-          ${isCollapsed ? "" : `<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${escapeHtml(guide.title)}</p>`}
-        </div>
-        <div class="agent-summary-actions flex shrink-0 ${isCollapsed ? "items-center" : "items-start"} gap-2 lg:justify-end">
-          ${isCollapsed ? "" : `<div class="flex flex-wrap gap-2 lg:max-w-[320px] lg:justify-end">
-            ${guide.highlights.map((item) => `<span class="inline-flex items-center rounded-full border border-white/80 bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-600 shadow-sm">${escapeHtml(item)}</span>`).join("")}
-          </div>`}
-          <button
-            type="button"
-            class="agent-summary-toggle inline-flex ${isCollapsed ? "h-7 w-7 text-[11px]" : "h-9 w-9 text-sm"} items-center justify-center rounded-full border border-slate-200/90 bg-white/90 text-slate-500 shadow-sm"
-            data-action="toggle-agent-summary"
-            title="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"
-            aria-label="${isCollapsed ? "Expandir cabecalho do agente" : "Recolher cabecalho do agente"}"
-            aria-expanded="${isCollapsed ? "false" : "true"}"
-          >
-            ${isCollapsed ? "▾" : "▴"}
-          </button>
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xs text-slate-400 shadow-sm hover:border-sky-200 hover:text-sky-500"
-            data-action="export-chat-pdf"
-            title="Exportar conversa como PDF"
-          >📄</button>
-        </div>
-      </div>
-      ${isCollapsed ? "" : `<div class="mt-3 flex flex-wrap gap-2">
-        ${guide.examples.map((example) => `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50/85 px-3 py-1.5 text-[11px] text-slate-500">${escapeHtml(example)}</span>`).join("")}
-      </div>`}
-    </section>
-  `;
-}
-
 function renderInstagramCreativePanel(state) {
   const brands = state.brands || [];
   const currentFormat = getInstagramFormatById(state, state.instagramFormat);
@@ -628,7 +548,7 @@ function renderAssistantActions(message, state) {
   }
 
   const isSpeaking = state.speakingMessageId === message.id;
-  const canSpeak = state.speechSynthesisSupported !== false || Boolean(state.settings.openAIKey);
+  const canSpeak = state.speechSynthesisSupported !== false;
   return `
     <button
       type="button"
@@ -648,6 +568,21 @@ function renderAssistantActions(message, state) {
     >
       ${isSpeaking ? "■" : "🔊"}
     </button>
+    <div class="relative inline-flex" data-dropdown="export-msg-${message.id}">
+      <button
+        type="button"
+        class="control-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500 shadow-sm"
+        data-action="toggle-dropdown"
+        data-dropdown-id="export-msg-${message.id}"
+        title="Exportar esta mensagem"
+      >
+        📥
+      </button>
+      <div class="hidden absolute right-0 top-8 z-50 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg" data-dropdown-menu="export-msg-${message.id}">
+        <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-message-pdf" data-message-id="${message.id}">📄 PDF</button>
+        <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-message-docx" data-message-id="${message.id}">📘 DOCX</button>
+      </div>
+    </div>
   `;
 }
 
@@ -707,10 +642,8 @@ function renderMessage(message, state, index = 0) {
   const label = isUser ? "Você" : "FEMIC GPT";
   const showTypingDots = message.role === "assistant" && !message.content && state.isLoading;
   const searchImages = Array.isArray(message.meta?.searchImages) && message.meta.searchImages.length > 0
-    ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.slice(0, 5).map((img) =>
-        typeof img === "string"
-          ? `<img src="${escapeHtml(img)}" alt="Imagem da busca" class="search-img-thumb h-20 w-20 rounded-lg object-cover border border-slate-200" loading="lazy" data-lightbox-src="${escapeHtml(img)}" />`
-          : ""
+    ? `<div class="mt-3 flex flex-wrap gap-2">${message.meta.searchImages.filter((img) => typeof img === "string" && img.startsWith("http")).slice(0, 5).map((img) =>
+        `<img src="${escapeHtml(img)}" alt="Imagem da busca" class="search-img-thumb h-20 w-20 rounded-lg object-cover border border-slate-200" loading="lazy" data-lightbox-src="${escapeHtml(img)}" onerror="this.style.display='none'" />`
       ).join("")}</div>`
     : "";
   const content = message.meta?.kind === "image" && message.meta?.generating
@@ -748,11 +681,21 @@ function renderMessage(message, state, index = 0) {
         >
           Baixar imagem
         </a>
+        <span class="image-model-badge inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-500">Gerado com: ${escapeHtml(getImageProviderLabel(message.meta?.provider))}</span>
       </div>
     `
     : showTypingDots
       ? `<div class="typing-dots text-slate-500"><span>●</span> <span>●</span> <span>●</span></div>`
-      : `<div class="markdown-body">${renderMarkdown(message.content)}</div>${searchImages}`;
+      : `<div class="markdown-body">${renderMarkdown(message.content)}</div>${searchImages}${
+        message.meta?.fileExport
+          ? `<div class="mt-3 flex flex-wrap gap-2">
+              ${message.meta.fileExport.blobUrl
+                ? `<a class="inline-flex items-center gap-2 rounded-full bg-femic-navy px-4 py-2 text-sm font-semibold text-white shadow-soft" href="${escapeHtml(message.meta.fileExport.blobUrl)}" download="${escapeHtml(message.meta.fileExport.fileName)}">📥 Baixar ${escapeHtml(message.meta.fileExport.format.toUpperCase())}</a>`
+                : ""}
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.fileExport.fileName)}</span>
+            </div>`
+          : ""
+      }`;
   const providerBadge = message.meta?.provider
     ? `<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">${escapeHtml(message.meta.provider)}</span>`
     : "";
@@ -794,6 +737,9 @@ export function initLightbox() {
   if (lightboxBound) return;
   lightboxBound = true;
   document.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-dropdown]")) {
+      document.querySelectorAll("[data-dropdown-menu]").forEach((m) => m.classList.add("hidden"));
+    }
     const img = e.target.closest("[data-lightbox-src]");
     if (!img) return;
     e.preventDefault();
@@ -1275,6 +1221,60 @@ function renderWhatsAppComposeModal(state) {
   `;
 }
 
+function renderTasksModal(state) {
+  if (!state.modals.tasks) return "";
+  const tasks = state.tasks || [];
+  return `
+    <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="tasks">
+      <div class="modal-panel glass-panel rounded-2xl p-5 shadow-panel max-w-lg w-full" data-modal-surface="tasks">
+          <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-slate-900">Minhas Tarefas</h3>
+            <p class="mt-1 text-sm text-slate-500">Gerencie seus lembretes e tarefas.</p>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="relative" data-dropdown="export-tasks">
+              <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="toggle-dropdown" data-dropdown-id="export-tasks" title="Exportar tarefas">📥</button>
+              <div class="hidden absolute right-0 top-8 z-50 min-w-[120px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg" data-dropdown-menu="export-tasks">
+                <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-tasks-docx">📘 DOCX</button>
+                <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-tasks-csv">📊 CSV</button>
+                <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-tasks-excel">📗 Excel</button>
+              </div>
+            </div>
+            <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="tasks">✕</button>
+          </div>
+        </div>
+        <div class="task-list space-y-2">
+          ${tasks.length === 0 ? '<p class="text-sm text-slate-400 text-center py-8">Nenhuma tarefa pendente.</p>' : tasks.map((task) => {
+            const isOverdue = new Date(task.dataExecucao) <= new Date();
+            const tipoIcon = task.tipo === "pesquisa" ? "🔍" : task.tipo === "arquivo" ? "📄" : "📋";
+            return `
+            <div class="task-item flex items-center gap-3 rounded-xl border border-slate-200 bg-white/75 p-3 ${isOverdue ? "border-amber-300 bg-amber-50/40" : ""}">
+              <input type="checkbox" class="h-4 w-4 shrink-0 rounded border-slate-300 text-femic-cyan focus:ring-femic-cyan cursor-pointer" data-action="complete-task" data-task-id="${task.id}" />
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium text-slate-800 flex items-center gap-1.5">
+                  <span class="text-[10px]">${tipoIcon}</span>
+                  <span>${escapeHtml(task.texto)}</span>
+                </div>
+                <div class="mt-0.5 flex items-center gap-2 text-[10px] text-slate-500">
+                  <span>${new Date(task.dataExecucao).toLocaleDateString("pt-BR")}</span>
+                  <span class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold capitalize ${task.recorrencia === "unica" ? "border-slate-200 bg-slate-50 text-slate-500" : "border-cyan-200 bg-cyan-50 text-cyan-700"}">${task.recorrencia}</span>
+                  ${task.tipo === "pesquisa" ? '<span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600">pesquisa</span>' : ""}
+                  ${isOverdue ? '<span class="text-amber-600 font-semibold text-[9px]">ATRASADA</span>' : ""}
+                </div>
+              </div>
+              <div class="flex items-center gap-1">
+                ${task.tipo === "pesquisa" && isOverdue ? `<button type="button" class="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold text-white bg-violet-500 hover:bg-violet-600" data-action="execute-task" data-task-id="${task.id}" title="Executar pesquisa">▶</button>` : ""}
+                <button type="button" class="shrink-0 rounded-full p-1 text-slate-400 hover:bg-red-50 hover:text-red-500" data-action="delete-task" data-task-id="${task.id}" title="Excluir">✕</button>
+              </div>
+            </div>
+          `}).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSettingsModal(state) {
   if (!state.modals.settings) {
     return "";
@@ -1332,23 +1332,6 @@ function renderSettingsModal(state) {
                     ` : `<p class="text-[10px] text-slate-400">Clique em "Buscar Modelos" para carregar a lista.</p>`}
                   </div>
                 ` : ""}
-              </section>
-
-              <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
-                <div class="mb-2 flex items-center justify-between">
-                  <div>
-                    <div class="text-sm font-semibold text-slate-900">DeepSeek direta</div>
-                    <div class="text-xs text-slate-500">Chave para modelos DeepSeek direto.</div>
-                  </div>
-                  <label class="relative inline-flex cursor-pointer items-center gap-1">
-                    <input type="checkbox" name="deepSeekEnabled" class="peer sr-only" ${settings.deepSeekEnabled !== false ? "checked" : ""} />
-                    <div class="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-femic-cyan peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                  </label>
-                </div>
-                <label class="block">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                  <input class="modal-input" name="deepSeekKey" type="password" value="${escapeHtml(settings.deepSeekKey || "")}" placeholder="sk-..." ${settings.deepSeekEnabled === false ? "disabled" : ""} />
-                </label>
               </section>
 
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
@@ -1420,6 +1403,17 @@ function renderSettingsModal(state) {
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Pixazo.ai)</span>
                   <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (so para Pixazo.ai)" />
                 </label>
+                <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Modelo de Imagem (Wavespeed)</span>
+                  <select class="modal-input" name="wavespeedImageModel">
+                    <option value="system" ${settings.wavespeedImageModel === "system" || !settings.wavespeedImageModel ? "selected" : ""}>Padrao do Sistema</option>
+                    <option value="wavespeed-ai/flux-2-klein-9b-text-to-image" ${settings.wavespeedImageModel === "wavespeed-ai/flux-2-klein-9b-text-to-image" ? "selected" : ""}>Flux 2 Klein (Wavespeed.ai)</option>
+                  </select>
+                </label>
+                <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Wavespeed.ai)</span>
+                  <input class="modal-input" name="wavespeedKey" type="password" value="${escapeHtml(settings.wavespeedKey || "")}" placeholder="ws_..." />
+                </label>
                 <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuito e nao precisa de chave. fal.ai e Pixazo.ai requerem chave de API.</div>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
@@ -1462,29 +1456,20 @@ function renderSettingsModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
-              <div class="text-sm font-semibold text-slate-900">Audio (OpenAI)</div>
-              <div class="text-xs text-slate-500">Fallback para microfone e leitura quando o navegador nao tem voz nativa.</div>
+              <div class="text-sm font-semibold text-slate-900">Audio (Fala e Transcricao)</div>
+              <div class="text-xs text-slate-500">Fala usa voz nativa do navegador. Transcricao usa OpenRouter.</div>
             </div>
             <div class="grid gap-3 lg:grid-cols-4">
               <label class="block lg:col-span-2">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
-                <input class="modal-input" name="openAIKey" type="password" value="${escapeHtml(settings.openAIKey || "")}" placeholder="sk-..." />
-              </label>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Transcricao</span>
-                <input class="modal-input" name="openAITranscribeModel" type="text" value="${escapeHtml(settings.openAITranscribeModel || "gpt-4o-mini-transcribe")}" />
-              </label>
-              <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Voz</span>
-                <select class="modal-input appearance-none" name="openAITtsVoice">
-                  ${["coral", "marin", "cedar", "alloy", "nova", "shimmer", "verse"].map((voice) => `
-                    <option value="${voice}" ${(settings.openAITtsVoice || "coral") === voice ? "selected" : ""}>${voice}</option>
+                <span class="mb-2 block text-sm font-medium text-slate-700">Modelo Whisper (transcricao)</span>
+                <select class="modal-input appearance-none" name="whisperModel">
+                  ${[
+                    { value: "openai/whisper-large-v3-turbo", label: "Whisper v3 Turbo (OpenRouter)" },
+                    { value: "openai/whisper-large-v3", label: "Whisper v3 (OpenRouter)" },
+                  ].map((m) => `
+                    <option value="${m.value}" ${(settings.whisperModel || "openai/whisper-large-v3-turbo") === m.value ? "selected" : ""}>${m.label}</option>
                   `).join("")}
                 </select>
-              </label>
-              <label class="block lg:col-span-2">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Modelo de fala</span>
-                <input class="modal-input" name="openAITtsModel" type="text" value="${escapeHtml(settings.openAITtsModel || "gpt-4o-mini-tts")}" />
               </label>
             </div>
           </section>
@@ -1558,7 +1543,7 @@ function renderSettingsModal(state) {
               <span class="mb-2 block text-sm font-medium text-slate-700">Instrucao global</span>
               <textarea class="modal-textarea min-h-[160px]" name="globalSystemPrompt" placeholder="Cole aqui o prompt global...">${escapeHtml(settings.globalSystemPrompt || "")}</textarea>
             </label>
-            <button type="button" class="mt-2 rounded-full border border-sky-200 px-3 py-1.5 text-[11px] font-semibold text-sky-600 hover:bg-sky-50" data-action="apply-global-prompt-template">Usar prompt de exemplo (Email + WhatsApp)</button>
+            <button type="button" class="mt-2 rounded-full border border-sky-200 px-3 py-1.5 text-[11px] font-semibold text-sky-600 hover:bg-sky-50" data-action="apply-global-prompt-template">Restaurar Prompt Global</button>
           </section>
 
           <section class="rounded-xl border border-emerald-200/70 bg-emerald-50/40 p-3">
@@ -1576,39 +1561,42 @@ function renderSettingsModal(state) {
                 <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCostValue(state.monthlyCost || 0))}</div>
               </div>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">Tavily (busca/dia)</span>
-                <input class="modal-input" name="tavilyDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tavilyDailyLimit ?? 30))}" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">Brave (busca/dia)</span>
-                <input class="modal-input" name="braveDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.braveDailyLimit ?? 65))}" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">Transcricao Groq (transc/dia)</span>
-                <input class="modal-input" name="groqTranscriptionDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.groqTranscriptionDailyLimit ?? 20))}" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">E2B (execucoes/dia)</span>
-                <input class="modal-input" name="e2bDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.e2bDailyLimit ?? 5))}" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">Historico maximo (mensagens)</span>
-                <input class="modal-input" name="maxHistoryMessages" type="number" min="4" max="100" value="${escapeHtml(String(settings.usageLimits?.maxHistoryMessages ?? 12))}" />
-              </label>
-              <label class="block">
-                <span class="mb-1 block text-xs font-medium text-slate-700">Alerta de tokens</span>
-                <input class="modal-input" name="tokenWarningLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tokenWarningLimit ?? 12000))}" />
-              </label>
-            </div>
+            <details class="mt-2">
+              <summary class="cursor-pointer text-xs font-semibold text-slate-500 hover:text-slate-700 select-none">Ajustar limites ▼</summary>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Tavily (busca/dia)</span>
+                  <input class="modal-input" name="tavilyDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tavilyDailyLimit ?? 30))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Brave (busca/dia)</span>
+                  <input class="modal-input" name="braveDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.braveDailyLimit ?? 65))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Transcricao (transc/dia)</span>
+                  <input class="modal-input" name="groqTranscriptionDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.groqTranscriptionDailyLimit ?? 20))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">E2B (execucoes/dia)</span>
+                  <input class="modal-input" name="e2bDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.e2bDailyLimit ?? 5))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Historico maximo (mensagens)</span>
+                  <input class="modal-input" name="maxHistoryMessages" type="number" min="4" max="100" value="${escapeHtml(String(settings.usageLimits?.maxHistoryMessages ?? 12))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Alerta de tokens</span>
+                  <input class="modal-input" name="tokenWarningLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tokenWarningLimit ?? 12000))}" />
+                </label>
+              </div>
+            </details>
             <div class="mt-3 rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
               <div class="flex items-center gap-2 text-xs font-semibold text-emerald-800">
                 <span>⚡</span>
                 <span>Prompt Caching ativo</span>
               </div>
               <div class="mt-1 text-[11px] leading-relaxed text-emerald-700">
-                O sistema usa cache de prompt para economizar tokens. DeepSeek e Groq fazem cache automatico de prefixos identicos (50-90% de desconto). OpenRouter usa response cache para requests identicas (zero custo).
+                O sistema usa cache de prompt para economizar tokens. Groq faz cache automatico de prefixos identicos (50-90% de desconto). OpenRouter usa response cache para requests identicas (zero custo).
               </div>
             </div>
           </section>
@@ -1708,9 +1696,8 @@ function renderHelpModal(state) {
             <p class="mt-1 text-xs leading-5 text-slate-600">Escolha o modelo certo para cada tarefa.</p>
             <ul class="mt-2 space-y-1 text-xs text-slate-500">
               <li><strong>⚡ Rapidos (Groq):</strong> Respostas instantaneas. Ideais para perguntas simples, traducoes, resumos.</li>
-              <li><strong>🧠 Qualidade (OpenRouter/DeepSeek):</strong> Textos longos, analises profundas, codigo.</li>
-              <li><strong>🔬 Raciocinio:</strong> Problemas complexos que precisam de etapas logicas.</li>
-              <li><strong>🌐 Gemini:</strong> Multimodal (imagens), bom custo-beneficio.</li>
+              <li><strong>🧠 Qualidade (OpenRouter):</strong> Qwen, DeepSeek (via OpenRouter) para textos longos, analises profundas, codigo.</li>
+              <li><strong>🌐 Gemini:</strong> Multimodal (imagens e documentos), bom custo-beneficio.</li>
             </ul>
           </section>
 
@@ -1741,12 +1728,12 @@ function renderHelpModal(state) {
 
           <section class="rounded-xl border border-violet-200 bg-violet-50/80 p-4">
             <h4 class="text-sm font-bold text-violet-900">Memoria Persistente</h4>
-            <p class="mt-1 text-xs leading-5 text-violet-700">O sistema lembra fatos sobre voce (nome, profissao, preferencias). Extraido automaticamente das conversas. Acesse pelo botao 🧠 na barra lateral.</p>
+            <p class="mt-1 text-xs leading-5 text-violet-700">O sistema lembra fatos sobre voce (nome, profissao, preferencias). Extraido automaticamente das conversas, voce tambem pode adicionar fatos manualmente. Acesse pelo botao 🧠 na barra lateral.</p>
           </section>
 
           <section class="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
             <h4 class="text-sm font-bold text-amber-900">Prompt Caching</h4>
-            <p class="mt-1 text-xs leading-5 text-amber-700">Respostas identicas usam cache local (24h). Providers como DeepSeek e Groq fazem cache automatico de prefixos (50-90% de desconto).</p>
+            <p class="mt-1 text-xs leading-5 text-amber-700">Respostas identicas usam cache local (24h). Providers como Groq e OpenRouter fazem cache automatico de prefixos (50-90% de desconto).</p>
           </section>
 
           <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
@@ -1755,13 +1742,145 @@ function renderHelpModal(state) {
           </section>
 
           <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Sistema de Tarefas</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Crie tarefas e lembretes diretamente no chat. Comandos:</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-500">
+              <li><strong>"me lembre de X uma vez por mes"</strong> — Cria tarefa mensal</li>
+              <li><strong>"criar tarefa: X"</strong> — Cria tarefa unica</li>
+              <li><strong>"lembrar de X"</strong> — Cria tarefa unica</li>
+              <li><strong>"tarefa nova: X"</strong> — Cria tarefa unica</li>
+              <li><strong>"pesquise X toda semana"</strong> — Cria tarefa recorrente de pesquisa</li>
+            </ul>
+            <p class="mt-2 text-xs text-slate-500">Tarefas atrasadas viram alerta na interface. Acesse pelo botao <strong>✓</strong> na barra lateral.</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
             <h4 class="text-sm font-bold text-slate-900">Geracao de Imagens</h4>
-            <p class="mt-1 text-xs leading-5 text-slate-600">Ative o modo imagem e peça para gerar. Provedores: Pollinations.ai (gratis) ou fal.ai (pago). Use agentes Designer ou Decorador para melhores resultados.</p>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Ative o modo imagem e peça para gerar. Provedores: Pollinations.ai (gratis), fal.ai (pago), Pixazo.ai (gratis) e WaveSpeed.ai (Flux 2 Klein). Configure o modelo e chave em Configuracoes. Cada imagem exibe badge com o provedor.</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Exportacao</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Exporte conversas em PDF, DOCX (Word nativo), CSV, JSON, Excel (.xlsx), PowerPoint (.pptx) e Word (PDF). Tarefas tambem podem ser exportadas. Use o botao 📥 no chat.</p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Atalhos do Teclado</h4>
+            <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div class="flex items-center gap-2"><kbd class="shortcut-key">Ctrl+K</kbd><span class="text-slate-500">Busca</span></div>
+              <div class="flex items-center gap-2"><kbd class="shortcut-key">Ctrl+N</kbd><span class="text-slate-500">Nova conversa</span></div>
+              <div class="flex items-center gap-2"><kbd class="shortcut-key">?</kbd><span class="text-slate-500">Atalhos</span></div>
+              <div class="flex items-center gap-2"><kbd class="shortcut-key">Esc</kbd><span class="text-slate-500">Fechar modal</span></div>
+            </div>
           </section>
 
           <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
             <h4 class="text-sm font-bold text-slate-900">Backup</h4>
             <p class="mt-1 text-xs leading-5 text-slate-600">Exporte e importe todas as conversas, configuracoes e chaves de API pelo menu Configuracoes.</p>
+          </section>
+
+          <section class="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
+            <h4 class="text-sm font-bold text-rose-900">Voz e Audio</h4>
+            <p class="mt-1 text-xs leading-5 text-rose-700">Entrada e saida de voz diretamente no chat.</p>
+            <ul class="mt-2 space-y-1 text-xs text-rose-600">
+              <li><strong>Leitura em voz alta:</strong> Voz nativa do navegador (sem configuracao)</li>
+              <li><strong>Microfone:</strong> Dictado por voz via OpenRouter Whisper</li>
+              <li><strong>Transcricao:</strong> Whisper v3 Turbo (OpenRouter) para converter fala em texto</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-orange-200 bg-orange-50/80 p-4">
+            <h4 class="text-sm font-bold text-orange-900">Leitura de Arquivos</h4>
+            <p class="mt-1 text-xs leading-5 text-orange-700">Envie um ou varios arquivos para o chat analisar e processar.</p>
+            <ul class="mt-2 space-y-1 text-xs text-orange-600">
+              <li><strong>Arrastar-e-soltar:</strong> Solte arquivos diretamente na area de chat</li>
+              <li><strong>Botao de anexo:</strong> Clique no icone 📎 para selecionar</li>
+              <li><strong>Multiplos arquivos:</strong> Clique varias vezes no 📎 para acumular anexos</li>
+              <li><strong>Formatos:</strong> PDF, imagens (PNG, JPG), Word (.docx), Excel (.xlsx), CSV, TXT, XML</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-teal-200 bg-teal-50/80 p-4">
+            <h4 class="text-sm font-bold text-teal-900">Relatorios Premium</h4>
+            <p class="mt-1 text-xs leading-5 text-teal-700">Gere relatorios profissionais em PDF com graficos e tabelas.</p>
+            <ul class="mt-2 space-y-1 text-xs text-teal-600">
+              <li><strong>Comando:</strong> [CRIAR_ARQUIVO:pdf] com JSON para graficos Chart.js</li>
+              <li><strong>Graficos:</strong> Barras, linhas, pizza, radar e mais</li>
+              <li><strong>Tabelas:</strong> Dados formatados em tabelas profissionais</li>
+              <li><strong>Imagens:</strong> Imagens Unsplash integradas ao relatorio</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-lime-200 bg-lime-50/80 p-4">
+            <h4 class="text-sm font-bold text-lime-900">Geracao de Arquivos</h4>
+            <p class="mt-1 text-xs leading-5 text-lime-700">Crie arquivos para download diretamente pelo chat.</p>
+            <ul class="mt-2 space-y-1 text-xs text-lime-600">
+              <li><strong>PDF:</strong> [CRIAR_ARQUIVO:pdf] para documentos formatados</li>
+              <li><strong>DOCX:</strong> [CRIAR_ARQUIVO:pdf] com titulo para documento Word nativo</li>
+              <li><strong>Excel:</strong> [CRIAR_ARQUIVO:xlsx] para planilhas</li>
+              <li><strong>CSV:</strong> [CRIAR_ARQUIVO:csv] para dados tabulares</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-indigo-200 bg-indigo-50/80 p-4">
+            <h4 class="text-sm font-bold text-indigo-900">Categorias de Chat</h4>
+            <p class="mt-1 text-xs leading-5 text-indigo-700">Organize suas conversas por categorias com codigo de cores.</p>
+            <ul class="mt-2 space-y-1 text-xs text-indigo-600">
+              <li><strong>Criar categorias:</strong> Acesse pelo menu lateral ou configuracoes</li>
+              <li><strong>Codigo de cores:</strong> Cada categoria tem uma cor para identificacao visual</li>
+              <li><strong>Filtrar:</strong> Filtre conversas por categoria no board</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900">Arquivamento</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Mantenha sua barra lateral organizada arquivando conversas antigas.</p>
+            <ul class="mt-2 space-y-1 text-xs text-slate-500">
+              <li><strong>Arquivar:</strong> Envie conversas para o arquivo sem exclui-las</li>
+              <li><strong>Restaurar:</strong> Recupere conversas arquivadas a qualquer momento</li>
+              <li><strong>Acessar:</strong> Filtro "Arquivadas" no board de conversas</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-pink-200 bg-pink-50/80 p-4">
+            <h4 class="text-sm font-bold text-pink-900">Custo e Uso</h4>
+            <p class="mt-1 text-xs leading-5 text-pink-700">Acompanhe o consumo de tokens e custos por modelo.</p>
+            <ul class="mt-2 space-y-1 text-xs text-pink-600">
+              <li><strong>Rastreamento:</strong> Custo estimado por mensagem enviada</li>
+              <li><strong>Por modelo:</strong> Detalhamento de uso por provider (Groq, OpenRouter, Gemini)</li>
+              <li><strong>Limites diarios:</strong> Configure limites de gasto diario em Configuracoes</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-cyan-200 bg-cyan-50/80 p-4">
+            <h4 class="text-sm font-bold text-cyan-900">Modo Leitura</h4>
+            <p class="mt-1 text-xs leading-5 text-cyan-700">Interface compacta para consumo de conteudo.</p>
+            <ul class="mt-2 space-y-1 text-xs text-cyan-600">
+              <li><strong>Ativacao:</strong> Alterne pelo menu de configuracoes</li>
+              <li><strong>Layout:</strong> UI simplificada com mais espaco para o texto</li>
+              <li><strong> Ideal para:</strong> Leitura de artigos, tutoriais e conteudo longo</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-yellow-200 bg-yellow-50/80 p-4">
+            <h4 class="text-sm font-bold text-yellow-900">Brasil APIs</h4>
+            <p class="mt-1 text-xs leading-5 text-yellow-700">Consultas a APIs brasileiras direto no chat.</p>
+            <ul class="mt-2 space-y-1 text-xs text-yellow-600">
+              <li><strong>CEP:</strong> "Consulte o CEP 01310-100" — Endereco completo automatico</li>
+              <li><strong>CNPJ:</strong> "Consulte o CNPJ 11.222.333/0001-81" — Dados da empresa</li>
+              <li><strong>Agente Brasil:</strong> Use o agente "Brasil" para queries especificas</li>
+            </ul>
+          </section>
+
+          <section class="rounded-xl border border-purple-200 bg-purple-50/80 p-4">
+            <h4 class="text-sm font-bold text-purple-900">PubMed</h4>
+            <p class="mt-1 text-xs leading-5 text-purple-700">Busca de artigos cientificos com filtros avancados.</p>
+            <ul class="mt-2 space-y-1 text-xs text-purple-600">
+              <li><strong>Agente Cientista:</strong> Use o agente "Cientista" para buscas PubMed</li>
+              <li><strong>Filtros:</strong> Filtrar por data, autor, journal, tipo de estudo</li>
+              <li><strong>Resumo:</strong> Resumo automatico dos artigos encontrados</li>
+              <li><strong>Referencias:</strong> Cite artigos diretamente nas respostas</li>
+            </ul>
           </section>
         </div>
       </div>
@@ -1787,6 +1906,10 @@ function renderMemoryModal(state) {
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="memory">✕</button>
         </div>
         <div class="space-y-3">
+          <div class="flex gap-2">
+            <input type="text" class="modal-input flex-1" name="memoryNewFact" placeholder="Adicionar fato manualmente (ex: Sou engenheiro, moro em SP)" />
+            <button type="button" class="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-600" data-action="add-memory-fact">＋ Adicionar</button>
+          </div>
           ${facts.length === 0
             ? `<div class="rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-sm text-slate-400">Nenhum fato registrado ainda. O sistema extrai automaticamente informacoes como nome, profissao e localizacao das suas conversas.</div>`
             : facts.map((fact) => `
@@ -2016,7 +2139,6 @@ function renderAgentModal(state) {
                   <select class="modal-input" name="textProvider">
                     <option value="" ${!editing.textProvider ? "selected" : ""}>Usar provedor global</option>
                     <option value="openrouter" ${editing.textProvider === "openrouter" ? "selected" : ""}>OpenRouter</option>
-                    <option value="deepseek" ${editing.textProvider === "deepseek" ? "selected" : ""}>DeepSeek</option>
                     <option value="groq" ${editing.textProvider === "groq" ? "selected" : ""}>Groq</option>
                     <option value="gemini" ${editing.textProvider === "gemini" ? "selected" : ""}>Google Gemini</option>
                   </select>
@@ -2026,13 +2148,6 @@ function renderAgentModal(state) {
                   <select class="modal-input" name="textModel">
                     <option value="">Modelo global</option>
                     ${renderModelOptions(state.modelOptions, editing.textModel)}
-                  </select>
-                </label>
-                <label class="block">
-                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">DeepSeek</span>
-                  <select class="modal-input" name="deepSeekModel">
-                    <option value="">Modelo global</option>
-                    ${renderModelOptions(state.deepSeekModelOptions, editing.deepSeekModel)}
                   </select>
                 </label>
                 <label class="block">
@@ -2110,11 +2225,11 @@ export function renderApp(state) {
   const activeChat = state.chats.find((item) => item.id === state.activeChatId);
   const hasMessages = Boolean(activeChat?.messages?.length);
   const chats = getVisibleChats(state);
-  const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openAIKey);
+  const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openRouterKey || state.settings.openAIKey);
   const voiceTitle = state.isVoiceProcessing
     ? "Transcrevendo audio"
     : state.speechRecognitionSupported === false && !canRecordFallback
-      ? "Use Chrome/Edge no computador ou configure Audio (OpenAI) para usar o microfone"
+      ? "Use Chrome/Edge no computador ou configure Audio (Fala e Transcricao) para usar o microfone"
       : state.isListening
       ? "Parar ditado"
       : "Ditado por voz";
@@ -2143,6 +2258,9 @@ export function renderApp(state) {
           </button>
           <button type="button" class="sidebar-icon-action" data-action="open-help" title="Ajuda e tutorial">
             <span>?</span>
+          </button>
+          <button type="button" class="sidebar-icon-action" data-action="open-tasks" title="Minhas Tarefas">
+            <span>✓</span>
           </button>
           <button type="button" class="sidebar-icon-action" data-action="open-settings" title="Configurações">
             <span>⚙</span>
@@ -2190,7 +2308,7 @@ export function renderApp(state) {
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
         <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
-          ${renderActiveAgentSummary(state)}
+          ${hasMessages ? `<div class="relative mb-1" data-dropdown="export-chat"><button type="button" class="inline-flex h-6 w-6 items-center justify-center rounded-full border-0 bg-transparent text-xs text-slate-300 opacity-60 hover:opacity-100 hover:text-sky-500" data-action="toggle-dropdown" data-dropdown-id="export-chat" title="Exportar conversa">📥</button><div class="hidden absolute left-0 top-7 z-50 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg" data-dropdown-menu="export-chat"><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-pdf">📄 PDF</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-docx">📘 DOCX</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-csv">📊 CSV</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-excel">📗 Excel</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-powerpoint">📙 PowerPoint</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-word">📘 Word</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-json">💾 JSON</button></div></div>` : ""}
 
           <section id="messages-panel" data-chat-id="${escapeHtml(state.activeChatId || "")}" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
@@ -2245,10 +2363,7 @@ export function renderApp(state) {
                         <span>${state.smartMode ? "⚡" : "🤖"}</span>
                         <span>${state.smartMode ? "AUTO" : "MANUAL"}</span>
                       </button>`}
-                      ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium shadow-sm ${state.thinkingEnabled ? "border-violet-400 bg-violet-50 text-violet-800 ring-2 ring-violet-200" : "border-slate-200 bg-white/70 text-slate-600"}" data-action="toggle-thinking-mode" title="Thinking: raciocinio encadeado para modelos compatíveis">
-                        <span>🧠</span>
-                        <span>Think</span>
-                      </button>`}
+
                     </div>
                     <div class="flex items-center gap-1">
                       ${instagramMode ? "" : `<button type="button" class="control-btn inline-flex h-8 w-8 items-center justify-center rounded-full border ${state.isListening ? "border-rose-300 bg-rose-50 text-rose-600" : "border-slate-200 bg-white/70 text-slate-500"} ${state.speechRecognitionSupported === false && !canRecordFallback ? "opacity-60" : ""} shadow-sm" data-action="toggle-voice" title="${voiceTitle}">
@@ -2276,9 +2391,10 @@ export function renderApp(state) {
     ${renderAgentModal(state)}
     ${renderEmailComposeModal(state)}
     ${renderWhatsAppComposeModal(state)}
+    ${renderTasksModal(state)}
   `;
 
-  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help || state.modals.emailCompose || state.modals.whatsappCompose);
+  document.body.classList.toggle("modal-open", state.modals.settings || state.modals.agentForm || state.modals.brandForm || state.modals.renameChat || state.modals.help || state.modals.emailCompose || state.modals.whatsappCompose || state.modals.tasks);
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel) {
     const chatChanged = oldChatId && oldChatId !== newChatId;
@@ -2379,6 +2495,9 @@ export function bindUIHandlers(handlers) {
     if (action === "create-chat") handlers.onCreateChat();
     if (action === "open-help") handlers.onOpenHelp();
     if (action === "open-settings") handlers.onOpenSettings();
+    if (action === "open-tasks") handlers.onOpenTasks();
+    if (action === "complete-task") handlers.onCompleteTask(target.dataset.taskId);
+    if (action === "delete-task") handlers.onDeleteTask(target.dataset.taskId);
     if (action === "open-memory") handlers.onOpenMemory();
     if (action === "apply-global-prompt-template") handlers.onApplyGlobalPromptTemplate();
     if (action === "fetch-openrouter-models") handlers.onFetchOpenRouterModels();
@@ -2392,18 +2511,28 @@ export function bindUIHandlers(handlers) {
     if (action === "restore-archived") handlers.onRestoreArchived(target.dataset.chatId);
     if (action === "delete-archived") handlers.onDeleteArchived(target.dataset.chatId);
     if (action === "toggle-smart-mode") handlers.onToggleSmartMode();
-    if (action === "toggle-thinking-mode") handlers.onToggleThinkingMode();
     if (action === "toggle-voice") handlers.onToggleVoice();
     if (action === "speak-message") handlers.onSpeakMessage(target.dataset.messageId);
     if (action === "copy-message") handlers.onCopyMessage(target.dataset.messageId);
     if (action === "clear-attachments") handlers.onClearAttachments();
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
-    if (action === "toggle-agent-summary") handlers.onToggleAgentSummary();
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
     if (action === "set-message-category") handlers.onSetMessageCategory(target.dataset.messageId, target.dataset.category);
     if (action === "rename-chat") handlers.onRenameChat(target.dataset.chatId);
     if (action === "export-chat-pdf") handlers.onExportChatPDF?.();
+    if (action === "export-chat-docx") handlers.onExportChatDOCX?.();
+    if (action === "export-chat-csv") handlers.onExportChatCSV?.();
+    if (action === "export-chat-json") handlers.onExportChatJSON?.();
+    if (action === "export-chat-excel") handlers.onExportChatExcel?.();
+    if (action === "export-chat-powerpoint") handlers.onExportChatPowerPoint?.();
+    if (action === "export-chat-word") handlers.onExportChatWord?.();
+    if (action === "export-tasks-docx") handlers.onExportTasksDOCX?.();
+    if (action === "export-tasks-csv") handlers.onExportTasksCSV?.();
+    if (action === "export-tasks-excel") handlers.onExportTasksExcel?.();
+    if (action === "execute-task") handlers.onExecuteTask?.(target.dataset.taskId);
+    if (action === "export-message-pdf") handlers.onExportMessagePDF?.(target.dataset.messageId);
+    if (action === "export-message-docx") handlers.onExportMessageDOCX?.(target.dataset.messageId);
     if (action === "clear-chat") handlers.onClearChat();
     if (action === "toggle-category-picker") handlers.onToggleCategoryPicker(target.dataset.chatId);
     if (action === "toggle-message-category-picker") handlers.onToggleMessageCategoryPicker(target.dataset.messageId);
@@ -2420,6 +2549,20 @@ export function bindUIHandlers(handlers) {
     if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
     if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);
     if (action === "remove-memory-fact") handlers.onRemoveMemoryFact(target.dataset.factId);
+    if (action === "add-memory-fact") {
+      const input = target.closest(".space-y-3")?.querySelector('input[name="memoryNewFact"]');
+      handlers.onAddMemoryFact(input?.value || "");
+      if (input) input.value = "";
+    }
+    if (action === "toggle-dropdown") {
+      const dropdownId = target.dataset.dropdownId;
+      const menu = app.querySelector(`[data-dropdown-menu="${dropdownId}"]`);
+      if (menu) {
+        const isHidden = menu.classList.contains("hidden");
+        app.querySelectorAll("[data-dropdown-menu]").forEach((m) => m.classList.add("hidden"));
+        if (isHidden) menu.classList.remove("hidden");
+      }
+    }
     if (action === "open-email-compose") handlers.onOpenEmailCompose?.(target.dataset.contactId ? { id: Number(target.dataset.contactId) } : null);
     if (action === "open-whatsapp-compose") handlers.onOpenWhatsAppCompose?.(target.dataset.contactId ? { id: Number(target.dataset.contactId) } : null);
     if (action === "pick-model") {
@@ -2587,7 +2730,7 @@ export function bindUIHandlers(handlers) {
   });
 }
 
-export function showToast(message, type = "info") {
+export function showToast(message, type = "info", onClick = null) {
   let stack = document.getElementById("toast-stack");
   if (!stack) {
     stack = document.createElement("div");
@@ -2599,6 +2742,7 @@ export function showToast(message, type = "info") {
   const element = document.createElement("div");
   element.className = `toast-item ${type}`;
   element.textContent = message;
+  if (onClick) element.style.cursor = "pointer";
   stack.appendChild(element);
 
   const dismiss = () => {
@@ -2608,6 +2752,13 @@ export function showToast(message, type = "info") {
     setTimeout(() => element.remove(), 300);
   };
 
-  element.addEventListener("click", dismiss);
+  element.addEventListener("click", (e) => {
+    if (onClick) {
+      onClick();
+      dismiss();
+    } else {
+      dismiss();
+    }
+  });
   element._toastTimer = setTimeout(dismiss, 3800);
 }

@@ -8,7 +8,6 @@ export function createVoiceController({
   render,
   getActiveChat,
   showToast,
-  generateSpeechAudio,
   transcribeAudio,
   getSpeechSynthesis,
   createSpeechRecognition,
@@ -81,13 +80,13 @@ export function createVoiceController({
     const settings = getSettings();
     return Boolean(
       state.mediaRecorderSupported &&
-      (settings.groqKey || settings.openAIKey)
+      (settings.openRouterKey || settings.groqKey)
     );
   }
 
   function showUnsupportedVoiceInputMessage() {
     showToast(
-      "Ditado nativo indisponivel neste navegador. Configure a chave da Groq em Configuracoes para usar o microfone por fallback.",
+      "Ditado nativo indisponivel neste navegador. Configure a chave da OpenRouter ou OpenAI em Configuracoes para usar o microfone por fallback.",
       "error",
     );
   }
@@ -127,13 +126,10 @@ export function createVoiceController({
     if (getSpeechSynthesis()) {
       const success = await speakNativeOptimized(message.content);
       if (!success && state.speakingMessageId !== null) {
-        if (state.availableVoice) {
-          showToast("Voz nativa falhou neste navegador. Usando fallback por OpenAI.", "info");
-        }
-        await speakOpenAiFallback(message.content);
+        showToast("Leitura em voz alta nao suportada neste navegador.", "error");
       }
     } else {
-      await speakOpenAiFallback(message.content);
+      showToast("Leitura em voz alta indisponivel neste navegador.", "error");
     }
 
     state.speakingMessageId = null;
@@ -213,38 +209,14 @@ export function createVoiceController({
     });
   }
 
-  async function speakOpenAiFallback(text) {
-    if (!getSettings().openAIKey) {
-      showToast("Configure Audio (OpenAI) para leitura em voz alta neste navegador.", "error");
-      return;
-    }
-    try {
-      const audioBlob = await generateSpeechAudio({
-        text,
-        settings: getSettings(),
-      });
-      const url = URL.createObjectURL(audioBlob);
-      const audio = new Audio(url);
-      state.currentAudioUrl = url;
-      state.currentAudio = audio;
-      await new Promise((resolve, reject) => {
-        audio.onended = resolve;
-        audio.onerror = reject;
-        audio.play().catch(reject);
-      });
-    } catch (error) {
-      showToast(buildUserErrorMessage(error, "Nao foi possivel gerar a fala da resposta."), "error");
-    }
-  }
-
   async function startRecordedFallbackInput() {
     if (!isMediaRecorderSupported()) {
       showToast("Microfone indisponivel neste navegador.", "error");
       return;
     }
 
-    if (!getSettings().groqKey && !getSettings().openAIKey) {
-      showToast("Adicione a chave da Groq ou OpenAI em Configuracoes para usar o microfone neste navegador.", "error");
+    if (!getSettings().groqKey) {
+        showToast("Adicione a chave da OpenRouter em Configuracoes para usar o microfone neste navegador.", "error");
       return;
     }
 
@@ -326,16 +298,16 @@ export function createVoiceController({
       render();
 
       if (canUseRecordedVoiceFallback() && !["not-allowed", "audio-capture", "no-speech"].includes(event.error)) {
-        showToast("Voz nativa falhou. Vou usar transcricao por Groq/OpenAI.", "info");
+        showToast("Voz nativa falhou. Vou usar transcricao por OpenRouter/OpenAI.", "info");
         await startRecordedFallbackInput();
         return;
       }
 
       showToast(
         (event.error === "service-not-allowed"
-          ? "O servico de voz do navegador falhou aqui. Use Chrome/Edge no computador ou configure Audio (OpenAI) para usar o microfone."
+          ? "O servico de voz do navegador falhou aqui. Use Chrome/Edge no computador ou configure Audio (Fala e Transcricao) para usar o microfone."
           : errors[event.error]) ||
-          `Nao foi possivel usar o microfone pelo navegador (${event.error || "erro desconhecido"}). Configure Audio (OpenAI) para usar o fallback.`,
+          `Nao foi possivel usar o microfone pelo navegador (${event.error || "erro desconhecido"}). Configure Audio (Fala e Transcricao) para usar o fallback.`,
         "error",
       );
     };
@@ -356,7 +328,7 @@ export function createVoiceController({
       render();
 
       if (canUseRecordedVoiceFallback()) {
-        showToast("Voz nativa indisponivel. Vou usar transcricao por Groq/OpenAI.", "info");
+        showToast("Voz nativa indisponivel. Vou usar transcricao por OpenRouter/OpenAI.", "info");
         await startRecordedFallbackInput();
         return;
       }

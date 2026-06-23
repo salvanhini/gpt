@@ -62,7 +62,6 @@ function createController(overrides = {}) {
       showToast: (message, type) => {
         calls.toasts.push({ message, type });
       },
-      generateSpeechAudio: async () => new Blob(),
       transcribeAudio: async () => "",
       getSpeechSynthesis: () => null,
       createSpeechRecognition: () => recognition,

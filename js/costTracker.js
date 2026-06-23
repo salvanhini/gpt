@@ -4,20 +4,9 @@ const MODEL_PRICES = {
   "qwen/qwen3.7-plus": { input: 0.4, output: 1.2 },
   "deepseek/deepseek-v4-pro": { input: 0.27, output: 1.1 },
 
-  // DeepSeek models
-  "deepseek-v4-flash": { input: 0.14, output: 0.28 },
-  "deepseek-v4-pro": { input: 0.27, output: 1.1 },
-  "deepseek-chat": { input: 0.14, output: 0.28 },
-  "deepseek-reasoner": { input: 0.55, output: 2.19 },
-
   // Groq models (free tier - $0)
   "openai/gpt-oss-20b": { input: 0, output: 0 },
   "openai/gpt-oss-120b": { input: 0, output: 0 },
-
-  // Qwen DashScope models
-  "qwen-plus": { input: 0.08, output: 0.24 },
-  "qwen-max": { input: 0.4, output: 1.2 },
-  "qwen-flash": { input: 0.02, output: 0.06 },
 };
 
 const COST_STORAGE_KEY = "femicgpt:costs";

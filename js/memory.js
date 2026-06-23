@@ -78,22 +78,20 @@ function extractFactsFromMessages(messages) {
     const content = (msg.content || "").trim();
     if (!content) continue;
 
-    const lower = content.toLowerCase();
-
-    // Name patterns
-    const nameMatch = content.match(/(?:meu nome e|me chamo|sou o?|meu nome é|pode me chamar)\s+([A-ZÀ-Ú][a-zà-ú]+)/i);
+    // Name patterns (more flexible)
+    const nameMatch = content.match(/(?:meu nome e|me chamo|sou o?|meu nome é|pode me chamar|me chama|aqui é|aqui esta|falo com|nome:?)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)/i);
     if (nameMatch) {
       facts.push(`Nome do usuario: ${nameMatch[1]}`);
     }
 
-    // Profession patterns
-    const profMatch = content.match(/(?:sou|trabalho como|exerço como|trabalho como|minha profissao e|sou formado em)\s+(.+?)(?:\.|,|$)/i);
+    // Profession patterns (more flexible)
+    const profMatch = content.match(/(?:sou|trabalho como|exerço como|trabalho como|minha profissao e|sou formado em|sou da area de|atuo como|meu trabalho e)\s+(.+?)(?:\.|,|$)/i);
     if (profMatch) {
       facts.push(`Profissao: ${profMatch[1].trim()}`);
     }
 
-    // Location patterns
-    const locMatch = content.match(/(?:moro em|resido em|sou de|cidade de|estou em)\s+([A-ZÀ-Ú][a-zà-ú\s]+)/i);
+    // Location patterns (more flexible)
+    const locMatch = content.match(/(?:moro em|resido em|sou de|cidade de|estou em|perto de|na regiao de)\s+([A-ZÀ-Ú][a-zà-ú\s]+)/i);
     if (locMatch) {
       facts.push(`Localizacao: ${locMatch[1].trim()}`);
     }
@@ -110,8 +108,20 @@ function extractFactsFromMessages(messages) {
       facts.push(`Email: ${emailMatch[1]}`);
     }
 
+    // Company / business patterns
+    const companyMatch = content.match(/(?:minha (?:empresa|loja|firma|startup) e|trabalho na|meu negocio e|sou dono(?:a)? de|tenho uma?)\s+(.+?)(?:\.|,|$)/i);
+    if (companyMatch) {
+      facts.push(`Empresa/Negocio: ${companyMatch[1].trim()}`);
+    }
+
+    // Age patterns
+    const ageMatch = content.match(/(?:tenho|meu(?:s)?\s+idade(?:s)?\s+(?:e|sao))\s+(\d{1,3})\s*(?:anos?|aninhos?)/i);
+    if (ageMatch) {
+      facts.push(`Idade: ${ageMatch[1]}`);
+    }
+
     // Preference patterns
-    const prefMatch = content.match(/(?:eu (?:gosto|prefiro|adoro|odeio)|minha (?:preferencia|opiniao) e|acho que)\s+(.+?)(?:\.|$)/i);
+    const prefMatch = content.match(/(?:eu (?:gosto|prefiro|adoro|odeio|minha (?:preferencia|opiniao) e|acho que|curto|nao gosto))\s+(.+?)(?:\.|$)/i);
     if (prefMatch) {
       facts.push(`Preferencia: ${prefMatch[1].trim()}`);
     }

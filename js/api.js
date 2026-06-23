@@ -1,5 +1,4 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
@@ -8,36 +7,26 @@ const BRAVE_URL = "https://api.search.brave.com/res/v1/web/search";
 const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "groq";
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_IMAGE_PROVIDER = "pollinations";
 const DEFAULT_IMAGE_MODEL_POLLINATIONS = "flux";
-const DEFAULT_IMAGE_MODEL_FALAI = "fal-ai/flux/schnell";
 const DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
-const DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts";
-const DEFAULT_OPENAI_TTS_VOICE = "coral";
 
-// Configuracao do proxy backend (futuro)
-const BACKEND_PROXY = {
-  enabled: false,
-  baseUrl: "",
-};
+const OPENROUTER_WHISPER_MODELS = [
+  { value: "openai/whisper-large-v3-turbo", label: "Whisper Large v3 Turbo (OpenRouter)" },
+  { value: "openai/whisper-large-v3", label: "Whisper Large v3 (OpenRouter)" },
+];
+
+export const OPENROUTER_WHISPER_MODEL_OPTIONS = OPENROUTER_WHISPER_MODELS.map((m) => ({
+  value: m.value,
+  label: m.label,
+}));
 
 // Resolve o endpoint e headers conforme o modo (direto vs proxy)
 function resolveEndpoint(provider, settings, bodyObject) {
-  if (BACKEND_PROXY.enabled) {
-    return {
-      url: `${BACKEND_PROXY.baseUrl.replace(/\/+$/, "")}/chat/completions`,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, ...bodyObject }),
-    };
-  }
-
-  // Modo direto (padrao) — envia para a API do provedor com a chave
   const providerNames = {
     openrouter: "OpenRouter",
-    deepseek: "DeepSeek",
     groq: "Groq",
     gemini: "Google Gemini",
   };
@@ -45,7 +34,6 @@ function resolveEndpoint(provider, settings, bodyObject) {
 
   const endpointMap = {
     openrouter: { url: OPENROUTER_URL, key: settings.openRouterKey },
-    deepseek: { url: DEEPSEEK_URL, key: settings.deepSeekKey },
     groq: { url: GROQ_URL, key: settings.groqKey },
     gemini: { url: GEMINI_URL, key: settings.geminiKey },
   };
@@ -122,29 +110,6 @@ const IMAGE_SIZE_DIMENSIONS = {
   portrait_16_9: { width: 720, height: 1280 },
 };
 
-export const DEEPSEEK_MODELS = [
-  {
-    value: "deepseek-v4-flash",
-    label: "DeepSeek V4 Flash",
-    description: "Modelo rapido e barato da DeepSeek.",
-    badges: ["Rapido", "Economico", "Texto"],
-    helperText: "Melhor para respostas rapidas do dia a dia e conversas frequentes.",
-  },
-  {
-    value: "deepseek-v4-pro",
-    label: "DeepSeek V4 Pro",
-    description: "Alta qualidade da DeepSeek para tarefas exigentes.",
-    badges: ["Qualidade", "Analise", "Texto"],
-    helperText: "Melhor para analises profundas, codigo complexo e tarefas que exigem raciocinio.",
-  },
-  {
-    value: "deepseek-r1",
-    label: "DeepSeek R1",
-    description: "Modelo com raciocinio encadeado (thinking) da DeepSeek.",
-    badges: ["Raciocinio", "Thinking", "Texto"],
-    helperText: "Melhor para problemas logicos, matematicos e cadeias de raciocinio complexas.",
-  },
-];
 
 export const GROQ_MODELS = [
   {
@@ -174,10 +139,6 @@ export const GEMINI_MODELS = [
 ];
 
 function findModelByProvider(provider, settings = {}) {
-  if (provider === "deepseek") {
-    return DEEPSEEK_MODELS.find((model) => model.value === settings.deepSeekModel) || null;
-  }
-
   if (provider === "groq") {
     return GROQ_MODELS.find((model) => model.value === settings.groqModel) || null;
   }
@@ -250,7 +211,6 @@ export function getDefaultSettings() {
   return {
     textProvider: DEFAULT_TEXT_PROVIDER,
     openRouterKey: "",
-    deepSeekKey: "",
     groqKey: "",
     geminiKey: "",
     falKey: "",
@@ -258,14 +218,144 @@ export function getDefaultSettings() {
     imageProvider: DEFAULT_IMAGE_PROVIDER,
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
-    deepSeekModel: DEFAULT_DEEPSEEK_MODEL,
     groqModel: DEFAULT_GROQ_MODEL,
     geminiModel: DEFAULT_GEMINI_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL_POLLINATIONS,
     imageSize: "landscape_4_3",
-    globalSystemPrompt: "",
+    globalSystemPrompt: `## IDENTIDADE E COMPORTAMENTO
+Você é o FEMIC GPT, um assistente de IA profissional, empático, eficiente e objetivo, atuando como o cérebro digital da FEMIC Fisioterapia.
+Sua comunicação deve ser SEMPRE em português do Brasil (exceto se solicitado de outra forma).
+Seja claro e direto. Evite jargões excessivos, a menos que esteja falando com um especialista.
+- Para perguntas simples: Responda de forma concisa (1-3 linhas).
+- Para tarefas complexas ou análises: Vá fundo, use estrutura em tópicos, subtópicos e tabelas para clareza.
+- Honestidade: Se não souber de algo ou se faltar alguma informação para executar uma ação, não invente. Pergunte ao usuário.
+
+## MEMÓRIA E CONTEXTO
+O sistema mantém uma memória persistente. Utilize ativamente os fatos já conhecidos sobre pacientes, rotinas e convênios para personalizar respostas. Jamais solicite uma informação que já foi fornecida no contexto.
+
+## REGRAS DE GATILHO PARA AÇÕES
+Quando o usuário pedir para "enviar", "mandar", "disparar" ou "criar", isso é uma ordem estrita para utilizar os blocos de integração abaixo.
+**Regra de Ouro:** NUNCA execute um bloco de ação se faltarem dados obrigatórios (ex: número, email, assunto). Se faltar algo, pergunte primeiro ANTES de gerar o bloco.
+
+---
+
+## 1. INTEGRAÇÃO: EMAIL
+
+Sempre baseie o conteúdo no pedido ATUAL. Nunca reenvie ou repita mensagens idênticas do histórico.
+Se o usuário pedir apenas para "redigir" ou "escrever", mostre apenas o texto. Se pedir para "enviar", use a estrutura exata abaixo.
+
+**Formato Obrigatório:**
+[ENVIAR_EMAIL]
+Para: email@exemplo.com
+Nome: Nome do Destinatario
+Assunto: Assunto do Email
+Remetente: marco
+[/ENVIAR_EMAIL]
+(O texto do email deve vir AQUI, após o fechamento do bloco)
+
+*Restrições:*
+- Remetente DEVE ser "marco" ou "alessandra". Na dúvida, pergunte.
+- Exemplo prático:
+Usuario: "Envie um email para carlos@exemplo.com confirmando a sessão de ortopedia amanhã."
+Resposta da IA:
+[ENVIAR_EMAIL]
+Para: carlos@exemplo.com
+Nome: Carlos
+Assunto: Confirmação de Sessão de Fisioterapia
+Remetente: marco
+[/ENVIAR_EMAIL]
+Olá Carlos,
+Este é um lembrete confirmando sua sessão de fisioterapia ortopédica amanhã.
+Atenciosamente,
+Marco
+
+---
+
+## 2. INTEGRAÇÃO: WHATSAPP
+
+Mensagens de WhatsApp devem ser conversacionais, curtas e amigáveis.
+**Formato Obrigatório:**
+[ENVIAR_WHATSAPP]
+Numero: 5516999999999
+[/ENVIAR_WHATSAPP]
+(O texto da mensagem deve vir AQUI, após o bloco)
+
+*Restrições:*
+- O número DEVE conter o código do país (ex: 55). Adicione automaticamente se o usuário fornecer apenas o DDD.
+- Exemplo prático:
+Usuario: "Manda um zap pro 16 99999-8888 avisando que a guia do convênio foi liberada."
+Resposta da IA:
+[ENVIAR_WHATSAPP]
+Numero: 5516999998888
+[/ENVIAR_WHATSAPP]
+Olá! Passando para avisar que a guia do seu convênio já foi liberada. Já podemos agendar sua próxima sessão!
+
+---
+
+## 3. INTEGRAÇÃO: CRIAÇÃO DE ARQUIVOS (BÁSICO)
+
+Utilizado para gerar relatórios, evoluções de pacientes, planilhas ou notas. O conteúdo deve vir imediatamente DEPOIS do bloco de fechamento.
+Formatos: pdf (textos longos/documentos), xlsx (tabelas), csv (dados puros), txt (notas).
+
+**Formato Obrigatório:**
+[CRIAR_ARQUIVO:pdf]
+titulo: Evolucao Fisioterapeutica
+[/CRIAR_ARQUIVO]
+# Evolução - Paciente X
+(Conteúdo formatado em Markdown aqui)
+
+---
+
+## 4. INTEGRAÇÃO: RELATÓRIOS PREMIUM (PDF COM GRÁFICOS)
+
+Para relatórios gerenciais, financeiros ou dashboards detalhados. Exige um JSON ESTRITAMENTE VÁLIDO dentro do bloco. O texto explicativo (markdown) vem DEPOIS do bloco.
+
+**Formato Obrigatório:**
+[CRIAR_ARQUIVO:pdf]
+{
+  "titulo": "Relatório de Atendimentos",
+  "subtitulo": "Fechamento Mensal - Convênios",
+  "imagem": "healthcare",
+  "corTema": "blue",
+  "grafico": {
+    "tipo": "bar",
+    "titulo": "Sessões por Semana",
+    "labels": ["Sem 1", "Sem 2", "Sem 3", "Sem 4"],
+    "datasets": [
+      {"label": "Ortopedia", "data": [12, 15, 14, 18], "cor": "#3B82F6"}
+    ]
+  },
+  "tabela": {
+    "cabecalho": ["Convênio", "Sessões", "Status"],
+    "linhas": [["Unimed", "45", "Aprovado"], ["Bradesco", "12", "Pendente"]]
+  }
+}
+[/CRIAR_ARQUIVO]
+(Análise textual em Markdown do relatório vem AQUI)
+
+*Restrições JSON (CRÍTICO):*
+- Use APENAS aspas duplas ("").
+- Não deixe vírgulas sobrando no final de listas ou objetos (trailing commas).
+- Valores em \`data\` no gráfico devem ser estritamente numéricos.
+- \`corTema\` suporta apenas: blue, green, purple, amber, teal.
+
+---
+
+## 5. INTEGRAÇÃO: TAREFAS E LEMBRETES
+
+Utilizado para agendar rotinas ou buscas.
+**Formato Obrigatório:**
+[CRIAR_TAREFA]
+texto: Revisar faturamento de convênios
+recorrencia: mensal
+tipo: manual
+[/CRIAR_TAREFA]
+(Mensagem de confirmação para o usuário vem AQUI)
+
+*Restrições:*
+- recorrencia: unica, diaria, semanal, mensal.
+- tipo: manual (lembrete simples) ou pesquisa (executa busca na web na data).`,
     openRouterEnabled: true,
-    deepSeekEnabled: true,
     groqEnabled: true,
     geminiEnabled: true,
     openRouterSelectedModels: [],
@@ -289,8 +379,7 @@ export function getDefaultSettings() {
     evolutionApiKey: "",
     evolutionInstanceName: "",
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
-    openAITtsModel: DEFAULT_OPENAI_TTS_MODEL,
-    openAITtsVoice: DEFAULT_OPENAI_TTS_VOICE,
+    whisperModel: "openai/whisper-large-v3-turbo",
   };
 }
 
@@ -317,10 +406,6 @@ export async function fetchOpenRouterModels(apiKey) {
 }
 
 export function getTextProviderDisplayName(provider) {
-  if (provider === "deepseek") {
-    return "DeepSeek";
-  }
-
   if (provider === "groq") {
     return "Groq";
   }
@@ -333,10 +418,6 @@ export function getTextProviderDisplayName(provider) {
 }
 
 export function hasTextProviderKey(settings, provider = settings?.textProvider) {
-  if (provider === "deepseek") {
-    return Boolean(settings?.deepSeekKey);
-  }
-
   if (provider === "groq") {
     return Boolean(settings?.groqKey);
   }
@@ -438,15 +519,11 @@ export function buildGroqRequestBody(opts) {
 }
 
 export function buildOpenRouterRequestBody(opts) {
-  const { messages, settings, webSearchMode = false, thinkingEnabled = false } = opts || {};
+  const { messages, settings, webSearchMode = false } = opts || {};
   const body = {
     model: settings.textModel || DEFAULT_TEXT_MODEL,
     messages: webSearchMode ? buildOpenRouterSearchMessages(messages) : messages,
   };
-
-  if (thinkingEnabled) {
-    body.include_reasoning = true;
-  }
 
   if (webSearchMode) {
     body.tools = [
@@ -458,6 +535,8 @@ export function buildOpenRouterRequestBody(opts) {
         },
       },
     ];
+  } else {
+    body.tool_choice = "none";
   }
 
   return body;
@@ -766,10 +845,6 @@ export async function runWebSearchQuery({ messages, settings }) {
     throw new Error("Digite uma pergunta valida para usar a Busca Web.");
   }
 
-  if (settings.textProvider === "deepseek") {
-    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
-  }
-
   if (settings.textProvider === "gemini") {
     throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
   }
@@ -852,9 +927,9 @@ async function chatFetch(url, headers, body) {
   return data;
 }
 
-export async function sendTextMessage({ messages, settings, webSearchMode = false, thinkingEnabled = false }) {
+export async function sendTextMessage({ messages, settings, webSearchMode = false }) {
   // Cache: verifica resposta repetida antes de chamar a API
-  const model = settings.textModel || settings.deepSeekModel || settings.groqModel || "";
+  const model = settings.textModel || settings.groqModel || "";
   const chaveCache = !webSearchMode ? getChaveCache(messages, model) : null;
   if (chaveCache) {
     const cached = lerCache(chaveCache);
@@ -863,12 +938,7 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
 
   let resultado;
 
-  if (settings.textProvider === "deepseek") {
-    if (webSearchMode) {
-      throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. DeepSeek direto continua apenas no chat normal.");
-    }
-    resultado = await sendDeepSeekMessage({ messages, settings, thinkingEnabled });
-  } else if (settings.textProvider === "groq") {
+  if (settings.textProvider === "groq") {
     resultado = await sendGroqMessage({ messages, settings, webSearchMode });
   } else if (settings.textProvider === "gemini") {
     if (webSearchMode) {
@@ -876,7 +946,7 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
     }
     resultado = await sendGeminiMessage({ messages, settings });
   } else {
-    const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode, thinkingEnabled });
+    const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode });
     const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
     const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
     const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
@@ -897,41 +967,6 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
 
   if (chaveCache) salvarCache(chaveCache, resultado.content);
   return resultado;
-}
-
-async function sendDeepSeekMessage({ messages, settings, thinkingEnabled = false }) {
-  const strippedMessages = messages.map((m) => ({
-    ...m,
-    content: stripImageParts(m.content),
-  }));
-  const bodyObj = {
-    model: settings.deepSeekModel || DEFAULT_DEEPSEEK_MODEL,
-    messages: strippedMessages,
-    stream: false,
-  };
-
-  if (thinkingEnabled && settings.deepSeekModel === "deepseek-r1") {
-    bodyObj.thinking = { type: "enabled", budget_tokens: 4096 };
-  }
-
-  const endpoint = resolveEndpoint("deepseek", settings, bodyObj);
-  const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
-
-  const content = normalizeAssistantContent(data?.choices?.[0]?.message?.content);
-  if (!content) {
-    throw new Error("A resposta da DeepSeek veio vazia.");
-  }
-
-  const usage = data?.usage;
-  const cachedTokens = usage?.prompt_cache_hit_tokens || 0;
-
-  return {
-    content,
-    raw: data,
-    cachedTokens,
-    promptTokens: usage?.prompt_tokens || 0,
-    completionTokens: usage?.completion_tokens || 0,
-  };
 }
 
 async function sendGroqMessage({ messages, settings, webSearchMode = false }) {
@@ -1095,6 +1130,11 @@ function salvarCache(chave, conteudo) {
 }
 
 export async function generateImage({ prompt, settings }) {
+  if (settings.wavespeedImageModel && settings.wavespeedImageModel !== "system") {
+    const { generateImageWavespeed } = await import("./wavespeedApi.js");
+    return generateImageWavespeed({ prompt, settings, imageSize: settings.imageSize });
+  }
+
   const provider = settings.imageProvider || DEFAULT_IMAGE_PROVIDER;
 
   if (provider === "fal-ai") {
@@ -1240,74 +1280,79 @@ async function generateImagePixazo({ prompt, settings }) {
 }
 
 export async function transcribeAudio({ audioBlob, settings }) {
-  if (!settings.openAIKey) {
-    throw new Error("Adicione sua chave da OpenAI nas configurações de áudio.");
-  }
-
   const file = new File([audioBlob], "femic-gpt-voice.webm", {
     type: audioBlob.type || "audio/webm",
   });
-  const form = new FormData();
-  form.append("file", file);
-  form.append("model", settings.openAITranscribeModel || DEFAULT_OPENAI_TRANSCRIBE_MODEL);
-  form.append("language", "pt");
-  form.append("response_format", "json");
 
-  let response;
-  try {
-    response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${settings.openAIKey}`,
-      },
-      body: form,
-    });
-  } catch {
-    throw new Error("Não foi possível conectar à OpenAI para transcrever o áudio.");
-  }
+  const openRouterKey = settings.openRouterKey || "";
+  const openAIKey = settings.openAIKey || "";
 
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(data, "Falha ao transcrever o áudio."));
-  }
+  if (openRouterKey) {
+    const model = settings.whisperModel || "openai/whisper-large-v3-turbo";
+    const form = new FormData();
+    form.append("file", file);
+    form.append("model", model);
+    form.append("language", "pt");
+    form.append("response_format", "json");
 
-  const text = data?.text?.trim();
-  if (!text) {
-    throw new Error("A transcrição veio vazia. Tente falar novamente.");
-  }
+    let response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+        },
+        body: form,
+      });
+    } catch {
+      throw new Error("Nao foi possivel conectar a OpenRouter para transcrever o audio.");
+    }
 
-  return text;
-}
-
-export async function generateSpeechAudio({ text, settings }) {
-  if (!settings.openAIKey) {
-    throw new Error("Adicione sua chave da OpenAI nas configurações de áudio.");
-  }
-
-  let response;
-  try {
-    response = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.openAIKey}`,
-      },
-      body: JSON.stringify({
-        model: settings.openAITtsModel || DEFAULT_OPENAI_TTS_MODEL,
-        voice: settings.openAITtsVoice || DEFAULT_OPENAI_TTS_VOICE,
-        input: text.slice(0, 4096),
-        instructions: "Fale em português do Brasil, com voz clara, natural e calma.",
-        response_format: "mp3",
-      }),
-    });
-  } catch {
-    throw new Error("Não foi possível conectar à OpenAI para gerar a fala.");
-  }
-
-  if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(extractErrorMessage(data, "Falha ao gerar áudio da resposta."));
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(data, "Falha ao transcrever o audio via OpenRouter."));
+    }
+
+    const text = data?.text?.trim();
+    if (!text) {
+      throw new Error("A transcrição veio vazia. Tente falar novamente.");
+    }
+
+    return text;
   }
 
-  return response.blob();
+  if (openAIKey) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("model", settings.openAITranscribeModel || DEFAULT_OPENAI_TRANSCRIBE_MODEL);
+    form.append("language", "pt");
+    form.append("response_format", "json");
+
+    let response;
+    try {
+      response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openAIKey}`,
+        },
+        body: form,
+      });
+    } catch {
+      throw new Error("Nao foi possivel conectar a OpenAI para transcrever o audio.");
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(data, "Falha ao transcrever o audio."));
+    }
+
+    const text = data?.text?.trim();
+    if (!text) {
+      throw new Error("A transcrição veio vazia. Tente falar novamente.");
+    }
+
+    return text;
+  }
+
+  throw new Error("Adicione a chave da OpenRouter ou OpenAI nas configuracoes de audio.");
 }
