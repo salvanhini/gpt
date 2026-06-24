@@ -8,6 +8,7 @@ import {
   loadAgents,
   restoreDefaultAgents,
   SCIENCE_AGENT_ID,
+  IMAGE_PROMPTER_ID,
   saveAgents,
   updateAgent,
 } from "./agents.js";
@@ -863,6 +864,93 @@ async function handleSendMessage(rawMessage) {
           },
         });
       }
+    } else
+    if (state.activeAgentId === IMAGE_PROMPTER_ID) {
+      const progressMsgId = crypto.randomUUID();
+      addMessage(activeChat.id, {
+        id: progressMsgId,
+        role: "assistant",
+        content: "",
+        meta: {
+          kind: "text",
+          provider: "local",
+          generating: true,
+        },
+      });
+      persistAndRender();
+
+      try {
+        const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+          .filter((f) => f.imageDataUrl)
+          .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
+
+        const payload = buildChatMessages({
+          globalSystemPrompt: state.settings.globalSystemPrompt || "",
+          agentSystemPrompt: activeAgent?.systemPrompt || "",
+          responseStyle: activeAgent?.responseStyle || "",
+          history: getActiveChat()?.messages?.slice(-20) || [],
+          attachmentContext: "",
+          referenceContext: "",
+          userMessage: message,
+          imageDataUrls,
+        });
+
+        const reply = await sendTextMessage({
+          messages: payload,
+          settings: getActiveSettings(),
+        });
+
+        const replyContent = reply.content || "";
+        const promptMatch = replyContent.match(/\[IMAGE_PROMPT\]\s*([\s\S]*?)\s*\[\/IMAGE_PROMPT\]/i);
+        const extractedPrompt = promptMatch ? promptMatch[1].trim() : replyContent.trim();
+
+        updateMessageContent(activeChat.id, progressMsgId, replyContent, {
+          meta: {
+            kind: "text",
+            provider: getTextProviderDisplayName(getActiveSettings().textProvider),
+            model: getActiveSettings().textModel || getActiveSettings().groqModel || "",
+          },
+        });
+
+        if (extractedPrompt) {
+          const imageMsgId = crypto.randomUUID();
+          addMessage(activeChat.id, {
+            id: imageMsgId,
+            role: "assistant",
+            content: extractedPrompt,
+            meta: {
+              kind: "image",
+              generating: true,
+              provider: IMAGE_PROVIDER_LABELS[getActiveSettings().imageProvider] || "Pollinations.ai",
+            },
+          });
+          persistAndRender();
+
+          const image = await generateImage({
+            prompt: extractedPrompt,
+            settings: getActiveSettings(),
+          });
+
+          updateMessageContent(activeChat.id, imageMsgId, extractedPrompt, {
+            meta: {
+              kind: "image",
+              generating: false,
+              imageUrl: image.url,
+              provider: IMAGE_PROVIDER_LABELS[getActiveSettings().imageProvider] || "Pollinations.ai",
+            },
+          });
+        }
+      } catch (error) {
+        updateMessageContent(activeChat.id, progressMsgId, `Erro ao gerar prompt/imagem: ${buildUserErrorMessage(error, "Erro desconhecido.")}`, {
+          meta: {
+            kind: "text",
+            provider: "local",
+            failed: true,
+          },
+        });
+      }
+
+      resetAttachments();
     } else
     if (state.imageMode || isInstagramMode) {
       if (isInstagramMode && instagramPayload) {
