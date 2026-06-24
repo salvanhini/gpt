@@ -108,6 +108,12 @@ export const IMAGE_PROVIDER_OPTIONS = [
   { value: "pixazo", label: "Pixazo.ai (Flux Schnell)" },
 ];
 
+export const FAL_IMAGE_MODELS = [
+  { value: "fal-ai/flux/schnell", label: "Flux Schnell (Rapido)" },
+  { value: "fal-ai/flux-2/klein/9b", label: "Flux 2 Klein 9B (Criacao)" },
+  { value: "fal-ai/flux-2/klein/9b/edit", label: "Flux 2 Klein 9B (Edicao)" },
+];
+
 const IMAGE_SIZE_DIMENSIONS = {
   landscape_4_3: { width: 1024, height: 768 },
   landscape_16_9: { width: 1280, height: 720 },
@@ -229,6 +235,7 @@ export function getDefaultSettings() {
     groqModel: DEFAULT_GROQ_MODEL,
     geminiModel: DEFAULT_GEMINI_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL_POLLINATIONS,
+    falImageModel: "fal-ai/flux/schnell",
     imageSize: "landscape_4_3",
     globalSystemPrompt: `## 1. IDENTIDADE E COMPORTAMENTO CENTRAL
 Você é o FEMIC GPT, a inteligência artificial central da FEMIC Fisioterapia e assistente estratégico de consultoria técnica multidisciplinar.
@@ -1230,7 +1237,7 @@ function salvarCache(chave, conteudo) {
   } catch { /* cache nao deve quebrar o chat */ }
 }
 
-export async function generateImage({ prompt, settings }) {
+export async function generateImage({ prompt, settings, editImageBase64 }) {
   if (settings.wavespeedImageModel && settings.wavespeedImageModel !== "system") {
     const { generateImageWavespeed } = await import("./wavespeedApi.js");
     return generateImageWavespeed({ prompt, settings, imageSize: settings.imageSize });
@@ -1239,7 +1246,7 @@ export async function generateImage({ prompt, settings }) {
   const provider = settings.imageProvider || DEFAULT_IMAGE_PROVIDER;
 
   if (provider === "fal-ai") {
-    return generateImageFalAI({ prompt, settings });
+    return generateImageFalAI({ prompt, settings, editImageBase64 });
   }
 
   if (provider === "pixazo") {
@@ -1286,29 +1293,42 @@ async function generateImagePollinations({ prompt, settings }) {
   };
 }
 
-async function generateImageFalAI({ prompt, settings }) {
+async function generateImageFalAI({ prompt, settings, editImageBase64 }) {
   if (!settings.falKey) {
     throw new Error("Adicione sua chave da fal.ai nas configuracoes.");
   }
 
+  const falModel = settings.falImageModel || "fal-ai/flux/schnell";
+  const isEdit = falModel.includes("/edit") || editImageBase64;
+
   const sizeKey = settings.imageSize || "square";
   const dims = IMAGE_SIZE_DIMENSIONS[sizeKey] || IMAGE_SIZE_DIMENSIONS.square;
 
+  const endpoint = isEdit
+    ? "https://fal.run/fal-ai/flux-2/klein/9b/edit"
+    : `https://fal.run/${falModel}`;
+
+  const body = { prompt, image_size: sizeKey };
+
+  if (isEdit && editImageBase64) {
+    body.image_urls = [editImageBase64];
+  }
+
+  if (!isEdit) {
+    body.num_images = 1;
+    body.num_inference_steps = 4;
+    body.enable_safety_checker = false;
+  }
+
   let response;
   try {
-    response = await fetch("https://fal.run/fal-ai/flux/schnell", {
+    response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Key ${settings.falKey}`,
       },
-      body: JSON.stringify({
-        prompt,
-        image_size: sizeKey,
-        num_images: 1,
-        num_inference_steps: 4,
-        enable_safety_checker: false,
-      }),
+      body: JSON.stringify(body),
     });
   } catch {
     throw new Error("Nao foi possivel conectar a fal.ai. Verifique internet e chave.");
@@ -1329,6 +1349,7 @@ async function generateImageFalAI({ prompt, settings }) {
   return {
     url: imageUrl,
     prompt,
+    model: falModel,
     raw: data,
   };
 }

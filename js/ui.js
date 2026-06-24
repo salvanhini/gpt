@@ -1406,6 +1406,14 @@ function renderSettingsModal(state) {
                   <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (so para fal.ai)" />
                 </label>
                 <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Modelo fal.ai</span>
+                  <select class="modal-input" name="falImageModel">
+                    ${(state.falImageModelOptions || []).map((opt) => `
+                      <option value="${escapeHtml(opt.value)}" ${(settings.falImageModel || "fal-ai/flux/schnell") === opt.value ? "selected" : ""}>${escapeHtml(opt.label)}</option>
+                    `).join("")}
+                  </select>
+                </label>
+                <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Pixazo.ai)</span>
                   <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (so para Pixazo.ai)" />
                 </label>

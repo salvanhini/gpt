@@ -44,6 +44,7 @@ import {
   getTextProviderDisplayName,
   GEMINI_MODELS,
   GROQ_MODELS,
+  FAL_IMAGE_MODELS,
   hasTextProviderKey,
   IMAGE_PROVIDER_OPTIONS,
   IMAGE_SIZE_OPTIONS,
@@ -205,6 +206,7 @@ const state = {
   openRouterAvailableModels: [],
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
   imageProviderOptions: IMAGE_PROVIDER_OPTIONS,
+  falImageModelOptions: FAL_IMAGE_MODELS,
   instagramFormats: INSTAGRAM_FORMATS,
 };
 
@@ -926,9 +928,12 @@ async function handleSendMessage(rawMessage) {
           });
           persistAndRender();
 
+          const editImageBase64 = imageDataUrls.length > 0 ? imageDataUrls[0].dataUrl : undefined;
+
           const image = await generateImage({
             prompt: extractedPrompt,
             settings: getActiveSettings(),
+            editImageBase64,
           });
 
           updateMessageContent(activeChat.id, imageMsgId, extractedPrompt, {
@@ -1679,6 +1684,7 @@ function handleSaveSettings(formValues) {
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
+    falImageModel: formValues.falImageModel || state.settings.falImageModel || getDefaultSettings().falImageModel,
     imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,

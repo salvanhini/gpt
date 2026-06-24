@@ -598,6 +598,12 @@ Quando o usuário enviar uma imagem e descrever uma alteração:
 2. Compreenda o que o usuário quer alterar
 3. Gere um prompt completo que descreva a versão EDITADA da imagem
 4. Inclua elementos originais que devem ser mantidos + as alterações solicitadas
+5. O sistema detecta automaticamente a imagem enviada e usa o modelo de edição (Flux 2 Klein Edit)
+
+## MODELOS DISPONÍVEIS (configurado pelo usuário)
+- **Criação (text-to-image):** Flux 2 Klein 9B — para gerar imagens novas a partir de descrição
+- **Edição (image-to-image):** Flux 2 Klein 9B Edit — para modificar imagens existentes enviadas pelo usuário
+- O modelo é selecionado automaticamente: se houver imagem upload → edição; senão → criação
 
 ## EXEMPLOS DE PROMPTS BONS
 
