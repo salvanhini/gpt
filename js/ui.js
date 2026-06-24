@@ -37,7 +37,8 @@ function formatRelativeDay(value) {
 }
 
 function renderMarkdown(content) {
-  const rawHtml = globalThis.marked.parse(content || "", {
+  const processed = parseAndRenderRichContent(content || "");
+  const rawHtml = globalThis.marked.parse(processed, {
     breaks: true,
     gfm: true,
   });
@@ -718,7 +719,12 @@ function renderMessage(message, state, index = 0) {
               ${sourceBadge}
               ${fallbackBadge}
             </div>
-            <div class="text-xs text-slate-400">${formatTime(message.createdAt)}</div>
+            <div class="text-xs text-slate-400 flex items-center gap-1.5">
+              ${formatTime(message.createdAt)}
+              ${message.meta?.cloudStatus === "pending" ? '<span class="text-amber-500" title="Salvando na nuvem..." aria-label="Salvando na nuvem">⏳</span>' : ""}
+              ${message.meta?.cloudStatus === "synced" ? '<span class="text-emerald-500" title="Salvo na nuvem" aria-label="Salvo na nuvem">☁️</span>' : ""}
+              ${message.meta?.cloudStatus === "error" ? '<span class="text-red-400" title="Erro ao salvar na nuvem" aria-label="Erro ao salvar na nuvem">⚠️</span>' : ""}
+            </div>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-1.5">
             ${renderMessageCategoryBadge(message)}
@@ -1439,10 +1445,24 @@ function renderSettingsModal(state) {
 
           <section class="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3">
             <div class="mb-2">
-              <div class="text-sm font-semibold text-slate-900">Busca Web (fallback)</div>
-              <div class="text-xs text-slate-600">Usado quando a busca premium falha. Tavily primeiro, depois Serper, e DuckDuckGo como ultimo recurso.</div>
+              <div class="text-sm font-semibold text-slate-900">Busca Web</div>
+              <div class="text-xs text-slate-600">Selecione a plataforma preferida ou deixe no automatico para usar a cadeia de fallback.</div>
             </div>
             <div class="grid gap-2 lg:grid-cols-2">
+              <label class="block lg:col-span-2">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Plataforma preferida</span>
+                <select class="modal-input appearance-none" name="webSearchProvider">
+                  ${[
+                    { value: "auto", label: "Automático (Tavily → Exa → Serper → DuckDuckGo)" },
+                    { value: "tavily", label: "Tavily" },
+                    { value: "exa", label: "Exa.ai (neural search)" },
+                    { value: "serper", label: "Serper.dev" },
+                    { value: "duckduckgo", label: "DuckDuckGo (grátis)" },
+                  ].map((p) => `
+                    <option value="${p.value}" ${(settings.webSearchProvider || "auto") === p.value ? "selected" : ""}>${p.label}</option>
+                  `).join("")}
+                </select>
+              </label>
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Tavily (API Key)</span>
                 <input class="modal-input" name="tavilyKey" type="password" value="${escapeHtml(settings.tavilyKey || "")}" placeholder="tvly-..." />
@@ -1450,6 +1470,10 @@ function renderSettingsModal(state) {
               <label class="block">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Serper.dev (API Key)</span>
                 <input class="modal-input" name="serperKey" type="password" value="${escapeHtml(settings.serperKey || "")}" placeholder="serper..." />
+              </label>
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Exa.ai (API Key)</span>
+                <input class="modal-input" name="exaKey" type="password" value="${escapeHtml(settings.exaKey || "")}" placeholder="exa-..." />
               </label>
             </div>
           </section>
@@ -1534,6 +1558,52 @@ function renderSettingsModal(state) {
             </div>
           </section>
 
+          <section class="rounded-xl border border-sky-200/70 bg-sky-50/40 p-3">
+            <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Backup Nuvem (Supabase)</div>
+              <div class="text-xs text-slate-600">Sincronize mensagens com o Supabase para backup permanente. Configure a URL e chave do seu projeto.</div>
+            </div>
+            <div class="grid gap-2 lg:grid-cols-2">
+              <label class="block lg:col-span-2">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Supabase URL</span>
+                <input class="modal-input" name="supabaseUrl" type="url" value="${escapeHtml(settings.supabaseConfig?.url || "")}" placeholder="https://seu-projeto.supabase.co" />
+              </label>
+              <label class="block lg:col-span-2">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Supabase Anon Key</span>
+                <input class="modal-input" name="supabaseKey" type="password" value="${escapeHtml(settings.supabaseConfig?.key || "")}" placeholder="eyJhbGciOiJI..." />
+              </label>
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${settings.supabaseConfig?.url && settings.supabaseConfig?.key && !settings.supabaseConfig?.url?.includes('YOUR_SUPABASE') ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                ${settings.supabaseConfig?.url && settings.supabaseConfig?.key && !settings.supabaseConfig?.url?.includes('YOUR_SUPABASE') ? '☁️ Conectado' : '☁️ Não configurado'}
+              </span>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-violet-200/70 bg-violet-50/40 p-3">
+            <div class="mb-2">
+              <div class="text-sm font-semibold text-slate-900">Memoria de Longo Prazo (Token Economy)</div>
+              <div class="text-xs text-slate-600">Gera resumos automaticos a cada 10 mensagens para economizar tokens. O resumo e injetado no contexto preservando pontos-chave.</div>
+            </div>
+            <div class="grid gap-2 lg:grid-cols-2">
+              <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Provider para resumo</span>
+                <select class="modal-input appearance-none" name="summaryProvider">
+                  ${[
+                    { value: "groq", label: "Groq (grátis)" },
+                    { value: "openrouter", label: "OpenRouter" },
+                  ].map((p) => `
+                    <option value="${p.value}" ${(settings.summaryProvider || "groq") === p.value ? "selected" : ""}>${p.label}</option>
+                  `).join("")}
+                </select>
+              </label>
+              <label class="block flex items-center gap-3 pt-6">
+                <input class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" type="checkbox" name="autoSummary" ${settings.autoSummary !== false ? "checked" : ""} />
+                <span class="text-sm font-medium text-slate-700">Resumo automatico</span>
+              </label>
+            </div>
+          </section>
+
           <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
             <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Prompt global do sistema</div>
@@ -1571,6 +1641,10 @@ function renderSettingsModal(state) {
                 <label class="block">
                   <span class="mb-1 block text-xs font-medium text-slate-700">Serper (busca/dia)</span>
                   <input class="modal-input" name="serperDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.serperDailyLimit ?? 65))}" />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Exa (busca/dia)</span>
+                  <input class="modal-input" name="exaDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.exaDailyLimit ?? 100))}" />
                 </label>
                 <label class="block">
                   <span class="mb-1 block text-xs font-medium text-slate-700">Transcricao (transc/dia)</span>
@@ -1713,7 +1787,7 @@ function renderHelpModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
             <h4 class="text-sm font-bold text-slate-900">Busca Web</h4>
-            <p class="mt-1 text-xs leading-5 text-slate-600">Acesso a internet em tempo real. Ordem: Tavily → Serper → DuckDuckGo → Groq/OpenRouter (fallback).</p>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Acesso a internet em tempo real. Ordem: Tavily → Exa → Serper → DuckDuckGo → Groq/OpenRouter (fallback).</p>
           </section>
 
           <section class="rounded-xl border border-sky-200 bg-sky-50/80 p-4">
@@ -2398,8 +2472,9 @@ export function renderApp(state) {
   const messagesPanel = document.getElementById("messages-panel");
   if (messagesPanel) {
     const chatChanged = oldChatId && oldChatId !== newChatId;
-    if (chatChanged && chatScrollPositions[newChatId] != null) {
-      messagesPanel.scrollTop = chatScrollPositions[newChatId];
+    const savedScroll = chatScrollPositions[newChatId];
+    if (savedScroll != null) {
+      messagesPanel.scrollTop = savedScroll;
     } else if (keepAtBottom) {
       messagesPanel.scrollTop = messagesPanel.scrollHeight;
     }
@@ -2761,4 +2836,176 @@ export function showToast(message, type = "info", onClick = null) {
     }
   });
   element._toastTimer = setTimeout(dismiss, 3800);
+}
+
+// --- Inline Chart/Table Rendering ---
+
+const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
+
+function escHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+export function renderInlineChart(chartData) {
+  if (!chartData?.labels?.length || !chartData?.datasets?.length) return "";
+  const chartId = `chart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const type = chartData.tipo || "bar";
+  const title = chartData.titulo || "";
+
+  const datasets = chartData.datasets.map((ds, i) => ({
+    label: ds.label || `Serie ${i + 1}`,
+    data: ds.dados || ds.data || [],
+    backgroundColor: ds.cor || CHART_COLORS[i % CHART_COLORS.length],
+    borderColor: ds.cor || CHART_COLORS[i % CHART_COLORS.length],
+    borderWidth: type === "line" ? 2 : 0,
+    borderRadius: type === "bar" ? 6 : 0,
+    fill: type === "line" ? false : undefined,
+    tension: type === "line" ? 0.3 : 0,
+  }));
+
+  const config = JSON.stringify({ type, data: { labels: chartData.labels, datasets: datasets }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: datasets.length > 1, position: "bottom", labels: { font: { family: "Inter", size: 12 }, padding: 16, usePointStyle: true } }, title: { display: !!title, text: title, font: { family: "Inter", size: 15, weight: "600" }, padding: { bottom: 12 } } }, scales: type === "doughnut" || type === "pie" ? {} : { x: { grid: { display: false }, ticks: { font: { family: "Inter", size: 11 } } }, y: { beginAtZero: true, grid: { color: "#F1F5F9" }, ticks: { font: { family: "Inter", size: 11 } } } } } });
+
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById(chartId);
+    if (canvas && window.Chart) {
+      new Chart(canvas.getContext("2d"), JSON.parse(config));
+    }
+  });
+
+  return `<div class="inline-chart-wrap"><canvas id="${chartId}" style="max-height:320px;"></canvas></div>`;
+}
+
+export function renderInlineTable(tableData) {
+  if (!tableData?.colunas?.length || !tableData?.linhas?.length) return "";
+  const headerHtml = tableData.colunas.map((c) => `<th>${escHtml(c)}</th>`).join("");
+  const rowsHtml = tableData.linhas
+    .map((row) => `<tr>${(row || []).map((cell) => `<td>${escHtml(String(cell))}</td>`).join("")}</tr>`)
+    .join("");
+
+  return `<div class="inline-table-wrap"><table class="inline-table"><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
+}
+
+export function parseMarkdownTable(text) {
+  if (!text) return "";
+  const lines = text.split("\n");
+  const tableLines = [];
+  let inTable = false;
+  const result = [];
+  let currentText = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^\|(.+)\|$/.test(trimmed) && trimmed.includes("---")) {
+      inTable = true;
+      continue;
+    }
+    if (/^\|(.+)\|$/.test(trimmed)) {
+      inTable = true;
+      tableLines.push(trimmed);
+    } else {
+      if (inTable && tableLines.length > 0) {
+        result.push(currentText.join("\n"));
+        result.push(renderMarkdownTableData(tableLines));
+        currentText = [];
+        tableLines.length = 0;
+        inTable = false;
+      }
+      currentText.push(line);
+    }
+  }
+
+  if (inTable && tableLines.length > 0) {
+    result.push(currentText.join("\n"));
+    result.push(renderMarkdownTableData(tableLines));
+  } else {
+    result.push(currentText.join("\n"));
+  }
+
+  return result.join("\n");
+}
+
+function renderMarkdownTableData(lines) {
+  if (lines.length < 2) return "";
+  const parseRow = (line) => line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  const colunas = parseRow(lines[0]);
+  const linhas = lines.slice(1).map(parseRow);
+  return renderInlineTable({ colunas, linhas });
+}
+
+export function parseAndRenderRichContent(content) {
+  if (!content) return content;
+
+  // Extract and replace JSON chart blocks with placeholders
+  let result = content.replace(/```json\s*([\s\S]*?)```/g, (match, jsonStr) => {
+    try {
+      const data = JSON.parse(jsonStr.trim());
+      if (data?.grafico) {
+        const chartId = `chart-placeholder-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        window.__pendingCharts = window.__pendingCharts || [];
+        window.__pendingCharts.push({ id: chartId, data: data.grafico });
+        return `<div class="inline-chart-placeholder" data-chart-id="${chartId}"></div>`;
+      }
+      return match;
+    } catch {
+      return match;
+    }
+  });
+
+  // Render Markdown tables
+  result = parseMarkdownTable(result);
+
+  return result;
+}
+
+export function mountPendingCharts() {
+  const pending = window.__pendingCharts || [];
+  window.__pendingCharts = [];
+  for (const item of pending) {
+    const el = document.querySelector(`[data-chart-id="${item.id}"]`);
+    if (!el) continue;
+    const canvas = document.createElement("canvas");
+    canvas.id = item.id;
+    canvas.style.maxHeight = "320px";
+    el.appendChild(canvas);
+    const chartId = item.id;
+    const chartData = item.data;
+    const type = chartData.tipo || "bar";
+    const title = chartData.titulo || "";
+    const datasets = (chartData.datasets || []).map((ds, i) => ({
+      label: ds.label || `Serie ${i + 1}`,
+      data: ds.dados || ds.data || [],
+      backgroundColor: ds.cor || CHART_COLORS[i % CHART_COLORS.length],
+      borderColor: ds.cor || CHART_COLORS[i % CHART_COLORS.length],
+      borderWidth: type === "line" ? 2 : 0,
+      borderRadius: type === "bar" ? 6 : 0,
+      fill: type === "line" ? false : undefined,
+      tension: type === "line" ? 0.3 : 0,
+    }));
+    const isPie = type === "doughnut" || type === "pie";
+    const config = {
+      type,
+      data: { labels: chartData.labels || [], datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: datasets.length > 1, position: "bottom", labels: { font: { family: "Inter", size: 12 }, padding: 16, usePointStyle: true } },
+          title: { display: !!title, text: title, font: { family: "Inter", size: 15, weight: "600" }, padding: { bottom: 12 } },
+        },
+        scales: isPie ? {} : {
+          x: { grid: { display: false }, ticks: { font: { family: "Inter", size: 11 } } },
+          y: { beginAtZero: true, grid: { color: "#F1F5F9" }, ticks: { font: { family: "Inter", size: 11 } } },
+        },
+      },
+    };
+    if (window.Chart) {
+      new window.Chart(canvas.getContext("2d"), config);
+    }
+  }
+}
+
+export function initInlineCharts() {
+  // No-op, charts are initialized via requestAnimationFrame in renderInlineChart
 }

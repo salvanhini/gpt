@@ -15,7 +15,8 @@ function buildPlainText(messages, title) {
   for (const msg of messages) {
     const role = msg.role === "user" ? "Voce" : "Assistente";
     lines.push(`[${role}] (${formatDate(msg.createdAt)}):`);
-    lines.push(msg.content || "");
+    const content = msg.role === "assistant" ? sanitizeText(msg.content) : (msg.content || "");
+    lines.push(isStructuredData(content) ? msg.content : content);
     lines.push("", "---", "");
   }
   return lines.join("\n");
@@ -41,7 +42,7 @@ export async function exportChatAsDOCX(messages, title = "Conversa") {
   if (!window.docx) {
     throw new Error("Biblioteca docx nao carregada.");
   }
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
 
   const children = [
     new Paragraph({
@@ -62,9 +63,12 @@ export async function exportChatAsDOCX(messages, title = "Conversa") {
         spacing: { before: 200, after: 60 },
       })
     );
+    const msgContent = msg.content || "";
+    const cleanContent = msg.role === "assistant" ? (isStructuredData(msgContent) ? msgContent : sanitizeText(msgContent)) : msgContent;
     children.push(
       new Paragraph({
-        children: [new TextRun({ text: sanitizeText(msg.content || ""), size: 22, font: "Arial" })],
+        children: [new TextRun({ text: cleanContent, size: 22, font: "Arial" })],
+        alignment: AlignmentType.JUSTIFIED,
         spacing: { after: 120 },
       })
     );
@@ -82,7 +86,8 @@ export function exportChatAsCSV(messages, title = "Conversa") {
     const d = new Date(msg.createdAt);
     const date = d.toLocaleDateString("pt-BR");
     const time = d.toLocaleTimeString("pt-BR");
-    const content = sanitizeText(msg.content || "").replace(/"/g, '""').replace(/\n/g, " ");
+    const rawContent = msg.content || "";
+    const content = (msg.role === "assistant" && isStructuredData(rawContent) ? rawContent : sanitizeText(rawContent)).replace(/"/g, '""').replace(/\n/g, " ");
     return `"${role}","${date}","${time}","${content}"`;
   }).join("\n");
   downloadText(header + rows, `${sanitizeFilename(title)}.csv`, "text/csv;charset=utf-8");
@@ -92,11 +97,11 @@ export function exportChatAsJSON(messages, title = "Conversa") {
   const data = {
     title,
     exportedAt: new Date().toISOString(),
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: sanitizeText(m.content || ""),
-      createdAt: m.createdAt,
-    })),
+    messages: messages.map((m) => {
+      const rawContent = m.content || "";
+      const cleanContent = m.role === "assistant" && isStructuredData(rawContent) ? rawContent : sanitizeText(rawContent);
+      return { role: m.role, content: cleanContent, createdAt: m.createdAt };
+    }),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   downloadBlob(blob, `${sanitizeFilename(title)}.json`);
@@ -120,11 +125,12 @@ export async function exportChatAsExcel(messages, title = "Conversa") {
 
   for (const msg of messages) {
     const d = new Date(msg.createdAt);
+    const rawContent = msg.content || "";
     ws.addRow({
       role: msg.role === "user" ? "Voce" : "Assistente",
       date: d.toLocaleDateString("pt-BR"),
       time: d.toLocaleTimeString("pt-BR"),
-      content: sanitizeText(msg.content || ""),
+      content: msg.role === "assistant" && isStructuredData(rawContent) ? rawContent : sanitizeText(rawContent),
     });
   }
 
@@ -161,7 +167,8 @@ export async function exportChatAsPowerPoint(messages, title = "Conversa") {
       const role = msg.role === "user" ? "Voce" : "Assistente";
       const roleColor = msg.role === "user" ? "3B82F6" : "10B981";
       const dateStr = formatDate(msg.createdAt);
-      const content = sanitizeText(msg.content || "");
+      const rawContent = msg.content || "";
+      const content = msg.role === "assistant" && isStructuredData(rawContent) ? rawContent : sanitizeText(rawContent);
 
       slide.addText(`${role} — ${dateStr}`, {
         x: 0.5, y, w: 9, h: 0.3, fontSize: 9, bold: true, color: roleColor,
@@ -205,9 +212,11 @@ export async function exportChatAsWord(messages, title = "Conversa") {
     const dateStr = formatDate(msg.createdAt);
     const div = document.createElement("div");
     div.style.cssText = "margin-bottom:16px;";
+    const rawContent = msg.content || "";
+    const cleanContent = msg.role === "assistant" && isStructuredData(rawContent) ? rawContent : sanitizeText(rawContent);
     div.innerHTML = `
       <div style="font-size:11px;font-weight:bold;color:${color};margin-bottom:4px;">${role} — ${dateStr}</div>
-      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;">${escapeHtmlForExport(sanitizeText(msg.content || ""))}</div>
+      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;">${escapeHtmlForExport(cleanContent)}</div>
       <hr style="border:none;border-top:1px solid #e2e8f0;margin-top:12px;">
     `;
     container.appendChild(div);
@@ -237,7 +246,32 @@ function escapeHtmlForExport(str) {
 }
 
 function sanitizeText(str) {
-  return str;
+  if (!str) return "";
+  const noisePatterns = [
+    // Saudacoes e intro
+    /(?:Claro!|Com certeza!|Entendido!|Certo!|Vou te ajudar com isso\.?\s*)/gi,
+    /(?:Aqui está|Segue|Confira|Encontra-se abaixo|De acordo com.*solicitação)[^.]*\.\s*/gi,
+    // Cortesias de fechamento
+    /(?:Espero ter ajudado|Se precisar de mais alguma coisa|Estou à disposição)[^.]*\.?\s*/gi,
+    // Transicoes
+    /(?:Segue o relatório|Relatório solicitado|Segue abaixo|Segue em anexo)[^.]*\.\s*/gi,
+    /(?:Baseado nos dados|Com base nas informações|Analisando os dados)[^.]*\.\s*/gi,
+    // Frases genericas
+    /(?:Aqui está a análise|Segue a análise|Conforme solicitado|Conforme pedido)[^.]*\.\s*/gi,
+    /(?:Analisei os dados|Fiz a análise|Verifiquei as informações)[^.]*\.\s*/gi,
+  ];
+  let clean = str;
+  for (const p of noisePatterns) clean = clean.replace(p, "");
+  return clean.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function isStructuredData(content) {
+  if (!content) return false;
+  const trimmed = content.trim();
+  if (trimmed.startsWith("```json")) return true;
+  if (/^\|(.+)\|$/m.test(trimmed)) return true;
+  if (trimmed.startsWith("{") && (trimmed.includes('"grafico"') || trimmed.includes('"tabela"'))) return true;
+  return false;
 }
 
 export async function exportTasksAsDOCX(tasks) {
@@ -247,7 +281,7 @@ export async function exportTasksAsDOCX(tasks) {
   if (!tasks || tasks.length === 0) {
     throw new Error("Nenhuma tarefa para exportar.");
   }
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
 
   const children = [
     new Paragraph({
@@ -265,6 +299,7 @@ export async function exportTasksAsDOCX(tasks) {
     children.push(
       new Paragraph({
         children: [new TextRun({ text: `${status} ${sanitizeText(t.texto || "")} — ${date} (${t.recorrencia})${overdue}`, size: 22, font: "Arial", color })],
+        alignment: AlignmentType.JUSTIFIED,
         spacing: { after: 80 },
       })
     );
@@ -330,7 +365,7 @@ export async function exportMessageAsDOCX(message, title = "Resposta") {
   if (!window.docx) {
     throw new Error("Biblioteca docx nao carregada.");
   }
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
 
   const role = message.role === "user" ? "Voce" : "Assistente";
   const color = message.role === "user" ? "3b82f6" : "10b981";
@@ -350,6 +385,7 @@ export async function exportMessageAsDOCX(message, title = "Resposta") {
         }),
         new Paragraph({
           children: [new TextRun({ text: sanitizeText(message.content || ""), size: 22, font: "Arial" })],
+          alignment: AlignmentType.JUSTIFIED,
         }),
       ],
     }],

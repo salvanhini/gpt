@@ -52,7 +52,7 @@ function mdToHtml(text) {
     } else {
       closeList();
       const formatted = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/__(.+?)__/g, "<strong>$1</strong>");
-      out.push(`<p style="margin:12px 0;color:#334155;font-size:13px;line-height:1.9;">${esc(formatted)}</p>`);
+      out.push(`<p style="margin:12px 0;color:#334155;font-size:13px;line-height:1.9;text-align:justify;">${esc(formatted)}</p>`);
     }
   }
   closeList();
@@ -147,7 +147,7 @@ function renderChatHTML(messages, title) {
         <span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;background:${badgeBg};color:${badgeColor};">${role}</span>
         <span style="font-size:11px;color:#94A3B8;">${d}</span>
       </div>
-      <div style="font-size:13px;line-height:1.8;color:#334155;padding-left:4px;">${content}</div>
+      <div style="font-size:13px;line-height:1.8;color:#334155;padding-left:4px;text-align:justify;">${content}</div>
     </div>`;
   }).join("\n");
 
@@ -296,7 +296,7 @@ export async function exportMessageAsPremiumPDF(message, title) {
         <span style="display:inline-block;padding:4px 14px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;background:${badgeBg};color:${badgeColor};">${role}</span>
         <span style="font-size:11px;color:#94A3B8;">${d}</span>
       </div>
-      <div style="font-size:13px;line-height:1.9;color:#334155;">${esc(message.content || "").replace(/\n/g, "<br>")}</div>
+      <div style="font-size:13px;line-height:1.9;color:#334155;text-align:justify;">${esc(message.content || "").replace(/\n/g, "<br>")}</div>
     </div>
   </div>`;
 

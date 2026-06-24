@@ -92,11 +92,11 @@ import {
   writeStorageJson,
   normalizeSettingsWithFallback,
 } from "./storage.js";
-import { bindUIHandlers, renderApp, showToast, initLightbox } from "./ui.js";
+import { bindUIHandlers, renderApp, showToast, initLightbox, mountPendingCharts } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
 import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
-import { addMemoryFact, getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore } from "./memory.js";
+import { addMemoryFact, getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore, getLongTermSummary, generateLongTermSummary, shouldGenerateSummary } from "./memory.js";
 import {
   loadContacts,
   addContact,
@@ -123,6 +123,7 @@ import {
   exportMessageAsDOCX,
 } from "./exportManager.js";
 import { initTaskSystem, getPendingTasks, getTasksByType, addTask, completeTask, deleteTask, parseTaskCommand, checkOverdueTasks } from "./taskSystem.js";
+import { isSupabaseConfigured, restoreFromSupabaseIfEmpty, initSupabase, bootstrapSupabase } from "./supabaseSync.js";
 
 const DRAFT_STORAGE_KEY = "femicgpt:draft";
 const IMAGE_PROVIDER_LABELS = { "fal-ai": "fal.ai", pixazo: "Pixazo.ai", wavespeed: "WaveSpeed.ai", pollinations: "Pollinations.ai" };
@@ -147,7 +148,7 @@ const state = {
   selectedBrandId: "",
   selectedTemplateId: "",
   pubmedMode: false,
-  smartMode: false,
+  smartMode: true,
   pubmedResultLimit: 5,
   webSearchMode: false,
   modelGuidanceCollapsed: false,
@@ -448,6 +449,7 @@ async function checkAndAutoExecutePesquisa() {
       state.webSearchMode = true;
       showToast(`🔍 Pesquisa automatica: "${task.texto.slice(0, 50)}"`, "info");
       await handleSendMessage(task.texto);
+      state.webSearchMode = false;
     }
     state.tasks = await getPendingTasks();
     persistAndRender();
@@ -534,6 +536,7 @@ function render() {
     state.monthlyCost = getMonthlyCost();
     state.memoryFacts = getMemoryFacts();
     renderApp(state);
+    if (typeof mountPendingCharts === "function") mountPendingCharts();
     window.scrollTo(0, 0);
   } catch (error) {
     console.error("[FEMIC GPT] Erro ao renderizar:", error);
@@ -562,7 +565,7 @@ function persistAndRender() {
 function compactHistoryForPayload(messages = [], settings = getActiveSettings()) {
   messages = messages || [];
   settings = settings || {};
-  const maxHistoryMessages = Math.max(4, Number(settings.usageLimits?.maxHistoryMessages) || 30);
+  const WINDOW_SIZE = 10;
 
   const mapear = (msg) => ({
     role: msg.role,
@@ -572,21 +575,21 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
         : msg.content,
   });
 
-  if (messages.length <= maxHistoryMessages) {
+  if (messages.length <= WINDOW_SIZE) {
     return messages.map(mapear);
   }
 
-  const chat = getActiveChat();
-  const recentMessages = messages.slice(-maxHistoryMessages);
+  const recentMessages = messages.slice(-WINDOW_SIZE);
+  const longTermSummary = getLongTermSummary();
 
-  if (chat?.summary) {
+  if (longTermSummary) {
     return [
-      { role: "system", content: `Resumo da conversa ate aqui:\n${chat.summary}` },
+      { role: "system", content: `Resumo de longo prazo da conversa:\n${longTermSummary}` },
       ...recentMessages.map(mapear),
     ];
   }
 
-  const oldMessages = messages.slice(0, -maxHistoryMessages);
+  const oldMessages = messages.slice(0, -WINDOW_SIZE);
   const linhas = oldMessages.map((msg) => {
     const papel = msg.role === "user" ? "U" : "A";
     const texto = String(msg.content || "").replace(/\s+/g, " ").slice(0, 200);
@@ -1001,24 +1004,28 @@ async function handleSendMessage(rawMessage) {
       let actualProvider = activeSettings.textProvider;
       let actualModel = activeSettings.textModel || activeSettings.groqModel || "";
 
-      if (state.smartMode && !isBrasilAgent) {
-        const { useWebSearch, modelTier } = smartClassify(message);
-        smartWebSearch = useWebSearch;
+      if (state.webSearchMode && !isBrasilAgent) {
+        if (state.smartMode) {
+          const classified = smartClassify(message);
+          smartWebSearch = classified.useWebSearch;
 
-        if (modelTier === "fast" && !smartWebSearch) {
-          if (activeSettings.groqKey) {
-            activeSettings.textProvider = "groq";
-            activeSettings.groqModel = "openai/gpt-oss-120b";
-          } else {
-            activeSettings.textProvider = "openrouter";
-            activeSettings.textModel = "qwen/qwen3.7-plus";
+          if (classified.modelTier === "fast" && !smartWebSearch) {
+            if (activeSettings.groqKey) {
+              activeSettings.textProvider = "groq";
+              activeSettings.groqModel = "openai/gpt-oss-120b";
+            } else {
+              activeSettings.textProvider = "openrouter";
+              activeSettings.textModel = "qwen/qwen3.5-flash-02-23";
+            }
+            actualProvider = activeSettings.textProvider;
+            actualModel = activeSettings.groqModel || activeSettings.textModel || "";
           }
-          actualProvider = activeSettings.textProvider;
-          actualModel = activeSettings.groqModel || activeSettings.textModel || "";
+        } else {
+          smartWebSearch = true;
         }
       }
 
-      const shouldSearch = smartWebSearch || state.webSearchMode;
+      const shouldSearch = smartWebSearch;
 
       if (shouldSearch) {
         addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
@@ -1211,21 +1218,17 @@ async function handleSendMessage(rawMessage) {
     refreshFromStorage();
     persistAndRender();
     incrementUsage("textMessages");
-    // Atualiza resumo acumulativo se houver mensagens demais
-    const chat = getActiveChat();
-    if (chat?.messages?.length > 40 && chat.summary !== false) {
-      const maxMsg = Math.max(4, Number(state.settings.usageLimits?.maxHistoryMessages) || 30);
-      const extras = chat.messages.length - maxMsg;
-      if (extras > 10) {
-        const antigas = chat.messages.slice(0, -(maxMsg + extras));
-        const linhas = antigas.map((m) => {
-          const p = m.role === "user" ? "U" : "A";
-          return `${p}: ${String(m.content || "").replace(/\s+/g, " ").slice(0, 200)}`;
-        });
-        chat.summary = linhas.join("\n");
-        saveChats(state.chats);
+
+    // Generate long-term summary when needed (every 10 messages beyond window)
+    try {
+      const chat = getActiveChat();
+      if (chat?.messages?.length > 10 && shouldGenerateSummary(chat.messages.length)) {
+        const activeSettings = getActiveSettings();
+        if (state.settings.autoSummary !== false) {
+          generateLongTermSummary(chat.messages, getLongTermSummary(), activeSettings).catch(() => {});
+        }
       }
-    }
+    } catch { /* ignore */ }
   }
 }
 
@@ -1581,6 +1584,8 @@ function handleSaveSettings(formValues) {
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
     serperKey: formValues.serperKey?.trim() || state.settings.serperKey || "",
+    exaKey: formValues.exaKey?.trim() || state.settings.exaKey || "",
+    webSearchProvider: formValues.webSearchProvider || state.settings.webSearchProvider || "auto",
     falKey: formValues.falKey?.trim() || state.settings.falKey || "",
     pixazoKey: formValues.pixazoKey?.trim() || state.settings.pixazoKey || "",
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
@@ -1605,6 +1610,7 @@ function handleSaveSettings(formValues) {
     usageLimits: {
       tavilyDailyLimit: Math.max(0, Number(formValues.tavilyDailyLimit) || 30),
       serperDailyLimit: Math.max(0, Number(formValues.serperDailyLimit) || 65),
+      exaDailyLimit: Math.max(0, Number(formValues.exaDailyLimit) || 100),
       groqTranscriptionDailyLimit: Math.max(0, Number(formValues.groqTranscriptionDailyLimit) || 20),
       e2bDailyLimit: Math.max(0, Number(formValues.e2bDailyLimit) || 5),
       maxHistoryMessages: Math.max(4, Number(formValues.maxHistoryMessages) || 12),
@@ -1619,7 +1625,18 @@ function handleSaveSettings(formValues) {
     evolutionInstanceUrl: formValues.evolutionInstanceUrl?.trim() || "",
     evolutionApiKey: formValues.evolutionApiKey?.trim() || "",
     evolutionInstanceName: formValues.evolutionInstanceName?.trim() || "",
+    supabaseConfig: {
+      url: formValues.supabaseUrl?.trim() || "",
+      key: formValues.supabaseKey?.trim() || "",
+    },
+    summaryProvider: formValues.summaryProvider || "groq",
+    summaryModel: formValues.summaryModel?.trim() || "",
+    autoSummary: formValues.autoSummary === "on" || formValues.autoSummary === true,
   };
+
+  if (state.settings.supabaseConfig?.url && state.settings.supabaseConfig?.key) {
+    initSupabase(state.settings.supabaseConfig.url, state.settings.supabaseConfig.key);
+  }
 
   saveSettings(state.settings);
   state.settingsFallbacks = [];
@@ -2070,6 +2087,7 @@ function initialize() {
   try {
     ensureSeedData();
     syncActivePointers();
+    bootstrapSupabase(state.settings.supabaseConfig);
     voiceController.syncSpeechVoice();
     initLightbox();
     try {
@@ -2093,6 +2111,21 @@ function initialize() {
       const allChats = loadChats();
       for (const chat of allChats) {
         if (chat.messages?.length >= 1) autoExtractAndStore(chat.messages);
+      }
+    } catch { /* ignore */ }
+
+    // Restore from Supabase if localStorage is empty
+    try {
+      if (isSupabaseConfigured() && state.chats.length === 0) {
+        restoreFromSupabaseIfEmpty().then((restored) => {
+          if (restored) {
+            state.chats.push(restored);
+            saveChats(state.chats);
+            state.activeChatId = restored.id;
+            showToast("Conversas restauradas da nuvem.", "success");
+            persistAndRender();
+          }
+        }).catch(() => {});
       }
     } catch { /* ignore */ }
 
@@ -2189,223 +2222,21 @@ function initialize() {
         persistAndRender();
         showToast(`Executando pesquisa: "${task.texto.slice(0, 60)}"`, "info");
         await handleSendMessage(task.texto);
+        state.webSearchMode = false;
       } catch (error) {
         showToast(error.message || "Erro ao executar tarefa.", "error");
       }
     },
     onOpenMemory: () => setModal("memory", true),
     onApplyGlobalPromptTemplate: () => {
-      const template = `## IDENTIDADE E COMPORTAMENTO
-Voce e o FEMIC GPT, um assistente de IA profissional, eficiente e objetivo. Responda SEMPRE em português do Brasil. Seja claro, direto e util. Evite respostas longas desnecessarias. Quando a tarefa pedir profundidade, sim. Para perguntas simples, seja conciso.
-
-## REGRAS GERAIS
-1. Responda em portugues do Brasil, exceto se o usuario pedir outro idioma
-2. Seja profissional mas acessivel
-3. Quando nao souber a resposta, diga honestamente
-4. Use formatacao (listas, negrito, titulos) para organizar informacoes
-5. Quando o usuario pedir para "enviar", "mandar" ou "disparar", isso significa ACAO via blocos abaixo
-
-## MEMORIA
-O sistema mantem memoria persistente sobre voce. Use os fatos conhecidos para personalizar respostas sem precisar perguntar novamente.
-
-## OTIMIZACAO DE RESPOSTAS
-- Perguntas simples: resposta direta em 1-3 linhas
-- Analises: use estrutura com topicos e subtopicos
-- Codigo: sempre em blocos de codigo com linguagem identificada
-- Listas: use marcadores ou numeracao
-- Email formal: estrutura com saudacao, corpo, despedida
-
-## FUNCOES DE COMUNICACAO
-
-Voce pode enviar emails e mensagens WhatsApp diretamente pelo chat. Quando o usuario pedir para enviar um email ou WhatsApp, use os blocos de acao abaixo.
-
-### REGRAS DE ENVIO
-- Cada pedido de envio e um email/WhatsApp NOVO e DIFERENTE
-- NAO reenvie emails ou mensagens anteriores
-- Sempre baseie o conteudo no pedido ATUAL do usuario
-- Se o usuario pedir "envie outro email", isso significa um email NOVO com conteudo NOVO
-- NAO repita conteudos de emails enviados anteriormente na conversa
-- Se so pediu para redigir (nao enviar), NAO use o bloco, apenas apresente o texto
-
-### ENVIO DE EMAIL
-
-Quando o usuario pedir para ENVIAR um email, responda EXATAMENTE neste formato:
-
-[ENVIAR_EMAIL]
-Para: email@exemplo.com
-Nome: Nome do Destinatario
-Assunto: Assunto do Email
-Remetente: marco
-[/ENVIAR_EMAIL]
-
-(texto do email aqui)
-
-- Remetente deve ser "marco" ou "alessandra"
-- Se o usuario nao informar o remetente, pergunte quem deve enviar
-
-Exemplo:
-Usuario: "Envie um email para joao@exemplo.com dizendo que a reuniao e amanha as 14h"
-Voce:
-[ENVIAR_EMAIL]
-Para: joao@exemplo.com
-Nome: Joao
-Assunto: Reuniao Amanha
-Remetente: marco
-[/ENVIAR_EMAIL]
-
-Ola Joao,
-
-Gostaria de informar que a reuniao esta marcada para amanha as 14h.
-
-Atenciosamente,
-Marco
-
-### ENVIO DE WHATSAPP
-
-Quando o usuario pedir para ENVIAR uma mensagem WhatsApp, responda EXATAMENTE neste formato:
-
-[ENVIAR_WHATSAPP]
-Numero: 5511999999999
-[/ENVIAR_WHATSAPP]
-
-(texto da mensagem aqui)
-
-- O numero deve conter codigo do pais (ex: 55 para Brasil)
-- Se o usuario nao informar o codigo do pais, pergunte
-- Mensagens WhatsApp devem ser claras e diretas
-- Cada mensagem e NOVA, nao repita mensagens anteriores
-
-Exemplo:
-Usuario: "Envie um WhatsApp para 11999998888 dizendo que estou a caminho"
-Voce:
-[ENVIAR_WHATSAPP]
-Numero: 5511999998888
-[/ENVIAR_WHATSAPP]
-
-Ola! Estou a caminho. Chego em instantes.
-
-### GERACAO DE ARQUIVOS
-
-Quando o usuario pedir para criar um arquivo (PDF, planilha, CSV, TXT), responda com o conteudo formatado e use este bloco:
-
-[CRIAR_ARQUIVO:pdf]
-titulo: Titulo do Arquivo
-[/CRIAR_ARQUIVO]
-
-O conteudo do arquivo deve vir DEPOIS do bloco de fechamento.
-
-Formatos disponiveis: pdf, xlsx, csv, txt
-- PDF: para documentos formatados, relatorios, textos longos, artigos
-- XLSX: para tabelas, dados estruturados, listas com colunas
-- CSV: para dados tabulares simples, exportacao de dados
-- TXT: para texto simples, anotacoes
-
-Exemplo:
-Usuario: "Crie um PDF sobre tereos de mama"
-Voce:
-[CRIAR_ARQUIVO:pdf]
-titulo: Tereos de Mama
-[/CRIAR_ARQUIVO]
-
-# Tereos de Mama
-
-## O que e
-A mastectomia e a remocao total ou parcial da mama...
-
-## Indicacoes
-- Cancer de mama
-- Prevencao em casos de alto risco
-...
-
-### CRIACAO DE TAREFAS COM PESQUISA
-
-Quando o usuario pedir para criar uma tarefa ou lembrete que envolva pesquisa, use este bloco:
-
-[CRIAR_TAREFA]
-texto: Descricao da tarefa
-recorrencia: unica
-tipo: pesquisa
-[/CRIAR_TAREFA]
-
-- texto: descricao da tarefa (obrigatorio)
-- recorrencia: unica, diaria, semanal ou mensal (opcional, padrao: unica)
-- tipo: manual (apenas lembrete) ou pesquisa (executa busca na data agendada) (opcional, padrao: manual)
-
-Exemplos:
-Usuario: "pesquise precos de GPU toda semana"
-Voce:
-[CRIAR_TAREFA]
-texto: Pesquisar precos de GPU
-recorrencia: semanal
-tipo: pesquisa
-[/CRIAR_TAREFA]
-
-Tarefa criada! Toda semana vou pesquisar os precos de GPU para voce.
-
-Usuario: "me lembre de revisar o relatorio amanha"
-Voce:
-[CRIAR_TAREFA]
-texto: Revisar relatorio mensal
-recorrencia: unica
-tipo: manual
-[/CRIAR_TAREFA]
-
-Tarefa criada! Vou lembrar voce de revisar o relatorio.
-
-### RELATORIOS PREMIUM
-
-### GERACAO DE PDF
-
-TODOS os PDFs gerados pelo sistema usam o modelo PREMIUM (capa profissional, layout premium, tipografia Inter).
-
-OPCAO 1 — PDF SIMPLES (titulo + conteudo):
-[CRIAR_ARQUIVO:pdf]
-titulo: Titulo do Documento
-[/CRIAR_ARQUIVO]
-
-O conteudo em markdown vem APOS o bloco.
-
-OPCAO 2 — PDF COM DADOS (grafico, tabela, imagem):
-[CRIAR_ARQUIVO:pdf]
-{
-  "titulo": "Titulo do Relatorio",
-  "subtitulo": "Subtitulo opcional",
-  "imagem": "stock-market",
-  "corTema": "blue",
-  "grafico": {
-    "tipo": "bar",
-    "titulo": "Titulo do Grafico",
-    "labels": ["Jan","Fev","Mar"],
-    "datasets": [
-      {"label":"Serie","data":[100,200,150],"cor":"#3B82F6"}
-    ]
-  },
-  "tabela": {
-    "titulo": "Tabela de Dados",
-    "cabecalho": ["Indicador","Valor","Var"],
-    "linhas": [["Item 1","R$ 1.000","+5%"],["Item 2","R$ 2.500","-2%"]]
-  }
-}
-[/CRIAR_ARQUIVO]
-
-O CONTEUDO EM MARKDOWN DEVE VIR APOS O BLOCO.
-
-REGRAS:
-- Sempre use [CRIAR_ARQUIVO:pdf] para gerar PDFs
-- Use OPCAO 1 quando o usuario pedir um PDF simples (curriculo, resumo, documento)
-- Use OPCAO 2 quando pedir graficos, tabelas ou imagens
-- corTema: blue | green | purple | amber | teal
-- imagem: palavra em ingles relevante para buscar foto (ex: "stock-market", "healthy-food", "artificial-intelligence")
-- grafico.tipo: "bar" | "line" | "doughnut"
-- grafico.datasets[].cor: cor hexadecimal (ex: "#3B82F6")
-- Dados do grafico DEVEM ser numeros reais
-- Se nao houver dados para grafico/tabela, use OPCAO 1`;
-      const textarea = document.querySelector('textarea[name="globalSystemPrompt"]');
-      if (textarea) {
-        textarea.value = template;
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      const defaults = getDefaultSettings();
+      const defaultPrompt = defaults.globalSystemPrompt || "";
+      if (defaultPrompt) {
+        state.settings.globalSystemPrompt = defaultPrompt;
+        saveSettings(state.settings);
+        showToast("Prompt global restaurado para o padrao do sistema.", "success");
+        persistAndRender();
       }
-      showToast("Prompt de exemplo aplicado. Clique em Salvar para gravar.", "success");
     },
     onOpenAgentModal: () => setModal("agentForm", true),
     onOpenBrandModal: handleOpenBrandModal,

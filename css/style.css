@@ -719,6 +719,7 @@ button {
   color: var(--femic-text);
   font-size: 0.92rem;
   line-height: 1.58;
+  text-align: justify;
 }
 
 .markdown-body > :first-child {
@@ -1692,4 +1693,105 @@ button {
 .task-item input[type="checkbox"]:checked + div .text-sm {
   text-decoration: line-through;
   opacity: 0.5;
+}
+
+/* Inline Chart/Table Rendering */
+
+.inline-chart-wrap,
+.inline-chart-placeholder {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.inline-table-wrap {
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.inline-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.inline-table th {
+  background: #1e293b;
+  color: white;
+  padding: 10px 14px;
+  font-weight: 600;
+  text-align: left;
+  font-family: "Inter", sans-serif;
+}
+
+.inline-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-family: "Inter", sans-serif;
+  color: #334155;
+}
+
+.inline-table tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.inline-table tr:last-child td {
+  border-bottom: none;
+}
+
+.inline-table tr:hover td {
+  background: #f1f5f9;
+}
+
+/* Dark mode support */
+.dark .inline-chart-wrap,
+.dark .inline-chart-placeholder {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dark .inline-table {
+  border-color: #334155;
+}
+
+.dark .inline-table td {
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .inline-table tr:nth-child(even) td {
+  background: #1e293b;
+}
+
+.dark .inline-table tr:hover td {
+  background: #334155;
+}
+
+/* Cloud sync indicator */
+.cloud-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.cloud-status.pending {
+  color: #94a3b8;
+}
+
+.cloud-status.synced {
+  color: #10b981;
+}
+
+.cloud-status.error {
+  color: #ef4444;
 }

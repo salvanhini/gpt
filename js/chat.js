@@ -1,3 +1,5 @@
+import { syncMessageToSupabase, isSupabaseConfigured, getSessionId } from "./supabaseSync.js";
+
 const CHATS_KEY = "femicgpt:chats";
 
 export const CHAT_CATEGORIES = [
@@ -56,12 +58,13 @@ export function addMessage(chatId, message) {
     throw new Error("Conversa não encontrada.");
   }
 
-  chat.messages.push({
+  const newMsg = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     meta: {},
     ...message,
-  });
+  };
+  chat.messages.push(newMsg);
   chat.updatedAt = new Date().toISOString();
 
   if (chat.titleMode !== "manual" && chat.title === "Nova conversa" && message.role === "user") {
@@ -70,6 +73,27 @@ export function addMessage(chatId, message) {
   }
 
   saveChats(chats);
+
+  if (isSupabaseConfigured()) {
+    newMsg.meta.cloudStatus = "pending";
+    syncMessageToSupabase(newMsg, getSessionId()).then((ok) => {
+      newMsg.meta.cloudStatus = ok ? "synced" : "error";
+      try {
+        const fresh = loadChats();
+        const freshChat = fresh.find((c) => c.id === chatId);
+        const freshMsg = freshChat?.messages.find((m) => m.id === newMsg.id);
+        if (freshMsg) {
+          freshMsg.meta.cloudStatus = newMsg.meta.cloudStatus;
+          saveChats(fresh);
+        }
+      } catch {
+        // best effort
+      }
+    }).catch(() => {
+      newMsg.meta.cloudStatus = "error";
+    });
+  }
+
   return chat;
 }
 

@@ -7,6 +7,9 @@ export const STORAGE_KEYS = {
   settings: "femicgpt:settings",
   view: "femicgpt:view",
   openRouterModels: "femicgpt:openrouter_models",
+  supabaseConfig: "femicgpt:supabase_config",
+  longTermSummary: "femicgpt:long_term_summary",
+  sessionId: "femicgpt:session_id",
 };
 
 export const BACKUP_SCHEMA_VERSION = 2;
@@ -159,6 +162,7 @@ export function reconcileAppData({
       selectedTemplateId: typeof nextView.selectedTemplateId === "string" ? nextView.selectedTemplateId : "",
       pubmedMode: Boolean(nextView.pubmedMode),
       pubmedResultLimit: Number(nextView.pubmedResultLimit) > 0 ? Number(nextView.pubmedResultLimit) : 5,
+      smartMode: Boolean(nextView.smartMode),
       webSearchMode: Boolean(nextView.webSearchMode),
       modelGuidanceCollapsed:
         typeof nextView.modelGuidanceCollapsed === "boolean"

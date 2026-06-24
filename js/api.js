@@ -4,6 +4,7 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DUCKDUCKGO_URL = "https://api.duckduckgo.com/";
 const TAVILY_URL = "https://api.tavily.com/search";
 const SERPER_URL = "https://google.serper.dev/search";
+const EXA_URL = "https://api.exa.ai/search";
 const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "groq";
@@ -67,6 +68,13 @@ export const OPENROUTER_MODELS = [
     description: "Modelo Qwen equilibrado via OpenRouter.",
     badges: ["Rapido", "Equilibrado", "Texto", "Web"],
     helperText: "Melhor para produtividade, conversa geral e pesquisas com resposta equilibrada.",
+  },
+  {
+    value: "qwen/qwen3.5-flash-02-23",
+    label: "Qwen 3.5 Flash",
+    description: "Modelo Qwen ultrarrapido e gratuito via OpenRouter.",
+    badges: ["Gratuito", "Flash", "Texto", "Imagem", "Video"],
+    helperText: "Melhor para respostas rápidas, perguntas simples e custo zero. Suporta imagens e video.",
   },
   {
     value: "deepseek/deepseek-v4-pro",
@@ -330,16 +338,66 @@ texto: Descrição clara e concisa da tarefa
 recorrencia: unica
 tipo: manual
 [/CRIAR_TAREFA]
-(A confirmação de que a tarefa foi inserida no sistema vem AQUI, fora do bloco)`,
+(A confirmação de que a tarefa foi inserida no sistema vem AQUI, fora do bloco)
+
+---
+
+### INTEGRAÇÃO F: GRÁFICOS E TABELAS INLINE (v8.0)
+Quando o usuário pedir análises numéricas, estatísticas, gráficos ou comparativos, responda SEMPRE com um bloco JSON estruturado entre \`\`\`json e \`\`\`, seguido de uma tabela Markdown opcional. O sistema renderiza automaticamente o gráfico e a tabela no chat.
+
+Formato obrigatório para gráficos inline:
+\`\`\`json
+{
+  "grafico": {
+    "tipo": "bar|line|doughnut|pie|radar",
+    "titulo": "Titulo do Grafico",
+    "labels": ["Item 1", "Item 2", "Item 3"],
+    "datasets": [
+      {
+        "label": "Nome da Serie",
+        "dados": [valor1, valor2, valor3],
+        "cor": "#3B82F6"
+      }
+    ]
+  },
+  "tabela": {
+    "colunas": ["Coluna 1", "Coluna 2"],
+    "linhas": [
+      ["Valor 1", "Valor 2"],
+      ["Valor 3", "Valor 4"]
+    ]
+  }
+}
+\`\`\`
+
+Regras para gráficos inline:
+- O campo "tabela" é OPCIONAL. Inclua apenas se fizer sentido apresentar dados em tabela.
+- Nunca inclua explicações textuais ANTES do JSON. Vá direto ao bloco JSON.
+- Após o JSON, pode incluir uma análise textual curta se necessário.
+- Valores numéricos em "dados" devem ser números (sem aspas).
+- Tipos suportados: bar (barras), line (linhas), doughnut (rosca), pie (pizza), radar.
+- Cores: use hex (#3B82F6) ou cores nomeadas. Se não especificar, usa cores do sistema.
+- Para tabelas Markdown puras (sem gráfico), use o formato padrão Markdown com pipes: | Col1 | Col2 |.
+
+---
+
+### INTEGRAÇÃO G: MEMÓRIA DE CONTEXTO (TOKEN ECONOMY)
+O sistema mantém um resumo de longo prazo das conversas anteriores para economizar tokens.
+- Responda com base no contexto fornecido (resumo + últimas mensagens).
+- Se o usuário referenciar algo muito antigo que não está no contexto atual, explique que pode não ter acesso completo e peça para reforçar o dado.
+- Não repita informações já presentes no resumo de longo prazo.`,
+
     openRouterEnabled: true,
     groqEnabled: true,
     geminiEnabled: true,
     openRouterSelectedModels: [],
     tavilyKey: "",
     serperKey: "",
+    exaKey: "",
     usageLimits: {
       tavilyDailyLimit: 30,
       serperDailyLimit: 65,
+      exaDailyLimit: 100,
       groqTranscriptionDailyLimit: 20,
       e2bDailyLimit: 5,
       maxHistoryMessages: 30,
@@ -356,6 +414,10 @@ tipo: manual
     evolutionInstanceName: "",
     openAITranscribeModel: DEFAULT_OPENAI_TRANSCRIBE_MODEL,
     whisperModel: "openai/whisper-large-v3-turbo",
+    webSearchProvider: "auto",
+    summaryProvider: "groq",
+    summaryModel: "",
+    autoSummary: true,
   };
 }
 
@@ -487,7 +549,7 @@ export function buildGroqRequestBody(opts) {
   };
 
   if (webSearchMode) {
-    body.tool_choice = "required";
+    body.tool_choice = "auto";
     body.tools = [{ type: "browser_search" }];
   }
 
@@ -748,7 +810,62 @@ async function searchSerper(query, settings) {
   };
 }
 
-// --- Coletor de fontes web (Tavily > Serper > DuckDuckGo) ---
+// --- Exa.ai (busca neural/semantica) ---
+
+function normalizeExaResults(data) {
+  return (Array.isArray(data?.results) ? data.results : [])
+    .filter((r) => r?.url && (r?.text || r?.title))
+    .slice(0, 5)
+    .map((r) => ({
+      title: r.title || r.url,
+      url: r.url,
+      snippet: r.text || r.highlights?.[0] || "",
+      provider: "Exa",
+    }));
+}
+
+async function searchExa(query, settings) {
+  if (!settings?.exaKey) {
+    throw new Error("Exa.ai sem chave configurada.");
+  }
+
+  let response;
+  try {
+    response = await fetch(EXA_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": settings.exaKey,
+      },
+      body: JSON.stringify({
+        query,
+        type: "auto",
+        numResults: 5,
+        contents: { highlights: true },
+      }),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar ao Exa.ai.");
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, "Falha ao consultar o Exa.ai."));
+  }
+
+  const results = normalizeExaResults(data);
+  if (!results.length) {
+    throw new Error("O Exa.ai nao retornou resultados suficientes.");
+  }
+
+  return {
+    provider: "Exa",
+    citations: results,
+    raw: data,
+  };
+}
+
+// --- Coletor de fontes web (Tavily > Exa > Serper > DuckDuckGo) ---
 
 function buildWebSearchContext(query, provider, citations) {
   const lines = [
@@ -779,11 +896,26 @@ async function collectWebSearchSources({ query, settings }) {
   }
 
   const errors = [];
-  const providers = [
+  const allProviders = [
     ["tavily", () => searchTavily(query, settings)],
+    ["exa", () => searchExa(query, settings)],
     ["serper", () => searchSerper(query, settings)],
     ["duckduckgo", () => searchDuckDuckGoFallback(query)],
   ];
+
+  const mode = settings.webSearchProvider || "auto";
+  let providers;
+  if (mode === "tavily") {
+    providers = [allProviders[0], allProviders[3]];
+  } else if (mode === "exa") {
+    providers = [allProviders[1], allProviders[3]];
+  } else if (mode === "serper") {
+    providers = [allProviders[2], allProviders[3]];
+  } else if (mode === "duckduckgo") {
+    providers = [allProviders[3]];
+  } else {
+    providers = allProviders;
+  }
 
   for (const [, search] of providers) {
     try {

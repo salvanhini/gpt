@@ -1,5 +1,7 @@
 const MEMORY_STORAGE_KEY = "femicgpt:memory";
+const LONG_TERM_SUMMARY_KEY = "femicgpt:long_term_summary";
 const MAX_MEMORY_FACTS = 50;
+const SUMMARY_MAX_TOKENS = 400;
 
 function readMemory() {
   try {
@@ -139,4 +141,90 @@ export function autoExtractAndStore(messages) {
     }
   }
   return added;
+}
+
+// --- Long-term summary (Token Economy) ---
+
+function readLongTermSummary() {
+  try {
+    return JSON.parse(localStorage.getItem(LONG_TERM_SUMMARY_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function writeLongTermSummary(data) {
+  try {
+    localStorage.setItem(LONG_TERM_SUMMARY_KEY, JSON.stringify(data));
+  } catch {
+    // storage failure
+  }
+}
+
+export function getLongTermSummary() {
+  const data = readLongTermSummary();
+  return data?.text || "";
+}
+
+export function clearLongTermSummary() {
+  localStorage.removeItem(LONG_TERM_SUMMARY_KEY);
+}
+
+export function shouldGenerateSummary(totalMessages) {
+  if (totalMessages <= 10) return false;
+  const data = readLongTermSummary();
+  if (!data) return true;
+  return totalMessages - (data.messageCount || 0) >= 10;
+}
+
+export async function generateLongTermSummary(messages, existingSummary, settings) {
+  const { sendTextMessage } = await import("./api.js");
+
+  const messagesToSummarize = messages.slice(0, -10);
+  if (!messagesToSummarize.length) return existingSummary || "";
+
+  const conversationText = messagesToSummarize
+    .map((m) => {
+      const role = m.role === "user" ? "Usuario" : "Assistente";
+      const content = String(m.content || "").replace(/\s+/g, " ").slice(0, 300);
+      return `${role}: ${content}`;
+    })
+    .join("\n");
+
+  const existingBlock = existingSummary
+    ? `\n\nResumo anterior para atualizar:\n${existingSummary}`
+    : "";
+
+  const summaryPrompt = `Gere um resumo executivo conciso em Portugues do Brasil dos pontos-chave desta conversa.
+Foco em: decisoes tomadas, dados importantes, preferencias do usuario, conclusoes.
+Maximo de ${SUMMARY_MAX_TOKENS} tokens. Seja direto e objetivo.
+Nao inclua saudacoes ou frases de cortesia.${existingBlock}
+
+Conversa para resumir:
+${conversationText}`;
+
+  try {
+    const result = await sendTextMessage({
+      messages: [
+        { role: "system", content: "Voce e um assistente que gera resumos executivos concisos." },
+        { role: "user", content: summaryPrompt },
+      ],
+      settings,
+      webSearchMode: false,
+    });
+
+    const summaryText = (result.content || "").trim();
+    if (summaryText) {
+      writeLongTermSummary({
+        text: summaryText,
+        messageCount: messages.length,
+        updatedAt: new Date().toISOString(),
+      });
+      return summaryText;
+    }
+  } catch (err) {
+    console.warn("[Memory] Erro ao gerar resumo longo prazo:", err.message);
+  }
+
+  return existingSummary || "";
 }
