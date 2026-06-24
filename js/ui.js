@@ -1440,7 +1440,7 @@ function renderSettingsModal(state) {
           <section class="rounded-xl border border-amber-200/70 bg-amber-50/40 p-3">
             <div class="mb-2">
               <div class="text-sm font-semibold text-slate-900">Busca Web (fallback)</div>
-              <div class="text-xs text-slate-600">Usado quando a busca premium falha. Tavily primeiro, depois Brave, e DuckDuckGo como ultimo recurso.</div>
+              <div class="text-xs text-slate-600">Usado quando a busca premium falha. Tavily primeiro, depois Serper, e DuckDuckGo como ultimo recurso.</div>
             </div>
             <div class="grid gap-2 lg:grid-cols-2">
               <label class="block">
@@ -1448,8 +1448,8 @@ function renderSettingsModal(state) {
                 <input class="modal-input" name="tavilyKey" type="password" value="${escapeHtml(settings.tavilyKey || "")}" placeholder="tvly-..." />
               </label>
               <label class="block">
-                <span class="mb-2 block text-sm font-medium text-slate-700">Brave Search (Subscription-Token)</span>
-                <input class="modal-input" name="braveSearchKey" type="password" value="${escapeHtml(settings.braveSearchKey || "")}" placeholder="BSA..." />
+                <span class="mb-2 block text-sm font-medium text-slate-700">Serper.dev (API Key)</span>
+                <input class="modal-input" name="serperKey" type="password" value="${escapeHtml(settings.serperKey || "")}" placeholder="serper..." />
               </label>
             </div>
           </section>
@@ -1569,8 +1569,8 @@ function renderSettingsModal(state) {
                   <input class="modal-input" name="tavilyDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.tavilyDailyLimit ?? 30))}" />
                 </label>
                 <label class="block">
-                  <span class="mb-1 block text-xs font-medium text-slate-700">Brave (busca/dia)</span>
-                  <input class="modal-input" name="braveDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.braveDailyLimit ?? 65))}" />
+                  <span class="mb-1 block text-xs font-medium text-slate-700">Serper (busca/dia)</span>
+                  <input class="modal-input" name="serperDailyLimit" type="number" min="0" value="${escapeHtml(String(settings.usageLimits?.serperDailyLimit ?? 65))}" />
                 </label>
                 <label class="block">
                   <span class="mb-1 block text-xs font-medium text-slate-700">Transcricao (transc/dia)</span>
@@ -1713,7 +1713,7 @@ function renderHelpModal(state) {
 
           <section class="rounded-xl border border-slate-200 bg-white/80 p-4">
             <h4 class="text-sm font-bold text-slate-900">Busca Web</h4>
-            <p class="mt-1 text-xs leading-5 text-slate-600">Acesso a internet em tempo real. Ordem: Tavily → Brave → DuckDuckGo → Groq/OpenRouter (fallback).</p>
+            <p class="mt-1 text-xs leading-5 text-slate-600">Acesso a internet em tempo real. Ordem: Tavily → Serper → DuckDuckGo → Groq/OpenRouter (fallback).</p>
           </section>
 
           <section class="rounded-xl border border-sky-200 bg-sky-50/80 p-4">

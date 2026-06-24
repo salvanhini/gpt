@@ -2,7 +2,7 @@ const STORAGE_KEY = "femicgpt:usage";
 
 const LIMITES_PADRAO = {
   tavily: { diario: 30, mensal: 900 },
-  brave: { diario: 65, mensal: 1900 },
+  serper: { diario: 65, mensal: 1900 },
   groqTranscription: { diario: 20, mensal: 600 },
   e2b: { diario: 5, mensal: 100 },
   falai: { diario: 50, mensal: 1500 },

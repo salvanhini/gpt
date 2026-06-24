@@ -456,7 +456,7 @@ async function checkAndAutoExecutePesquisa() {
 
 function startPesquisaWatcher() {
   if (pesquisaCheckInterval) clearInterval(pesquisaCheckInterval);
-  pesquisaCheckInterval = setInterval(checkAndAutoExecutePesquisa, 60000);
+  pesquisaCheckInterval = setInterval(checkAndAutoExecutePesquisa, 3600000);
 }
 
 function ensureSeedData() {
@@ -1580,7 +1580,7 @@ function handleSaveSettings(formValues) {
     geminiKey: formValues.geminiKey?.trim() || state.settings.geminiKey || "",
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
-    braveSearchKey: formValues.braveSearchKey?.trim() || state.settings.braveSearchKey || "",
+    serperKey: formValues.serperKey?.trim() || state.settings.serperKey || "",
     falKey: formValues.falKey?.trim() || state.settings.falKey || "",
     pixazoKey: formValues.pixazoKey?.trim() || state.settings.pixazoKey || "",
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
@@ -1604,7 +1604,7 @@ function handleSaveSettings(formValues) {
     whisperModel: formValues.whisperModel || getDefaultSettings().whisperModel,
     usageLimits: {
       tavilyDailyLimit: Math.max(0, Number(formValues.tavilyDailyLimit) || 30),
-      braveDailyLimit: Math.max(0, Number(formValues.braveDailyLimit) || 65),
+      serperDailyLimit: Math.max(0, Number(formValues.serperDailyLimit) || 65),
       groqTranscriptionDailyLimit: Math.max(0, Number(formValues.groqTranscriptionDailyLimit) || 20),
       e2bDailyLimit: Math.max(0, Number(formValues.e2bDailyLimit) || 5),
       maxHistoryMessages: Math.max(4, Number(formValues.maxHistoryMessages) || 12),
