@@ -424,25 +424,36 @@ function renderAttachmentChips(state) {
     return "";
   }
   const hasTruncated = files.some((file) => String(file.extractedText || file.contextBlock || "").includes("truncado"));
+  const statusLabel = (file) => {
+    const method = file.documentMeta?.extractionMethod || file.status;
+    if (method === "text" || method === "lido") return "Lido";
+    if (method === "weak" || method === "parcial") return "Parcial";
+    if (method === "visual_required" || method === "leitura visual") return "Leitura visual";
+    if (method === "failed" || method === "erro") return "Erro";
+    return "Ativo";
+  };
 
   return `
-    <div class="mb-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2">
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+    <details class="attachment-library mb-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2" open>
+      <summary class="attachment-library-summary mb-2 flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">
         <div class="inline-flex items-center gap-2 text-xs font-semibold text-sky-950">
           <span>📚</span>
           <span>Documentos desta conversa</span>
           <span class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] text-sky-700">${files.length}</span>
         </div>
-        ${hasTruncated ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">Contexto resumido para caber no modelo</span>` : ""}
-      </div>
-      <div class="flex flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          ${hasTruncated ? `<span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">Contexto resumido</span>` : ""}
+          <span class="attachment-library-chevron text-xs font-bold text-sky-700">⌄</span>
+        </div>
+      </summary>
+      <div class="attachment-library-list flex flex-wrap gap-2">
       ${files
         .map(
           (file) => `
             <div class="composer-chip inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-900">
               <span>📎</span>
               <span>${escapeHtml(file.summary)}</span>
-              <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-700/70">ativo</span>
+              <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-700/70">${escapeHtml(statusLabel(file))}</span>
               <button type="button" class="text-sky-700/70 hover:text-rose-600" data-action="remove-attachment" data-attachment-id="${escapeHtml(file.id || "")}" title="Remover documento" aria-label="Remover ${escapeHtml(file.summary)}">✕</button>
             </div>
           `,
@@ -456,7 +467,7 @@ function renderAttachmentChips(state) {
         Limpar anexos
       </button>
       </div>
-    </div>
+    </details>
   `;
 }
 

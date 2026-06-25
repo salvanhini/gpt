@@ -61,6 +61,8 @@ export function createChat(agentId) {
     summary: "",
     pinned: false,
     attachments: [],
+    documentContextVersion: 0,
+    documentContextUpdatedAt: null,
     messages: [],
   };
 }
@@ -82,13 +84,22 @@ function getChatOrThrow(chatId) {
   if (!Array.isArray(chat.attachments)) {
     chat.attachments = [];
   }
+  if (!Number.isFinite(chat.documentContextVersion)) {
+    chat.documentContextVersion = 0;
+  }
   return { chats, chat };
+}
+
+function markDocumentContextUpdated(chat) {
+  chat.documentContextVersion = (Number(chat.documentContextVersion) || 0) + 1;
+  chat.documentContextUpdatedAt = new Date().toISOString();
 }
 
 export function addChatAttachments(chatId, attachments = []) {
   const { chats, chat } = getChatOrThrow(chatId);
   const normalized = attachments.map(normalizeAttachment);
   chat.attachments = [...chat.attachments, ...normalized];
+  markDocumentContextUpdated(chat);
   chat.updatedAt = new Date().toISOString();
   saveChats(chats);
   return normalized;
@@ -97,6 +108,7 @@ export function addChatAttachments(chatId, attachments = []) {
 export function removeChatAttachment(chatId, attachmentId) {
   const { chats, chat } = getChatOrThrow(chatId);
   chat.attachments = chat.attachments.filter((item) => item.id !== attachmentId);
+  markDocumentContextUpdated(chat);
   chat.updatedAt = new Date().toISOString();
   saveChats(chats);
   return chat.attachments;
@@ -105,6 +117,7 @@ export function removeChatAttachment(chatId, attachmentId) {
 export function clearChatAttachments(chatId) {
   const { chats, chat } = getChatOrThrow(chatId);
   chat.attachments = [];
+  markDocumentContextUpdated(chat);
   chat.updatedAt = new Date().toISOString();
   saveChats(chats);
   return chat.attachments;

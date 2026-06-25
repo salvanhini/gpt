@@ -51,3 +51,18 @@ test("buildChatMessages appends response style to the agent prompt", () => {
   assert.match(payload[0].content, /Estilo de resposta/);
   assert.match(payload[0].content, /subtítulos curtos/);
 });
+
+test("buildChatMessages sends visual PDF pages with the final user message", () => {
+  const payload = buildChatMessages({
+    history: [],
+    userMessage: "Resuma o PDF anexado.",
+    imageDataUrls: [
+      { dataUrl: "data:image/jpeg;base64,abc123", name: "Pagina 1" },
+    ],
+  });
+
+  assert.equal(payload.length, 1);
+  assert.equal(payload[0].role, "user");
+  assert.equal(payload[0].content[0].text, "Resuma o PDF anexado.");
+  assert.equal(payload[0].content[1].image_url.url, "data:image/jpeg;base64,abc123");
+});

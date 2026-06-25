@@ -2,6 +2,8 @@ import { getPdfJs } from "./pdf.js";
 
 export const MAX_CONTEXT_CHARS = 12000;
 const MAX_FILE_CONTEXT_CHARS = 8000;
+const MAX_VISUAL_PDF_PAGES = 4;
+const MIN_USEFUL_PAGE_CHARS = 40;
 
 function truncate(text, max = MAX_FILE_CONTEXT_CHARS) {
   if (text.length <= max) {
@@ -30,10 +32,95 @@ async function readPdf(file) {
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
     const text = textContent.items.map((item) => item.str).join(" ").trim();
-    pages.push(`Pagina ${pageNumber}\n${text}`);
+    pages.push({ pageNumber, text });
   }
 
-  return pages.join("\n\n");
+  const quality = assessPdfTextQuality(pages);
+  const visualPages = shouldRenderPdfVisually(quality)
+    ? await renderPdfPagesAsImages(pdf, quality.weakPageNumbers)
+    : [];
+
+  return {
+    text: pages.map((page) => `Pagina ${page.pageNumber}\n${page.text}`).join("\n\n"),
+    pages,
+    visualPages,
+    quality: {
+      ...quality,
+      visualPagesRendered: visualPages.length,
+      visualPartial: visualPages.length > 0 && visualPages.length < quality.weakPageNumbers.length,
+    },
+  };
+}
+
+function normalizeUsefulText(text = "") {
+  return String(text)
+    .replace(/\bpagina\s*\d+\b/gi, " ")
+    .replace(/\bpage\s*\d+\b/gi, " ")
+    .replace(/\d+/g, " ")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isUsefulPdfPageText(text = "") {
+  const normalized = normalizeUsefulText(text);
+  const words = normalized.split(/\s+/).filter((word) => word.length >= 3);
+  return normalized.length >= MIN_USEFUL_PAGE_CHARS && words.length >= 5;
+}
+
+export function assessPdfTextQuality(pages = []) {
+  const totalPages = pages.length;
+  const usefulPages = pages.filter((page) => isUsefulPdfPageText(page.text));
+  const weakPageNumbers = pages
+    .filter((page) => !isUsefulPdfPageText(page.text))
+    .map((page) => page.pageNumber);
+  const extractedChars = pages.reduce((sum, page) => sum + String(page.text || "").trim().length, 0);
+  const usefulRatio = totalPages ? usefulPages.length / totalPages : 0;
+
+  let method = "failed";
+  if (totalPages > 0 && usefulPages.length === 0) {
+    method = "visual_required";
+  } else if (usefulRatio < 0.6) {
+    method = "weak";
+  } else {
+    method = "text";
+  }
+
+  return {
+    method,
+    totalPages,
+    usefulPages: usefulPages.length,
+    weakPageNumbers,
+    extractedChars,
+  };
+}
+
+function shouldRenderPdfVisually(quality) {
+  return ["weak", "visual_required"].includes(quality.method);
+}
+
+async function renderPdfPagesAsImages(pdf, pageNumbers = []) {
+  if (!globalThis.document?.createElement) return [];
+  const selectedPages = pageNumbers.slice(0, MAX_VISUAL_PDF_PAGES);
+  const images = [];
+
+  for (const pageNumber of selectedPages) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.15 });
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) continue;
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    images.push({
+      pageNumber,
+      dataUrl: canvas.toDataURL("image/jpeg", 0.78),
+      name: `Pagina ${pageNumber}`,
+    });
+  }
+
+  return images;
 }
 
 async function readSpreadsheet(file) {
@@ -208,9 +295,23 @@ export async function processFile(file) {
   try {
     const extension = getExtension(file.name);
     let content = "";
+    let documentMeta = null;
+    let visualPages = [];
 
     if (extension === "pdf") {
-      content = await readPdf(file);
+      const pdfResult = await readPdf(file);
+      content = pdfResult.text;
+      visualPages = pdfResult.visualPages;
+      documentMeta = {
+        kind: "pdf",
+        pages: pdfResult.quality.totalPages,
+        usefulPages: pdfResult.quality.usefulPages,
+        weakPages: pdfResult.quality.weakPageNumbers,
+        extractedChars: pdfResult.quality.extractedChars,
+        extractionMethod: pdfResult.quality.method,
+        visualPagesRendered: pdfResult.quality.visualPagesRendered,
+        visualPartial: pdfResult.quality.visualPartial,
+      };
     } else if (["xlsx", "xls"].includes(extension)) {
       content = await readSpreadsheet(file);
     } else if (extension === "csv") {
@@ -252,18 +353,30 @@ export async function processFile(file) {
     }
 
     const normalized = truncate(content.trim());
+    const statusLabel =
+      documentMeta?.extractionMethod === "visual_required"
+        ? "leitura visual"
+        : documentMeta?.extractionMethod === "weak"
+          ? "parcial"
+          : "lido";
     return {
       name: file.name,
       type: extension,
       size: file.size,
+      documentMeta,
+      visualPages,
+      status: statusLabel,
       extractedText: normalized,
       summary: `${file.name} (${extension.toUpperCase()})`,
       contextBlock: [
         `Arquivo: ${file.name}`,
         `Tipo: ${extension.toUpperCase()}`,
+        documentMeta ? `Status de leitura: ${statusLabel}` : "",
+        documentMeta ? `Paginas: ${documentMeta.pages}; paginas com texto util: ${documentMeta.usefulPages}; caracteres extraidos: ${documentMeta.extractedChars}` : "",
+        documentMeta?.visualPagesRendered ? `Leitura visual preparada para paginas: ${visualPages.map((page) => page.pageNumber).join(", ")}` : "",
         "Conteudo extraido:",
-        normalized,
-      ].join("\n"),
+        normalized || "[Sem texto confiavel extraido. Use as paginas renderizadas como imagem para leitura visual.]",
+      ].filter(Boolean).join("\n"),
     };
   } catch (error) {
     throw new Error(`Falha ao preparar ${file.name}: ${error.message}`);

@@ -148,6 +148,8 @@ test("chat attachments persist until explicitly removed or cleared", () => {
     let [storedChat] = loadChats();
     assert.equal(storedChat.attachments.length, 1);
     assert.equal(storedChat.attachments[0].id, firstAttachment.id);
+    assert.ok(storedChat.documentContextUpdatedAt);
+    const firstContextVersion = storedChat.documentContextVersion;
 
     addMessage(chat.id, {
       role: "user",
@@ -161,6 +163,7 @@ test("chat attachments persist until explicitly removed or cleared", () => {
     removeChatAttachment(chat.id, firstAttachment.id);
     [storedChat] = loadChats();
     assert.equal(storedChat.attachments.length, 0);
+    assert.ok(storedChat.documentContextVersion > firstContextVersion);
 
     addChatAttachments(chat.id, [
       {
@@ -171,10 +174,12 @@ test("chat attachments persist until explicitly removed or cleared", () => {
         contextBlock: "Arquivo: artigo-b.pdf\nConteudo B",
       },
     ]);
+    const afterSecondAddVersion = loadChats()[0].documentContextVersion;
     clearChatAttachments(chat.id);
 
     [storedChat] = loadChats();
     assert.deepEqual(storedChat.attachments, []);
+    assert.ok(storedChat.documentContextVersion > afterSecondAddVersion);
   } finally {
     globalThis.localStorage = previousStorage;
   }

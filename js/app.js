@@ -640,15 +640,94 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
   ];
 }
 
+function isDocumentFocusedMessage(message = "") {
+  return /\b(pdf|anexo|arquivo|documento|artigo|resum|sintetiz|extraia|leia|ebook|paper)\b/i.test(message);
+}
+
+function getHistoryForPayload(activeChat, userMessage) {
+  const messages = activeChat?.messages || [];
+  if (!activeChat?.documentContextUpdatedAt || !isDocumentFocusedMessage(userMessage)) {
+    return messages;
+  }
+  const updatedAt = new Date(activeChat.documentContextUpdatedAt).getTime();
+  return messages.filter((message) => {
+    const createdAt = new Date(message.createdAt || 0).getTime();
+    return Number.isFinite(createdAt) && createdAt >= updatedAt;
+  });
+}
+
+function getAttachmentVisualPages(files = []) {
+  return files.flatMap((file) => {
+    const visualPages = Array.isArray(file.visualPages) ? file.visualPages : [];
+    return visualPages
+      .filter((page) => page.dataUrl)
+      .map((page) => ({
+        dataUrl: page.dataUrl,
+        name: `${file.name || "PDF"} - pagina ${page.pageNumber || ""}`.trim(),
+      }));
+  });
+}
+
+function hasAttachmentVisualPages(files = getActiveChatAttachments()) {
+  return getAttachmentVisualPages(files).length > 0;
+}
+
+function asksForActiveDocument(message = "") {
+  return /\b(pdf|anexo|arquivo|documento|artigo|ebook|paper)\b/i.test(message)
+    && /\b(resum|sintetiz|leia|ler|analise|extraia|explique)\b/i.test(message);
+}
+
+function shouldPrioritizeActiveDocuments(message = "", files = getActiveChatAttachments()) {
+  return asksForActiveDocument(message) && files.length > 0;
+}
+
+function getSettingsForVisualDocuments(baseSettings = getActiveSettings()) {
+  if (!hasAttachmentVisualPages()) return baseSettings;
+  if (baseSettings.geminiKey) {
+    return {
+      ...baseSettings,
+      textProvider: "gemini",
+      geminiModel: baseSettings.geminiModel || "gemini-3.5-flash",
+    };
+  }
+  if (baseSettings.openRouterKey) {
+    return {
+      ...baseSettings,
+      textProvider: "openrouter",
+      textModel: "qwen/qwen3.7-plus",
+    };
+  }
+  return baseSettings;
+}
+
+function buildDocumentFocusContext(files = []) {
+  if (!files.length) return "";
+  return [
+    "Documentos ativos nesta conversa:",
+    ...files.map((file, index) => {
+      const meta = file.documentMeta || {};
+      const status = file.status || meta.extractionMethod || "lido";
+      return `${index + 1}. ${file.name} (${String(file.type || "").toUpperCase()}) - status: ${status}; paginas: ${meta.pages || "n/d"}; leitura visual: ${meta.visualPagesRendered || 0} pagina(s).`;
+    }),
+    "",
+    "Responda com base apenas nos documentos ativos acima e no conteudo fornecido agora. Ignore respostas antigas sobre arquivos removidos ou substituidos.",
+  ].join("\n");
+}
+
 function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const attachmentContext = getActiveAttachmentContext();
-  const history = compactHistoryForPayload(activeChat?.messages || []);
+  const activeFiles = attachmentContext.files || [];
+  const history = compactHistoryForPayload(getHistoryForPayload(activeChat, userMessage));
   const memoryContext = buildMemoryContext();
-  const imageDataUrls = (attachmentContext.files || [])
-    .filter((f) => f.imageDataUrl)
-    .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
+  const imageDataUrls = [
+    ...activeFiles
+      .filter((f) => f.imageDataUrl)
+      .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name })),
+    ...getAttachmentVisualPages(activeFiles),
+  ];
+  const documentFocusContext = buildDocumentFocusContext(activeFiles);
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -656,7 +735,7 @@ function buildTextPayload(userMessage) {
     responseStyle: activeAgent?.responseStyle || "",
     history,
     attachmentContext: attachmentContext.combinedContext || "",
-    referenceContext: memoryContext,
+    referenceContext: [documentFocusContext, memoryContext].filter(Boolean).join("\n\n"),
     userMessage,
     imageDataUrls,
   });
@@ -666,10 +745,15 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
   const attachmentContext = getActiveAttachmentContext();
-  const history = compactHistoryForPayload(activeChat?.messages || []);
-  const imageDataUrls = (attachmentContext.files || [])
-    .filter((f) => f.imageDataUrl)
-    .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
+  const activeFiles = attachmentContext.files || [];
+  const history = compactHistoryForPayload(getHistoryForPayload(activeChat, userMessage));
+  const imageDataUrls = [
+    ...activeFiles
+      .filter((f) => f.imageDataUrl)
+      .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name })),
+    ...getAttachmentVisualPages(activeFiles),
+  ];
+  const documentFocusContext = buildDocumentFocusContext(activeFiles);
 
   return buildChatMessages({
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
@@ -677,7 +761,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
     responseStyle: activeAgent?.responseStyle || "",
     history,
     attachmentContext: attachmentContext.combinedContext || "",
-    referenceContext,
+    referenceContext: [documentFocusContext, referenceContext].filter(Boolean).join("\n\n"),
     userMessage,
     imageDataUrls,
   });
@@ -889,6 +973,29 @@ async function handleSendMessage(rawMessage) {
     return;
   }
 
+  const activeAttachmentsSnapshot = getActiveChatAttachments();
+  const prioritizeActiveDocuments = shouldPrioritizeActiveDocuments(message, activeAttachmentsSnapshot);
+
+  if (asksForActiveDocument(message) && activeAttachmentsSnapshot.length === 0) {
+    addMessage(activeChat.id, {
+      role: "user",
+      content: message,
+      meta: { kind: "text", attachments: [] },
+    });
+    addMessage(activeChat.id, {
+      role: "assistant",
+      content: "Não há documento ativo nesta conversa. Anexe o PDF ou artigo e peça o resumo novamente.",
+      meta: {
+        kind: "text",
+        provider: "local",
+        sourceType: "document-missing",
+        failed: true,
+      },
+    });
+    persistAndRender();
+    return;
+  }
+
   let instagramPayload = null;
   if (isInstagramMode) {
     try {
@@ -903,7 +1010,6 @@ async function handleSendMessage(rawMessage) {
   const textPayload = state.imageMode || isInstagramMode || isPubMedMode
     ? null
     : buildTextPayload(message);
-  const activeAttachmentsSnapshot = getActiveChatAttachments();
   state.isLoading = true;
 
   try {
@@ -1222,7 +1328,7 @@ async function handleSendMessage(rawMessage) {
         });
       }
     } else {
-      if (state.webSearchMode && !canUseWebSearch()) {
+      if (state.webSearchMode && !prioritizeActiveDocuments && !canUseWebSearch()) {
         addMessage(activeChat.id, {
           role: "assistant",
           content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para continuar.",
@@ -1238,12 +1344,27 @@ async function handleSendMessage(rawMessage) {
       }
 
       // Smart mode: classifica e roteia sem mutar o estado global
-      let activeSettings = getActiveSettings();
+      let activeSettings = getSettingsForVisualDocuments(getActiveSettings());
       let smartWebSearch = false;
       let actualProvider = activeSettings.textProvider;
       let actualModel = activeSettings.textModel || activeSettings.groqModel || "";
+      if (actualProvider === "gemini") actualModel = activeSettings.geminiModel || "";
 
-      if (state.webSearchMode && !isBrasilAgent) {
+      if (hasAttachmentVisualPages() && !["gemini", "openrouter"].includes(activeSettings.textProvider)) {
+        addMessage(activeChat.id, {
+          role: "assistant",
+          content: "Este PDF precisa de leitura visual porque o texto extraído veio fraco ou vazio. Configure Gemini ou OpenRouter para eu ler as páginas como imagem e resumir corretamente.",
+          meta: {
+            kind: "text",
+            provider: "local",
+            sourceType: "document-visual-required",
+            failed: true,
+          },
+        });
+        return;
+      }
+
+      if (state.webSearchMode && !isBrasilAgent && !prioritizeActiveDocuments) {
         if (state.smartMode) {
           const classified = smartClassify(message);
           smartWebSearch = classified.useWebSearch;
@@ -2887,5 +3008,22 @@ function registerServiceWorker() {
   });
 }
 
+function initMobileViewportTuning() {
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+
+  const update = () => {
+    const keyboardOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    document.documentElement.style.setProperty("--keyboard-offset", `${Math.round(keyboardOffset)}px`);
+    document.body.classList.toggle("keyboard-open", keyboardOffset > 80);
+  };
+
+  viewport.addEventListener("resize", update);
+  viewport.addEventListener("scroll", update);
+  window.addEventListener("orientationchange", () => setTimeout(update, 250));
+  update();
+}
+
 initialize();
 registerServiceWorker();
+initMobileViewportTuning();

@@ -12,6 +12,7 @@
   --femic-code-line: rgba(255, 255, 255, 0.08);
   --femic-gold: #b7791f;
   --femic-gold-soft: #fff7e6;
+  --keyboard-offset: 0px;
 }
 
 * {
@@ -1143,6 +1144,18 @@ button {
   max-width: 130px;
 }
 
+.attachment-library-summary::-webkit-details-marker {
+  display: none;
+}
+
+.attachment-library-chevron {
+  transition: transform 0.18s ease;
+}
+
+.attachment-library[open] .attachment-library-chevron {
+  transform: rotate(180deg);
+}
+
 .modal-input:focus,
 .modal-textarea:focus {
   border-color: rgba(63, 183, 214, 0.9);
@@ -1315,19 +1328,23 @@ button {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(8, 15, 27, 0.28);
+    background: rgba(8, 15, 27, 0.34);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     z-index: 35;
   }
 
   .femic-shell .sidebar-mobile {
     position: fixed;
     inset: 0 auto 0 0;
-    width: min(90vw, 340px);
+    width: min(92vw, 360px);
     height: 100vh;
     height: 100dvh;
     z-index: 40;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
+    padding-top: calc(0.85rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.85rem + env(safe-area-inset-bottom));
   }
 
   .femic-shell .sidebar-mobile.open {
@@ -1340,7 +1357,7 @@ button {
   }
 
   .sidebar-edge-collapse {
-    top: 3.15rem;
+    display: none;
   }
 
   .sidebar-collapsed .sidebar-brand-panel {
@@ -1361,6 +1378,25 @@ button {
   .femic-shell main > div {
     padding-top: calc(3.25rem + env(safe-area-inset-top)) !important;
   }
+
+  .composer-dock {
+    padding-bottom: max(env(safe-area-inset-bottom), calc(var(--keyboard-offset) * 0.08));
+  }
+
+  .scroll-to-bottom-btn {
+    bottom: calc(6rem + env(safe-area-inset-bottom) + min(var(--keyboard-offset), 80px)) !important;
+    right: 1rem !important;
+  }
+
+  .sidebar-icon-action,
+  .control-btn,
+  .chat-rename-btn,
+  .danger-mini,
+  button[data-action="toggle-sidebar"],
+  button[data-action="create-chat"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 1180px) {
@@ -1375,6 +1411,42 @@ button {
 
   .composer-panel {
     border-radius: 1.15rem;
+  }
+
+  .board-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .modal-panel {
+    max-width: min(92vw, 760px);
+  }
+}
+
+@media (min-width: 981px) and (max-width: 1180px) and (orientation: landscape) {
+  .femic-shell {
+    grid-template-columns: 240px 1fr;
+  }
+
+  .sidebar-mobile {
+    padding-inline: 0.75rem !important;
+  }
+
+  .sidebar-section {
+    padding: 0.65rem !important;
+  }
+
+  .chat-workspace {
+    padding-inline: 1rem !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 980px) and (orientation: portrait) {
+  .femic-shell .sidebar-mobile {
+    width: min(78vw, 380px);
+  }
+
+  .composer-panel {
+    width: min(100%, 900px);
   }
 }
 
@@ -1408,6 +1480,15 @@ button {
     padding: 0.65rem !important;
   }
 
+  .keyboard-open .composer-panel {
+    padding: 0.5rem !important;
+    border-radius: 0.8rem;
+  }
+
+  .keyboard-open .chat-workspace.has-messages .composer-panel {
+    padding: 0.45rem 0.55rem !important;
+  }
+
   .secure-mode-banner {
     border-radius: 1rem;
     font-size: 0.72rem;
@@ -1425,6 +1506,11 @@ button {
     line-height: 1.45;
   }
 
+  .keyboard-open #composer-input {
+    min-height: 48px;
+    max-height: 22vh;
+  }
+
   .quick-model-wrap {
     flex: 1 1 100%;
     min-width: 0;
@@ -1439,7 +1525,7 @@ button {
 
   .composer-chip,
   .control-btn {
-    min-height: 2rem;
+    min-height: 2.75rem;
   }
 
   .control-btn {
@@ -1508,6 +1594,41 @@ button {
     padding: 1rem !important;
   }
 
+  .attachment-library {
+    padding: 0.55rem 0.65rem !important;
+    border-radius: 0.95rem !important;
+  }
+
+  .attachment-library:not([open]) {
+    margin-bottom: 0.45rem !important;
+  }
+
+  .attachment-library-summary {
+    margin-bottom: 0 !important;
+    min-height: 2.5rem;
+  }
+
+  .attachment-library[open] .attachment-library-summary {
+    margin-bottom: 0.45rem !important;
+  }
+
+  .attachment-library-list {
+    max-height: 6.25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .attachment-library .composer-chip {
+    width: 100%;
+    justify-content: space-between;
+    min-height: 2.4rem;
+    padding-block: 0.45rem !important;
+  }
+
+  .keyboard-open .attachment-library[open] .attachment-library-list {
+    max-height: 3.25rem;
+  }
+
   .sidebar-section-agents {
     max-height: 26vh;
   }
@@ -1527,8 +1648,8 @@ button {
   }
 
   .sidebar-icon-action {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .sidebar-section {
@@ -1542,6 +1663,10 @@ button {
 
   .sidebar-agents-scroll {
     max-height: 56px;
+  }
+
+  .sidebar-chats-scroll {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .chat-card-compact {
@@ -1574,6 +1699,33 @@ button {
   .message-bubble,
   .message-enter.items-end .message-bubble {
     max-width: 100%;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .chat-card:hover,
+  .control-btn:hover,
+  .composer-chip:hover,
+  .danger-mini:hover,
+  .agent-icon-card:hover,
+  .chat-icon-card:hover {
+    transform: none;
+  }
+
+  .danger-mini,
+  .chat-rename-btn {
+    opacity: 1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }
 

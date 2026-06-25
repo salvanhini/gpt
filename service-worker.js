@@ -1,10 +1,10 @@
-const CACHE_NAME = "femic-gpt-v8-3";
+const CACHE_NAME = "femic-gpt-v8-5";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/style.css?v=8.3",
-  "./js/app.js?v=8.3",
+  "./css/style.css?v=8.5",
+  "./js/app.js?v=8.5",
   "./js/agents.js",
   "./js/api.js",
   "./js/archiveStorage.js",
