@@ -460,23 +460,6 @@ function renderAttachmentChips(state) {
   `;
 }
 
-function renderRecommendedModel(state) {
-  const recommendation = state.recommendedModel;
-  if (!recommendation) return "";
-  const shouldShow = (state.pendingAttachmentContext?.files?.length || 0) > 0 || state.webSearchMode || !state.recommendedModelActive;
-  if (!shouldShow) return "";
-
-  return `
-    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-950">
-      <div class="min-w-0">
-        <span class="font-semibold">Modelo sugerido: ${escapeHtml(recommendation.label)}</span>
-        <span class="text-emerald-800/75"> · ${escapeHtml(recommendation.reason)}</span>
-      </div>
-      ${state.recommendedModelActive ? `<span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-emerald-700">Em uso</span>` : `<button type="button" class="rounded-full bg-emerald-600 px-3 py-1 text-[10px] font-bold text-white shadow-sm" data-action="apply-recommended-model">Usar recomendado</button>`}
-    </div>
-  `;
-}
-
 function renderPubMedControls(state) {
   if (!isScienceAgent(state)) {
     return "";
@@ -2489,7 +2472,7 @@ export function renderApp(state) {
 
           <footer class="composer-dock shrink-0 pt-2">
             <div class="composer-panel glass-panel rounded-2xl border border-white/70 px-3 py-2.5 shadow-sm">
-              ${instagramMode ? renderInstagramCreativePanel(state) : `${scienceMode ? renderPubMedControls(state) : ""}${renderRecommendedModel(state)}${renderAttachmentChips(state)}`}
+              ${instagramMode ? renderInstagramCreativePanel(state) : `${scienceMode ? renderPubMedControls(state) : ""}${renderAttachmentChips(state)}`}
               <form data-form="composer">
                 <div class="flex flex-col gap-1.5">
                   ${instagramMode
@@ -2682,7 +2665,6 @@ export function bindUIHandlers(handlers) {
     if (action === "copy-message") handlers.onCopyMessage(target.dataset.messageId);
     if (action === "clear-attachments") handlers.onClearAttachments();
     if (action === "remove-attachment") handlers.onRemoveAttachment?.(target.dataset.attachmentId);
-    if (action === "apply-recommended-model") handlers.onApplyRecommendedModel?.();
     if (action === "toggle-sidebar") handlers.onToggleSidebar();
     if (action === "toggle-sidebar-collapse") handlers.onToggleSidebarCollapse();
     if (action === "set-chat-category") handlers.onSetChatCategory(target.dataset.chatId, target.dataset.category);
