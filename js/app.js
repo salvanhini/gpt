@@ -677,8 +677,16 @@ function asksForActiveDocument(message = "") {
     && /\b(resum|sintetiz|leia|ler|analise|extraia|explique)\b/i.test(message);
 }
 
+function asksForDocumentAction(message = "") {
+  return /\b(resum|sintetiz|leia|ler|analise|analisar|extraia|extrair|explique|fichamento|pontos principais|principais pontos|sumari|tabela|compare|comparar)\b/i.test(message);
+}
+
+function asksForExplicitWebSearch(message = "") {
+  return /\b(busca web|web search|internet|online|google|noticia|noticias|notícias|atualizado|atualizada|hoje|agora|tempo real|sites externos|fontes externas)\b/i.test(message);
+}
+
 function shouldPrioritizeActiveDocuments(message = "", files = getActiveChatAttachments()) {
-  return asksForActiveDocument(message) && files.length > 0;
+  return files.length > 0 && asksForDocumentAction(message) && !asksForExplicitWebSearch(message);
 }
 
 function getSettingsForVisualDocuments(baseSettings = getActiveSettings()) {
