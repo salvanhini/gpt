@@ -1,5 +1,6 @@
 import { SECURE_AGENT_ID } from "./agents.js";
 import { syncMessageToSupabase, isSupabaseConfigured, getSessionId } from "./supabaseSync.js";
+import { buildDocumentBrief, buildDocumentSynthesis, normalizeResponseMode } from "./documentContext.js";
 
 const CHATS_KEY = "femicgpt:chats";
 const SECURE_CHATS_KEY = "femicgpt:secure_chats";
@@ -61,6 +62,9 @@ export function createChat(agentId) {
     summary: "",
     pinned: false,
     attachments: [],
+    responseMode: "estruturado",
+    documentBriefs: [],
+    documentSynthesis: "",
     documentContextVersion: 0,
     documentContextUpdatedAt: null,
     messages: [],
@@ -84,6 +88,13 @@ function getChatOrThrow(chatId) {
   if (!Array.isArray(chat.attachments)) {
     chat.attachments = [];
   }
+  chat.responseMode = normalizeResponseMode(chat.responseMode);
+  if (!Array.isArray(chat.documentBriefs)) {
+    chat.documentBriefs = [];
+  }
+  if (typeof chat.documentSynthesis !== "string") {
+    chat.documentSynthesis = "";
+  }
   if (!Number.isFinite(chat.documentContextVersion)) {
     chat.documentContextVersion = 0;
   }
@@ -91,6 +102,8 @@ function getChatOrThrow(chatId) {
 }
 
 function markDocumentContextUpdated(chat) {
+  chat.documentBriefs = chat.attachments.map(buildDocumentBrief);
+  chat.documentSynthesis = buildDocumentSynthesis(chat.documentBriefs);
   chat.documentContextVersion = (Number(chat.documentContextVersion) || 0) + 1;
   chat.documentContextUpdatedAt = new Date().toISOString();
 }
@@ -121,6 +134,14 @@ export function clearChatAttachments(chatId) {
   chat.updatedAt = new Date().toISOString();
   saveChats(chats);
   return chat.attachments;
+}
+
+export function setChatResponseMode(chatId, responseMode) {
+  const { chats, chat } = getChatOrThrow(chatId);
+  chat.responseMode = normalizeResponseMode(responseMode);
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+  return chat.responseMode;
 }
 
 export function addMessage(chatId, message) {

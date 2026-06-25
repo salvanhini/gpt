@@ -35,6 +35,7 @@ import {
   loadChats,
   removeChatAttachment,
   saveChats,
+  setChatResponseMode,
   updateChatCategory,
   updateMessageCategory,
   updateChatTitle,
@@ -65,6 +66,12 @@ import {
   pickPortugueseVoice,
 } from "./audio.js";
 import { processFiles, buildCombinedContext } from "./fileProcessor.js";
+import {
+  buildDocumentBrief,
+  buildDocumentSynthesis,
+  getResponseDepthInstruction,
+  RESPONSE_MODES,
+} from "./documentContext.js";
 import {
   formatCepSummary,
   formatCnpjSummary,
@@ -166,6 +173,7 @@ const state = {
   smartMode: true,
   pubmedResultLimit: 5,
   webSearchMode: false,
+  responseModes: RESPONSE_MODES,
   modelGuidanceCollapsed: false,
   agentSummaryCollapsed: true,
   creativeBriefCollapsed: true,
@@ -710,6 +718,11 @@ function getSettingsForVisualDocuments(baseSettings = getActiveSettings()) {
 
 function buildDocumentFocusContext(files = []) {
   if (!files.length) return "";
+  const activeChat = getActiveChat();
+  const briefs = activeChat?.documentBriefs?.length
+    ? activeChat.documentBriefs
+    : files.map(buildDocumentBrief);
+  const synthesis = activeChat?.documentSynthesis || buildDocumentSynthesis(briefs);
   return [
     "Documentos ativos nesta conversa:",
     ...files.map((file, index) => {
@@ -717,8 +730,14 @@ function buildDocumentFocusContext(files = []) {
       const status = file.status || meta.extractionMethod || "lido";
       return `${index + 1}. ${file.name} (${String(file.type || "").toUpperCase()}) - status: ${status}; paginas: ${meta.pages || "n/d"}; leitura visual: ${meta.visualPagesRendered || 0} pagina(s).`;
     }),
+    synthesis ? `\nSintese local dos anexos:\n${synthesis}` : "",
+    briefs.length ? `\nFichas dos documentos:\n${briefs.map((brief, index) => [
+      `${index + 1}. ${brief.name}`,
+      `Status: ${brief.status}; paginas: ${brief.pages || "n/d"}; paginas uteis: ${brief.usefulPages}; truncado: ${brief.truncated ? "sim" : "nao"}.`,
+      brief.pageHighlights ? `Indice util:\n${brief.pageHighlights}` : "",
+    ].filter(Boolean).join("\n")).join("\n\n")}` : "",
     "",
-    "Responda com base apenas nos documentos ativos acima e no conteudo fornecido agora. Ignore respostas antigas sobre arquivos removidos ou substituidos.",
+    "Responda com base apenas nos documentos ativos acima e no conteudo fornecido agora. Ao comparar varios anexos, separe achados por documento antes de sintetizar. Ignore respostas antigas sobre arquivos removidos ou substituidos.",
   ].join("\n");
 }
 
@@ -741,6 +760,7 @@ function buildTextPayload(userMessage) {
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
+    responseDepthInstruction: getResponseDepthInstruction(activeChat?.responseMode),
     history,
     attachmentContext: attachmentContext.combinedContext || "",
     referenceContext: [documentFocusContext, memoryContext].filter(Boolean).join("\n\n"),
@@ -767,6 +787,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
+    responseDepthInstruction: getResponseDepthInstruction(activeChat?.responseMode),
     history,
     attachmentContext: attachmentContext.combinedContext || "",
     referenceContext: [documentFocusContext, referenceContext].filter(Boolean).join("\n\n"),
@@ -1750,6 +1771,18 @@ function handleQuickModelChange(value) {
   state.settingsFallbacks = [];
   showToast(`Modelo ativo: ${getTextProviderDisplayName(provider)}`, "success");
   persistAndRender();
+}
+
+function handleResponseModeChange(value) {
+  const chat = getActiveChat();
+  if (!chat) return;
+  try {
+    setChatResponseMode(chat.id, value);
+    state.chats = loadChats();
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Nao foi possivel alterar o modo de resposta.", "error");
+  }
 }
 
 function handleApplyRecommendedModel() {
@@ -2841,6 +2874,7 @@ function initialize() {
     onSaveBrand: handleSaveBrand,
     onDeleteBrand: handleDeleteBrand,
     onQuickModelChange: handleQuickModelChange,
+    onResponseModeChange: handleResponseModeChange,
     onChangeImageSize: handleChangeImageSize,
     onCreativeFieldChange: handleCreativeFieldChange,
     onSelectBrand: handleSelectBrand,

@@ -52,6 +52,22 @@ test("buildChatMessages appends response style to the agent prompt", () => {
   assert.match(payload[0].content, /subtítulos curtos/);
 });
 
+test("buildChatMessages appends response depth instructions without replacing agent prompt", () => {
+  const payload = buildChatMessages({
+    globalSystemPrompt: "",
+    agentSystemPrompt: "Você é um professor clínico.",
+    responseStyle: "Use tabelas quando fizer sentido.",
+    responseDepthInstruction: "Modo Aula Completa: desenvolva a resposta em capítulos.",
+    history: [],
+    userMessage: "Explique o artigo.",
+  });
+
+  assert.equal(payload[0].role, "system");
+  assert.match(payload[0].content, /professor clínico/i);
+  assert.match(payload[0].content, /Estilo de resposta/);
+  assert.match(payload[0].content, /Modo Aula Completa/);
+});
+
 test("buildChatMessages sends visual PDF pages with the final user message", () => {
   const payload = buildChatMessages({
     history: [],

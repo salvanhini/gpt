@@ -9,6 +9,7 @@ import {
   loadChats,
   removeChatAttachment,
   saveChats,
+  setChatResponseMode,
   updateChatTitle,
   updateMessageCategory,
 } from "../js/chat.js";
@@ -68,6 +69,25 @@ test("createChat starts in automatic title mode", () => {
   assert.equal(chat.title, "Nova conversa");
   assert.equal(chat.titleMode, "auto");
   assert.deepEqual(chat.attachments, []);
+  assert.equal(chat.responseMode, "estruturado");
+});
+
+test("setChatResponseMode persists the selected mode per chat", () => {
+  const previousStorage = globalThis.localStorage;
+  const memoryStorage = createMemoryStorage();
+  globalThis.localStorage = memoryStorage;
+
+  try {
+    const chat = createChat("agent-general");
+    saveChats([chat]);
+
+    setChatResponseMode(chat.id, "aula");
+
+    const [storedChat] = loadChats();
+    assert.equal(storedChat.responseMode, "aula");
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
 });
 
 test("addMessage generates automatic title only while chat remains in auto mode", () => {

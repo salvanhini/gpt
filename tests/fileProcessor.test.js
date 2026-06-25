@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   assessPdfTextQuality,
+  buildPdfPageIndex,
   buildCombinedContext,
   MAX_CONTEXT_CHARS,
 } from "../js/fileProcessor.js";
@@ -55,4 +56,18 @@ test("assessPdfTextQuality marks useful PDF text as text", () => {
 
   assert.equal(assessment.method, "text");
   assert.equal(assessment.usefulPages, 2);
+});
+
+test("buildPdfPageIndex keeps useful page metadata and compact previews", () => {
+  const [page] = buildPdfPageIndex([
+    {
+      pageNumber: 3,
+      text: "Esta pagina apresenta metodologia, criterios de inclusao, resultados clinicos e conclusoes importantes para analise detalhada.",
+    },
+  ]);
+
+  assert.equal(page.pageNumber, 3);
+  assert.equal(page.useful, true);
+  assert.ok(page.chars > 40);
+  assert.match(page.preview, /metodologia/);
 });

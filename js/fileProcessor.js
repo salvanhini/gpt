@@ -2,6 +2,7 @@ import { getPdfJs } from "./pdf.js";
 
 export const MAX_CONTEXT_CHARS = 12000;
 const MAX_FILE_CONTEXT_CHARS = 8000;
+const MAX_PAGE_TEXT_CHARS = 2000;
 const MAX_VISUAL_PDF_PAGES = 4;
 const MIN_USEFUL_PAGE_CHARS = 40;
 
@@ -66,6 +67,27 @@ function isUsefulPdfPageText(text = "") {
   const normalized = normalizeUsefulText(text);
   const words = normalized.split(/\s+/).filter((word) => word.length >= 3);
   return normalized.length >= MIN_USEFUL_PAGE_CHARS && words.length >= 5;
+}
+
+export function buildPdfPageIndex(pages = []) {
+  return pages.map((page) => {
+    const rawText = String(page.text || "").trim();
+    return {
+      pageNumber: page.pageNumber,
+      chars: rawText.length,
+      useful: isUsefulPdfPageText(rawText),
+      preview: rawText.replace(/\s+/g, " ").slice(0, 220),
+    };
+  });
+}
+
+function buildPdfDocumentPages(pages = []) {
+  return pages.map((page) => ({
+    pageNumber: page.pageNumber,
+    text: truncate(String(page.text || "").trim(), MAX_PAGE_TEXT_CHARS),
+    chars: String(page.text || "").trim().length,
+    useful: isUsefulPdfPageText(page.text),
+  }));
 }
 
 export function assessPdfTextQuality(pages = []) {
@@ -302,6 +324,7 @@ export async function processFile(file) {
       const pdfResult = await readPdf(file);
       content = pdfResult.text;
       visualPages = pdfResult.visualPages;
+      const trimmedContent = content.trim();
       documentMeta = {
         kind: "pdf",
         pages: pdfResult.quality.totalPages,
@@ -311,7 +334,10 @@ export async function processFile(file) {
         extractionMethod: pdfResult.quality.method,
         visualPagesRendered: pdfResult.quality.visualPagesRendered,
         visualPartial: pdfResult.quality.visualPartial,
+        truncated: trimmedContent.length > MAX_FILE_CONTEXT_CHARS,
+        pageIndex: buildPdfPageIndex(pdfResult.pages),
       };
+      documentMeta.documentPages = buildPdfDocumentPages(pdfResult.pages);
     } else if (["xlsx", "xls"].includes(extension)) {
       content = await readSpreadsheet(file);
     } else if (extension === "csv") {
@@ -352,7 +378,9 @@ export async function processFile(file) {
       throw new Error(`Formato nao suportado: .${extension}`);
     }
 
-    const normalized = truncate(content.trim());
+    const rawContent = content.trim();
+    const normalized = truncate(rawContent);
+    const truncated = rawContent.length > normalized.length;
     const statusLabel =
       documentMeta?.extractionMethod === "visual_required"
         ? "leitura visual"
@@ -365,6 +393,7 @@ export async function processFile(file) {
       size: file.size,
       documentMeta,
       visualPages,
+      truncated,
       status: statusLabel,
       extractedText: normalized,
       summary: `${file.name} (${extension.toUpperCase()})`,
@@ -373,7 +402,9 @@ export async function processFile(file) {
         `Tipo: ${extension.toUpperCase()}`,
         documentMeta ? `Status de leitura: ${statusLabel}` : "",
         documentMeta ? `Paginas: ${documentMeta.pages}; paginas com texto util: ${documentMeta.usefulPages}; caracteres extraidos: ${documentMeta.extractedChars}` : "",
+        documentMeta?.pageIndex?.length ? `Indice de paginas:\n${documentMeta.pageIndex.slice(0, 20).map((page) => `Pagina ${page.pageNumber}: ${page.useful ? "texto util" : "texto fraco"}; ${page.chars} caracteres; ${page.preview || "sem previa"}`).join("\n")}` : "",
         documentMeta?.visualPagesRendered ? `Leitura visual preparada para paginas: ${visualPages.map((page) => page.pageNumber).join(", ")}` : "",
+        truncated ? "Aviso: conteudo textual truncado para controlar custo e estabilidade." : "",
         "Conteudo extraido:",
         normalized || "[Sem texto confiavel extraido. Use as paginas renderizadas como imagem para leitura visual.]",
       ].filter(Boolean).join("\n"),

@@ -215,6 +215,19 @@ function renderQuickModelOptions(state) {
   return [...openRouter, ...groq, ...gemini].join("");
 }
 
+function renderResponseModeOptions(state) {
+  const activeMode = state.chats?.find((chat) => chat.id === state.activeChatId)?.responseMode || "estruturado";
+  const modes = state.responseModes || [
+    { value: "estruturado", label: "Estruturado" },
+    { value: "aula", label: "Aula completa" },
+    { value: "apostila", label: "Apostila" },
+    { value: "executivo", label: "Executivo" },
+  ];
+  return modes.map((mode) => `
+    <option value="${escapeHtml(mode.value)}" ${activeMode === mode.value ? "selected" : ""}>${escapeHtml(mode.label)}</option>
+  `).join("");
+}
+
 function renderModelGuidance(state) {
   const details = getActiveModelDetails(state);
   const isCollapsed = Boolean(state.modelGuidanceCollapsed);
@@ -432,6 +445,13 @@ function renderAttachmentChips(state) {
     if (method === "failed" || method === "erro") return "Erro";
     return "Ativo";
   };
+  const detailLabel = (file) => {
+    const meta = file.documentMeta || {};
+    const parts = [];
+    if (meta.pages) parts.push(`${meta.usefulPages || 0}/${meta.pages} pág. úteis`);
+    if (meta.visualPartial || file.truncated || meta.truncated) parts.push("parcial");
+    return parts.join(" · ");
+  };
 
   return `
     <details class="attachment-library mb-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2" open>
@@ -454,6 +474,7 @@ function renderAttachmentChips(state) {
               <span>📎</span>
               <span>${escapeHtml(file.summary)}</span>
               <span class="text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-700/70">${escapeHtml(statusLabel(file))}</span>
+              ${detailLabel(file) ? `<span class="text-[10px] text-sky-700/70">${escapeHtml(detailLabel(file))}</span>` : ""}
               <button type="button" class="text-sky-700/70 hover:text-rose-600" data-action="remove-attachment" data-attachment-id="${escapeHtml(file.id || "")}" title="Remover documento" aria-label="Remover ${escapeHtml(file.summary)}">✕</button>
             </div>
           `,
@@ -2508,6 +2529,12 @@ export function renderApp(state) {
                           ${renderQuickModelOptions(state)}
                         </select>
                       </label>`}
+                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-1.5 py-0.5">
+                        <span class="text-[9px] text-slate-400 mr-0.5">Resposta:</span>
+                        <select class="quick-model-select-inline" data-action="response-mode-change" title="Escolha a profundidade da resposta">
+                          ${renderResponseModeOptions(state)}
+                        </select>
+                      </label>`}
                       ${state.imageMode && !instagramMode ? renderImageSizeSelector(state) : ""}
                       ${instagramMode ? "" : `<label class="control-btn inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm">
                         <input id="file-input" type="file" class="hidden" multiple accept=".pdf,.xlsx,.xls,.csv,.xml,.txt,.docx,.jpg,.jpeg,.png" data-action="attach-files" />
@@ -2784,6 +2811,11 @@ export function bindUIHandlers(handlers) {
     const input = event.target;
     if (input instanceof HTMLSelectElement && input.dataset.action === "quick-model-change") {
       handlers.onQuickModelChange(input.value);
+      return;
+    }
+
+    if (input instanceof HTMLSelectElement && input.dataset.action === "response-mode-change") {
+      handlers.onResponseModeChange?.(input.value);
       return;
     }
 
