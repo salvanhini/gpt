@@ -28,9 +28,12 @@ import {
 } from "./archiveStorage.js";
 import {
   addMessage,
+  addChatAttachments,
+  clearChatAttachments,
   createChat,
   getChatsByAgent,
   loadChats,
+  removeChatAttachment,
   saveChats,
   updateChatCategory,
   updateMessageCategory,
@@ -505,6 +508,24 @@ function getActiveChat() {
   return state.chats.find((chat) => chat.id === state.activeChatId) || null;
 }
 
+function getActiveChatAttachments() {
+  return getActiveChat()?.attachments || [];
+}
+
+function getActiveAttachmentContext() {
+  const files = getActiveChatAttachments();
+  return {
+    files,
+    combinedContext: buildCombinedContext(files),
+  };
+}
+
+function syncPendingAttachmentContext() {
+  const context = getActiveAttachmentContext();
+  state.pendingAttachmentContext = context.files.length ? context : null;
+  return state.pendingAttachmentContext;
+}
+
 function applyAgentModeDefaults(agentId) {
   const agent = state.agents.find((item) => item.id === agentId);
   if (!agent) {
@@ -530,6 +551,7 @@ function refreshFromStorage() {
   state.brands = loadBrands();
   state.chats = loadChats();
   hydratePersistentState();
+  syncPendingAttachmentContext();
 }
 
 function setModal(name, open, payload = {}) {
@@ -546,6 +568,8 @@ function render() {
     refreshFromStorage();
     state.activeAgent = getActiveAgent();
     state.effectiveSettings = getActiveSettings();
+    state.recommendedModel = getRecommendedModelForContext();
+    state.recommendedModelActive = isRecommendedModelActive(state.recommendedModel);
     state.dailyCost = getDailyCost();
     state.monthlyCost = getMonthlyCost();
     state.memoryFacts = getMemoryFacts();
@@ -619,9 +643,10 @@ function compactHistoryForPayload(messages = [], settings = getActiveSettings())
 function buildTextPayload(userMessage) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
+  const attachmentContext = getActiveAttachmentContext();
   const history = compactHistoryForPayload(activeChat?.messages || []);
   const memoryContext = buildMemoryContext();
-  const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+  const imageDataUrls = (attachmentContext.files || [])
     .filter((f) => f.imageDataUrl)
     .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
 
@@ -630,7 +655,7 @@ function buildTextPayload(userMessage) {
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
     history,
-    attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
+    attachmentContext: attachmentContext.combinedContext || "",
     referenceContext: memoryContext,
     userMessage,
     imageDataUrls,
@@ -640,8 +665,9 @@ function buildTextPayload(userMessage) {
 function buildTextPayloadWithReference(userMessage, referenceContext) {
   const activeAgent = getActiveAgent();
   const activeChat = getActiveChat();
+  const attachmentContext = getActiveAttachmentContext();
   const history = compactHistoryForPayload(activeChat?.messages || []);
-  const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+  const imageDataUrls = (attachmentContext.files || [])
     .filter((f) => f.imageDataUrl)
     .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
 
@@ -650,7 +676,7 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
     history,
-    attachmentContext: state.pendingAttachmentContext?.combinedContext || "",
+    attachmentContext: attachmentContext.combinedContext || "",
     referenceContext,
     userMessage,
     imageDataUrls,
@@ -692,6 +718,115 @@ function getActiveTextProviderLabel() {
 function canUseWebSearch() {
   const provider = getActiveSettings().textProvider;
   return provider !== "gemini";
+}
+
+function getRecommendedModelForContext() {
+  const attachments = getActiveChatAttachments();
+  const activeSettings = getActiveSettings();
+  const hasManyDocuments = attachments.length >= 2;
+  const hasDocuments = attachments.length > 0;
+  const hasOpenRouter = Boolean(activeSettings.openRouterKey);
+  const hasGroq = Boolean(activeSettings.groqKey);
+  const hasGemini = Boolean(activeSettings.geminiKey);
+
+  if (state.webSearchMode) {
+    if (hasGroq) {
+      return {
+        provider: "groq",
+        model: "openai/gpt-oss-120b",
+        label: "Groq GPT OSS 120B",
+        reason: hasDocuments ? "melhor para combinar pesquisa web com documentos" : "melhor para pesquisa web rápida",
+      };
+    }
+    if (hasOpenRouter) {
+      return {
+        provider: "openrouter",
+        model: "qwen/qwen3.7-plus",
+        label: "Qwen 3.7 Plus",
+        reason: "boa alternativa para pesquisa com contexto longo",
+      };
+    }
+    if (hasGemini) {
+      return {
+        provider: "gemini",
+        model: activeSettings.geminiModel || "gemini-3.5-flash",
+        label: "Gemini 3.5 Flash",
+        reason: "melhor opção configurada para documentos quando não há Groq/OpenRouter",
+      };
+    }
+    return {
+      provider: "openrouter",
+      model: "qwen/qwen3.7-plus",
+      label: "Qwen 3.7 Plus",
+      reason: "recomendado para pesquisa com documentos; configure a chave OpenRouter para usar",
+    };
+  }
+
+  if (hasManyDocuments) {
+    if (hasOpenRouter) {
+      return {
+        provider: "openrouter",
+        model: "qwen/qwen3.7-plus",
+        label: "Qwen 3.7 Plus",
+        reason: "melhor equilíbrio para vários artigos e custo controlado",
+      };
+    }
+    if (hasGemini) {
+      return {
+        provider: "gemini",
+        model: activeSettings.geminiModel || "gemini-3.5-flash",
+        label: "Gemini 3.5 Flash",
+        reason: "forte para leitura de vários documentos",
+      };
+    }
+  }
+
+  if (hasDocuments) {
+    return hasOpenRouter
+      ? {
+          provider: "openrouter",
+          model: "qwen/qwen3.7-plus",
+          label: "Qwen 3.7 Plus",
+          reason: "bom contexto para documentos anexados",
+        }
+      : hasGemini
+        ? {
+            provider: "gemini",
+            model: activeSettings.geminiModel || "gemini-3.5-flash",
+            label: "Gemini 3.5 Flash",
+            reason: "forte para leitura de documentos",
+          }
+      : {
+          provider: "openrouter",
+          model: "qwen/qwen3.7-plus",
+          label: "Qwen 3.7 Plus",
+          reason: "recomendado para documentos; configure a chave OpenRouter para usar",
+        };
+  }
+
+  if (hasGroq) {
+    return {
+      provider: "groq",
+      model: "openai/gpt-oss-20b",
+      label: "Groq GPT OSS 20B",
+      reason: "rápido e econômico para perguntas simples",
+    };
+  }
+
+  return {
+    provider: "openrouter",
+    model: "qwen/qwen3.5-flash-02-23",
+    label: "Qwen 3.5 Flash",
+    reason: "rápido e barato para respostas curtas",
+  };
+}
+
+function isRecommendedModelActive(recommendation = getRecommendedModelForContext()) {
+  const settings = getActiveSettings();
+  if (recommendation.provider !== settings.textProvider) return false;
+  if (recommendation.provider === "groq") return settings.groqModel === recommendation.model;
+  if (recommendation.provider === "gemini") return settings.geminiModel === recommendation.model;
+  return settings.textModel === recommendation.model;
 }
 
 function resetAttachments() {
@@ -768,6 +903,7 @@ async function handleSendMessage(rawMessage) {
   const textPayload = state.imageMode || isInstagramMode || isPubMedMode
     ? null
     : buildTextPayload(message);
+  const activeAttachmentsSnapshot = getActiveChatAttachments();
   state.isLoading = true;
 
   try {
@@ -776,7 +912,7 @@ async function handleSendMessage(rawMessage) {
       content: message,
       meta: {
         kind: "text",
-        attachments: state.pendingAttachmentContext?.files || [],
+        attachments: activeAttachmentsSnapshot,
         instagramFormat: instagramPayload?.format.id || null,
         brandId: instagramPayload?.brand.id || null,
       },
@@ -880,6 +1016,7 @@ async function handleSendMessage(rawMessage) {
     } else
     if (state.activeAgentId === IMAGE_PROMPTER_ID) {
       const progressMsgId = crypto.randomUUID();
+      const activeAgent = getActiveAgent();
       addMessage(activeChat.id, {
         id: progressMsgId,
         role: "assistant",
@@ -893,7 +1030,7 @@ async function handleSendMessage(rawMessage) {
       persistAndRender();
 
       try {
-        const imageDataUrls = (state.pendingAttachmentContext?.files || [])
+        const imageDataUrls = (getActiveAttachmentContext().files || [])
           .filter((f) => f.imageDataUrl)
           .map((f) => ({ dataUrl: f.imageDataUrl, name: f.name }));
 
@@ -966,7 +1103,6 @@ async function handleSendMessage(rawMessage) {
         });
       }
 
-      resetAttachments();
     } else
     if (state.imageMode || isInstagramMode) {
       if (isInstagramMode && instagramPayload) {
@@ -1098,7 +1234,6 @@ async function handleSendMessage(rawMessage) {
             failed: true,
           },
         });
-        resetAttachments();
         return;
       }
 
@@ -1308,8 +1443,6 @@ async function handleSendMessage(rawMessage) {
       }
     }
 
-    resetAttachments();
-
     // Auto-extract memory facts from conversation
     if (activeChat?.messages?.length >= 1) {
       autoExtractAndStore(activeChat.messages);
@@ -1488,6 +1621,11 @@ function handleQuickModelChange(value) {
   state.settingsFallbacks = [];
   showToast(`Modelo ativo: ${getTextProviderDisplayName(provider)}`, "success");
   persistAndRender();
+}
+
+function handleApplyRecommendedModel() {
+  const recommendation = getRecommendedModelForContext();
+  handleQuickModelChange(`${recommendation.provider}::${recommendation.model}`);
 }
 
 function handleChangeImageSize(value) {
@@ -2002,17 +2140,33 @@ function handleEditAgent(agentId) {
 
 async function handleAttachFiles(fileList) {
   try {
+    const chat = getActiveChat();
+    if (!chat) {
+      showToast("Nenhuma conversa ativa disponível para receber documentos.", "error");
+      return;
+    }
     const newProcessed = await processFiles(fileList);
-    const existing = state.pendingAttachmentContext?.files || [];
-    const merged = [...existing, ...newProcessed.files];
-    state.pendingAttachmentContext = {
-      files: merged,
-      combinedContext: buildCombinedContext(merged),
-    };
-    showToast(`${merged.length} arquivo(s) pronto(s) para envio.`, "success");
+    addChatAttachments(chat.id, newProcessed.files);
+    state.chats = loadChats();
+    syncPendingAttachmentContext();
+    const total = getActiveChatAttachments().length;
+    showToast(`${total} documento(s) na biblioteca desta conversa.`, "success");
     persistAndRender();
   } catch (error) {
     showToast(error.message || "Falha ao processar arquivos.", "error");
+  }
+}
+
+function handleRemoveAttachment(attachmentId) {
+  const chat = getActiveChat();
+  if (!chat) return;
+  try {
+    removeChatAttachment(chat.id, attachmentId);
+    state.chats = loadChats();
+    syncPendingAttachmentContext();
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Não foi possível remover o documento.", "error");
   }
 }
 
@@ -2388,6 +2542,7 @@ function initialize() {
     onSpeakMessage: (messageId) => voiceController.speakMessage(messageId),
     onCopyMessage: handleCopyMessage,
     onAttachFiles: handleAttachFiles,
+    onRemoveAttachment: handleRemoveAttachment,
     onSetChatCategory: handleSetChatCategory,
     onSetMessageCategory: handleSetMessageCategory,
     onRenameChat: handleRenameChat,
@@ -2537,9 +2692,15 @@ function initialize() {
     onToggleModelGuidance: handleToggleModelGuidance,
     onChangePubMedResultLimit: handleChangePubMedResultLimit,
     onClearAttachments: () => {
+      const chat = getActiveChat();
+      if (chat) {
+        clearChatAttachments(chat.id);
+        state.chats = loadChats();
+      }
       resetAttachments();
       persistAndRender();
     },
+    onApplyRecommendedModel: handleApplyRecommendedModel,
     onSendMessage: handleSendMessage,
     onSaveSettings: handleSaveSettings,
     onSupabaseLogin: handleSupabaseLogin,

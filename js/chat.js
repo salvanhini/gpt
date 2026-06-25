@@ -60,8 +60,54 @@ export function createChat(agentId) {
     category: "",
     summary: "",
     pinned: false,
+    attachments: [],
     messages: [],
   };
+}
+
+function normalizeAttachment(attachment) {
+  return {
+    id: attachment.id || crypto.randomUUID(),
+    attachedAt: attachment.attachedAt || new Date().toISOString(),
+    ...attachment,
+  };
+}
+
+function getChatOrThrow(chatId) {
+  const chats = loadChats();
+  const chat = chats.find((item) => item.id === chatId);
+  if (!chat) {
+    throw new Error("Conversa não encontrada.");
+  }
+  if (!Array.isArray(chat.attachments)) {
+    chat.attachments = [];
+  }
+  return { chats, chat };
+}
+
+export function addChatAttachments(chatId, attachments = []) {
+  const { chats, chat } = getChatOrThrow(chatId);
+  const normalized = attachments.map(normalizeAttachment);
+  chat.attachments = [...chat.attachments, ...normalized];
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+  return normalized;
+}
+
+export function removeChatAttachment(chatId, attachmentId) {
+  const { chats, chat } = getChatOrThrow(chatId);
+  chat.attachments = chat.attachments.filter((item) => item.id !== attachmentId);
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+  return chat.attachments;
+}
+
+export function clearChatAttachments(chatId) {
+  const { chats, chat } = getChatOrThrow(chatId);
+  chat.attachments = [];
+  chat.updatedAt = new Date().toISOString();
+  saveChats(chats);
+  return chat.attachments;
 }
 
 export function addMessage(chatId, message) {

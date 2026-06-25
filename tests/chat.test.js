@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   addMessage,
+  addChatAttachments,
+  clearChatAttachments,
   createChat,
   loadChats,
+  removeChatAttachment,
   saveChats,
   updateChatTitle,
   updateMessageCategory,
@@ -64,6 +67,7 @@ test("createChat starts in automatic title mode", () => {
 
   assert.equal(chat.title, "Nova conversa");
   assert.equal(chat.titleMode, "auto");
+  assert.deepEqual(chat.attachments, []);
 });
 
 test("addMessage generates automatic title only while chat remains in auto mode", () => {
@@ -117,6 +121,60 @@ test("saveChats separates secure local conversations from normal conversations",
     assert.equal(JSON.parse(dump["femicgpt:chats"]).length, 1);
     assert.equal(JSON.parse(dump["femicgpt:secure_chats"]).length, 1);
     assert.deepEqual(loadChats().map((chat) => chat.id).sort(), [normalChat.id, secureChat.id].sort());
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test("chat attachments persist until explicitly removed or cleared", () => {
+  const previousStorage = globalThis.localStorage;
+  const memoryStorage = createMemoryStorage();
+  globalThis.localStorage = memoryStorage;
+
+  try {
+    const chat = createChat("agent-general");
+    saveChats([chat]);
+
+    const [firstAttachment] = addChatAttachments(chat.id, [
+      {
+        name: "artigo-a.pdf",
+        type: "pdf",
+        size: 1024,
+        summary: "artigo-a.pdf (PDF)",
+        contextBlock: "Arquivo: artigo-a.pdf\nConteudo A",
+      },
+    ]);
+
+    let [storedChat] = loadChats();
+    assert.equal(storedChat.attachments.length, 1);
+    assert.equal(storedChat.attachments[0].id, firstAttachment.id);
+
+    addMessage(chat.id, {
+      role: "user",
+      content: "Resuma o artigo",
+      meta: { attachments: storedChat.attachments },
+    });
+
+    [storedChat] = loadChats();
+    assert.equal(storedChat.attachments.length, 1);
+
+    removeChatAttachment(chat.id, firstAttachment.id);
+    [storedChat] = loadChats();
+    assert.equal(storedChat.attachments.length, 0);
+
+    addChatAttachments(chat.id, [
+      {
+        name: "artigo-b.pdf",
+        type: "pdf",
+        size: 2048,
+        summary: "artigo-b.pdf (PDF)",
+        contextBlock: "Arquivo: artigo-b.pdf\nConteudo B",
+      },
+    ]);
+    clearChatAttachments(chat.id);
+
+    [storedChat] = loadChats();
+    assert.deepEqual(storedChat.attachments, []);
   } finally {
     globalThis.localStorage = previousStorage;
   }
