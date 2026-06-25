@@ -2523,14 +2523,14 @@ export function renderApp(state) {
                   }
                   <div class="flex flex-wrap items-center justify-between gap-1">
                     <div class="flex flex-wrap items-center gap-1">
-                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-1.5 py-0.5">
-                        <span class="text-[9px] text-slate-400 mr-0.5">Modelo:</span>
+                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/80 bg-white/85 px-2 py-1 shadow-sm">
+                        <span class="quick-model-label text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Modelo</span>
                         <select class="quick-model-select-inline" data-action="quick-model-change">
                           ${renderQuickModelOptions(state)}
                         </select>
                       </label>`}
-                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-1.5 py-0.5">
-                        <span class="text-[9px] text-slate-400 mr-0.5">Resposta:</span>
+                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/80 bg-white/85 px-2 py-1 shadow-sm">
+                        <span class="quick-model-label text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Resposta</span>
                         <select class="quick-model-select-inline" data-action="response-mode-change" title="Escolha a profundidade da resposta">
                           ${renderResponseModeOptions(state)}
                         </select>

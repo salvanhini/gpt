@@ -1075,17 +1075,20 @@ button {
 
 .quick-model-wrap {
   position: relative;
+  gap: 0.25rem;
+  min-height: 1.85rem;
+  overflow: visible;
 }
 
 .quick-model-wrap::after {
   content: "⌄";
   position: absolute;
-  right: 0.85rem;
+  right: 0.55rem;
   top: 50%;
   pointer-events: none;
   transform: translateY(-54%);
-  color: #6b7f96;
-  font-size: 0.85rem;
+  color: #7c8da3;
+  font-size: 0.72rem;
 }
 
 .image-size-select {
@@ -1136,12 +1139,23 @@ button {
   background: transparent;
   border: none;
   color: var(--femic-text);
-  font-size: 0.6rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
   outline: none;
   cursor: pointer;
-  padding-right: 0.2rem;
-  max-width: 130px;
+  padding: 0.15rem 1.05rem 0.15rem 0;
+  min-width: 7.4rem;
+  max-width: 15rem;
+  text-overflow: ellipsis;
+}
+
+.quick-model-select-inline[data-action="quick-model-change"] {
+  min-width: 11.75rem;
+}
+
+.quick-model-select-inline[data-action="response-mode-change"] {
+  min-width: 7.8rem;
 }
 
 .attachment-library-summary::-webkit-details-marker {
@@ -1515,12 +1529,14 @@ button {
     flex: 1 1 100%;
     min-width: 0;
     width: 100%;
+    justify-content: space-between;
   }
 
   .quick-model-select-inline {
     flex: 1;
     max-width: none;
     min-width: 0;
+    width: 100%;
   }
 
   .composer-chip,
@@ -1755,13 +1771,16 @@ button {
 
 .chat-workspace.reading-mode .quick-model-wrap {
   display: inline-flex;
-  border: none;
-  background: transparent;
-  padding: 0;
+  border-color: rgba(216, 226, 236, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.28rem 0.55rem;
+  box-shadow: 0 6px 16px rgba(21, 48, 79, 0.06);
 }
 
-.chat-workspace.reading-mode .quick-model-wrap span {
-  display: none;
+.chat-workspace.reading-mode .quick-model-label {
+  display: inline-flex;
+  color: #7a8da3;
+  letter-spacing: 0.08em;
 }
 
 .chat-workspace.reading-mode .composer-panel .control-btn span:last-child {
