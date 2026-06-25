@@ -1,6 +1,8 @@
+import { SECURE_AGENT_ID } from "./agents.js";
 import { syncMessageToSupabase, isSupabaseConfigured, getSessionId } from "./supabaseSync.js";
 
 const CHATS_KEY = "femicgpt:chats";
+const SECURE_CHATS_KEY = "femicgpt:secure_chats";
 
 export const CHAT_CATEGORIES = [
   { id: "", label: "Sem categoria", color: "#94A3B8" },
@@ -24,16 +26,27 @@ function safeParse(value, fallback) {
 }
 
 export function loadChats() {
-  return safeParse(localStorage.getItem(CHATS_KEY), []);
+  return [
+    ...safeParse(localStorage.getItem(CHATS_KEY), []),
+    ...safeParse(localStorage.getItem(SECURE_CHATS_KEY), []),
+  ];
 }
 
 export function saveChats(chats) {
   try {
-    localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+    const normalizedChats = Array.isArray(chats) ? chats : [];
+    const normalChats = normalizedChats.filter((chat) => chat?.agentId !== SECURE_AGENT_ID);
+    const secureChats = normalizedChats.filter((chat) => chat?.agentId === SECURE_AGENT_ID);
+    localStorage.setItem(CHATS_KEY, JSON.stringify(normalChats));
+    localStorage.setItem(SECURE_CHATS_KEY, JSON.stringify(secureChats));
   } catch {
     // Storage quota excedida ou modo privado
   }
   return chats;
+}
+
+export function isSecureChat(chat) {
+  return chat?.agentId === SECURE_AGENT_ID;
 }
 
 export function createChat(agentId) {
@@ -74,7 +87,7 @@ export function addMessage(chatId, message) {
 
   saveChats(chats);
 
-  if (isSupabaseConfigured()) {
+  if (!isSecureChat(chat) && isSupabaseConfigured()) {
     newMsg.meta.cloudStatus = "pending";
     syncMessageToSupabase(newMsg, getSessionId()).then((ok) => {
       newMsg.meta.cloudStatus = ok ? "synced" : "error";

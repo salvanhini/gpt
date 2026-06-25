@@ -245,10 +245,11 @@ function renderModelGuidance(state) {
 
 function renderAgentCard(agent, state) {
   const isActive = state.activeAgentId === agent.id;
+  const secureClass = agent.isSecureLocal ? "secure-agent-card" : "";
   return `
     <button
       type="button"
-      class="agent-icon-card ${isActive ? "active" : ""}"
+      class="agent-icon-card ${secureClass} ${isActive ? "active" : ""}"
       data-action="select-agent"
       data-agent-id="${agent.id}"
       title="${escapeHtml(agent.name)}"
@@ -256,6 +257,33 @@ function renderAgentCard(agent, state) {
     >
       <span class="agent-icon-glyph">${escapeHtml(agent.emoji)}</span>
     </button>
+  `;
+}
+
+function renderCollapsedSidebarTools() {
+  return `
+    <section class="sidebar-section sidebar-section-collapsed-tools rounded-xl border border-white/10 bg-white/5 p-2.5">
+      <div class="collapsed-tools-grid">
+        <button type="button" class="sidebar-icon-action collapsed-tool-btn" data-action="create-chat" title="Nova conversa" aria-label="Nova conversa">
+          <span>＋</span>
+        </button>
+        <button type="button" class="sidebar-icon-action collapsed-tool-btn" data-action="toggle-board-view" title="Board de conversas" aria-label="Board de conversas">
+          <span>📋</span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function renderCollapsedChatsSection(chats, state) {
+  return `
+    <section class="sidebar-section sidebar-section-chats sidebar-section-collapsed-chats rounded-xl border border-white/10 bg-white/5 p-2">
+      <div class="sidebar-scroll sidebar-chats-scroll sidebar-chats-scroll-collapsed scroll-soft pr-0">
+        ${chats.length
+          ? chats.map((chat) => renderChatCard(chat, state)).join("")
+          : `<div class="sidebar-empty-state-collapsed" title="Ainda não há conversas para este agente." aria-label="Ainda não há conversas para este agente.">○</div>`}
+      </div>
+    </section>
   `;
 }
 
@@ -310,6 +338,7 @@ function renderCategoryPicker(chat, state) {
 
 function renderChatCard(chat, state) {
   const isActive = chat.id === state.activeChatId;
+  const isSecure = state.agents?.some((agent) => agent.id === chat.agentId && agent.isSecureLocal);
   const cat = getCategoryById(chat.category);
   if (state.sidebarCollapsed) {
     return `
@@ -320,16 +349,18 @@ function renderChatCard(chat, state) {
           data-action="select-chat"
           data-chat-id="${chat.id}"
           title="${escapeHtml(chat.title)}"
+          aria-label="${escapeHtml(chat.title)}"
         >
-          💬
+          ${isSecure ? "🔒" : "💬"}
         </button>
+        ${chat.pinned ? '<span class="chat-icon-indicator chat-icon-indicator-pin" aria-hidden="true">📌</span>' : ""}
         ${chat.category ? `<span class="absolute -right-0.5 -top-0.5 block h-2 w-2 rounded-full ring-1 ring-white" style="background:${cat.color}"></span>` : ""}
       </div>
     `;
   }
 
   return `
-    <div class="chat-card ${isActive ? "active" : ""} chat-card-compact relative overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-1.5 py-1.25 shadow-sm">
+    <div class="chat-card ${isSecure ? "secure-chat-card" : ""} ${isActive ? "active" : ""} chat-card-compact relative overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-1.5 py-1.25 shadow-sm">
       <div class="flex items-start gap-1.5">
         <div class="mt-0.5 shrink-0">
           ${chat.category
@@ -347,6 +378,7 @@ function renderChatCard(chat, state) {
             >
               <div class="truncate text-[10px] font-semibold leading-[0.9rem] text-slate-800">${escapeHtml(chat.title)}</div>
               <div class="mt-0.5 flex items-center gap-1 text-[8.5px] leading-3 text-slate-500">
+                ${isSecure ? `<span class="font-semibold text-amber-700">Local</span><span>•</span>` : ""}
                 <span>${formatRelativeDay(chat.updatedAt)}</span>
               </div>
             </button>
@@ -1585,6 +1617,18 @@ function renderSettingsModal(state) {
               <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${settings.supabaseConfig?.url && settings.supabaseConfig?.key && !settings.supabaseConfig?.url?.includes('YOUR_SUPABASE') ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
                 ${settings.supabaseConfig?.url && settings.supabaseConfig?.key && !settings.supabaseConfig?.url?.includes('YOUR_SUPABASE') ? '☁️ Conectado' : '☁️ Não configurado'}
               </span>
+              <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${state.supabaseUser?.email ? 'bg-cyan-100 text-cyan-800' : 'bg-amber-100 text-amber-700'}">
+                ${state.supabaseUser?.email ? `Login: ${escapeHtml(state.supabaseUser.email)}` : 'Login necessário para sync'}
+              </span>
+            </div>
+            <div class="mt-3 rounded-lg border border-white/70 bg-white/65 p-2.5">
+              <div class="mb-2 text-xs font-semibold text-slate-700">Login Supabase para RLS</div>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <input class="modal-input min-w-0 flex-1" name="supabaseLoginEmail" type="email" placeholder="seu@email.com" value="${escapeHtml(state.supabaseUser?.email || "")}" />
+                <button type="button" class="rounded-xl bg-femic-navy px-3 py-2 text-xs font-semibold text-white shadow-sm" data-action="supabase-login">Enviar link</button>
+                ${state.supabaseUser?.email ? `<button type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm" data-action="supabase-logout">Sair</button>` : ""}
+              </div>
+              <p class="mt-2 text-[11px] leading-5 text-slate-500">Com RLS, o backup em nuvem só sincroniza mensagens do usuário logado. O agente Seguro Local nunca sincroniza.</p>
             </div>
           </section>
 
@@ -2302,11 +2346,13 @@ export function renderApp(state) {
   const collapsedClass = state.sidebarCollapsed ? "sidebar-collapsed" : "";
   const activeAgent = state.activeAgent;
   const instagramMode = activeAgent?.id === "agent-instagram-producer";
+  const secureLocalMode = Boolean(activeAgent?.isSecureLocal);
   const scienceMode = isScienceAgent(state);
   const brasilMode = isBrasilAgent(state);
   const activeChat = state.chats.find((item) => item.id === state.activeChatId);
   const hasMessages = Boolean(activeChat?.messages?.length);
   const chats = getVisibleChats(state);
+  const collapsedSidebar = Boolean(state.sidebarCollapsed);
   const canRecordFallback = state.mediaRecorderSupported !== false && Boolean(state.settings.openRouterKey || state.settings.openAIKey);
   const voiceTitle = state.isVoiceProcessing
     ? "Transcrevendo audio"
@@ -2350,36 +2396,42 @@ export function renderApp(state) {
         </div>
 
         <div class="sidebar-main">
-        <section class="sidebar-section sidebar-section-agents rounded-xl border border-white/10 bg-white/5 p-2.5">
-          <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Agentes</div>
-          <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal" title="Novo agente">＋</button>
-          </div>
-          <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
-            <button
-              type="button"
-              class="agent-icon-card ${state.activeAgentId === "no-agent" ? "active" : ""}"
-              data-action="select-agent"
-              data-agent-id="no-agent"
-              title="Conversa sem agente (chat normal)"
-              aria-label="Nenhum agente"
-            >
-              <span class="agent-icon-glyph" style="font-size:18px;">💬</span>
-            </button>
-            ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
-          </div>
-        </section>
+        ${collapsedSidebar
+          ? ""
+          : `<section class="sidebar-section sidebar-section-agents rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <div class="sidebar-expanded-only mb-3 flex items-center justify-between">
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Agentes</div>
+              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal" title="Novo agente">＋</button>
+              </div>
+              <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
+                <button
+                  type="button"
+                  class="agent-icon-card ${state.activeAgentId === "no-agent" ? "active" : ""}"
+                  data-action="select-agent"
+                  data-agent-id="no-agent"
+                  title="Conversa sem agente (chat normal)"
+                  aria-label="Nenhum agente"
+                >
+                  <span class="agent-icon-glyph" style="font-size:18px;">💬</span>
+                </button>
+                ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
+              </div>
+            </section>`
+        }
 
-        <section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
-          <div class="sidebar-expanded-only mb-2 flex items-center justify-between">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Conversas</div>
-            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="create-chat" title="Nova conversa">＋</button>
-          </div>
-          ${renderCategoryFilter(state)}
-          <div class="sidebar-scroll sidebar-chats-scroll scroll-soft flex flex-col gap-2 pr-1">
-            ${chats.length ? chats.map((chat) => renderChatCard(chat, state)).join("") : `<div class="rounded-xl border border-white/10 p-3 text-xs text-white" style="background:rgba(255,255,255,0.06); opacity:0.82;">Ainda não há conversas para este agente.</div>`}
-          </div>
-        </section>
+        ${collapsedSidebar
+          ? `${renderCollapsedSidebarTools()}${renderCollapsedChatsSection(chats, state)}`
+          : `<section class="sidebar-section sidebar-section-chats rounded-xl border border-white/10 bg-white/5 p-2.5">
+              <div class="sidebar-expanded-only mb-2 flex items-center justify-between">
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">Conversas</div>
+                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="create-chat" title="Nova conversa">＋</button>
+              </div>
+              ${renderCategoryFilter(state)}
+              <div class="sidebar-scroll sidebar-chats-scroll scroll-soft flex flex-col gap-2 pr-1">
+                ${chats.length ? chats.map((chat) => renderChatCard(chat, state)).join("") : `<div class="rounded-xl border border-white/10 p-3 text-xs text-white" style="background:rgba(255,255,255,0.06); opacity:0.82;">Ainda não há conversas para este agente.</div>`}
+              </div>
+            </section>`
+        }
         </div>
 
       </aside>
@@ -2389,8 +2441,11 @@ export function renderApp(state) {
         ${state.viewMode === "board"
           ? renderBoardView(state)
           : `<button type="button" class="fixed left-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white/80 text-base text-slate-600 shadow-sm backdrop-blur-sm lg:hidden" data-action="toggle-sidebar">☰</button>
-        <div class="chat-workspace ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
+        <div class="chat-workspace ${secureLocalMode ? "secure-local-workspace" : ""} ${instagramMode ? "instagram-workspace" : ""} ${hasMessages ? "has-messages reading-mode" : ""} mx-auto flex max-w-[1440px] flex-col px-4 py-3 sm:px-5 lg:px-6">
           ${hasMessages ? `<div class="relative mb-1" data-dropdown="export-chat"><button type="button" class="inline-flex h-6 w-6 items-center justify-center rounded-full border-0 bg-transparent text-xs text-slate-300 opacity-60 hover:opacity-100 hover:text-sky-500" data-action="toggle-dropdown" data-dropdown-id="export-chat" title="Exportar conversa">📥</button><div class="hidden absolute left-0 top-7 z-50 min-w-[140px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg" data-dropdown-menu="export-chat"><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-pdf">📄 PDF</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-docx">📘 DOCX</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-csv">📊 CSV</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-excel">📗 Excel</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-powerpoint">📙 PowerPoint</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-word">📘 Word</button><button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-chat-json">💾 JSON</button></div></div>` : ""}
+          ${secureLocalMode ? `<div class="secure-mode-banner mb-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-2 text-xs text-amber-900 shadow-sm">
+            <strong>🔒 Seguro Local:</strong> conversas e anexos deste agente ficam apenas neste aparelho e não sincronizam com Supabase.
+          </div>` : ""}
 
           <section id="messages-panel" data-chat-id="${escapeHtml(state.activeChatId || "")}" class="chat-timeline scroll-soft min-h-0 flex-1 space-y-3 overflow-auto pr-1 pb-1">
             ${renderMessages(state)}
@@ -2457,7 +2512,6 @@ export function renderApp(state) {
                       </button>
                     </div>
                   </div>
-                  ${instagramMode ? "" : renderModelGuidance(state)}
                 </div>
               </form>
             </div>
@@ -2628,6 +2682,11 @@ export function bindUIHandlers(handlers) {
     if (action === "toggle-model-guidance") handlers.onToggleModelGuidance();
     if (action === "search-chats") handlers.onSearchChats(target.value);
     if (action === "export-data") handlers.onExportData();
+    if (action === "supabase-login") {
+      const input = target.closest("section")?.querySelector('input[name="supabaseLoginEmail"]');
+      handlers.onSupabaseLogin?.(input?.value || "");
+    }
+    if (action === "supabase-logout") handlers.onSupabaseLogout?.();
     if (action === "delete-brand") handlers.onDeleteBrand(target.dataset.brandId);
     if (action === "save-current-template") handlers.onSaveCurrentAsTemplate();
     if (action === "delete-brand-template") handlers.onDeleteBrandTemplate(target.dataset.templateId);

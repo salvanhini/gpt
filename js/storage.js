@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   agents: "femicgpt:agents",
   brands: "femicgpt:brands",
   settings: "femicgpt:settings",
+  secureChats: "femicgpt:secure_chats",
   view: "femicgpt:view",
   openRouterModels: "femicgpt:openrouter_models",
   supabaseConfig: "femicgpt:supabase_config",
@@ -13,6 +14,127 @@ export const STORAGE_KEYS = {
 };
 
 export const BACKUP_SCHEMA_VERSION = 2;
+const BACKUP_SECRET_VERSION = 1;
+const BACKUP_SECRET_ALGORITHM = "AES-GCM";
+const BACKUP_SECRET_KDF = "PBKDF2";
+const BACKUP_SECRET_ITERATIONS = 210000;
+const BACKUP_SECRET_KEY_LENGTH = 256;
+const BACKUP_SECRET_SALT_BYTES = 16;
+const BACKUP_SECRET_IV_BYTES = 12;
+
+const SECRET_SETTING_KEYS = [
+  "openRouterKey",
+  "groqKey",
+  "geminiKey",
+  "falKey",
+  "pixazoKey",
+  "openAIKey",
+  "tavilyKey",
+  "serperKey",
+  "exaKey",
+  "e2bKey",
+  "wavespeedKey",
+  "emailJSMarcoServiceId",
+  "emailJSMarcoTemplateId",
+  "emailJSMarcoPublicKey",
+  "emailJSAlessandraServiceId",
+  "emailJSAlessandraTemplateId",
+  "emailJSAlessandraPublicKey",
+  "evolutionInstanceUrl",
+  "evolutionApiKey",
+  "evolutionInstanceName",
+];
+
+function getCrypto() {
+  const cryptoImpl = globalThis.crypto;
+  if (!cryptoImpl?.subtle) {
+    throw new Error("Criptografia indisponível neste navegador.");
+  }
+  return cryptoImpl;
+}
+
+function bytesToBase64(bytes) {
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  if (typeof btoa === "function") {
+    return btoa(binary);
+  }
+  return Buffer.from(binary, "binary").toString("base64");
+}
+
+function base64ToBytes(value) {
+  const binary = typeof atob === "function"
+    ? atob(value)
+    : Buffer.from(value, "base64").toString("binary");
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function deriveBackupKey(password, salt) {
+  const cryptoImpl = getCrypto();
+  const material = await cryptoImpl.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    BACKUP_SECRET_KDF,
+    false,
+    ["deriveKey"],
+  );
+
+  return cryptoImpl.subtle.deriveKey(
+    {
+      name: BACKUP_SECRET_KDF,
+      salt,
+      iterations: BACKUP_SECRET_ITERATIONS,
+      hash: "SHA-256",
+    },
+    material,
+    { name: BACKUP_SECRET_ALGORITHM, length: BACKUP_SECRET_KEY_LENGTH },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
+export async function encryptBackupSecrets(secrets, password) {
+  if (!password) {
+    throw new Error("Informe uma senha para proteger as chaves do backup.");
+  }
+
+  const cryptoImpl = getCrypto();
+  const salt = cryptoImpl.getRandomValues(new Uint8Array(BACKUP_SECRET_SALT_BYTES));
+  const iv = cryptoImpl.getRandomValues(new Uint8Array(BACKUP_SECRET_IV_BYTES));
+  const key = await deriveBackupKey(password, salt);
+  const payload = new TextEncoder().encode(JSON.stringify(secrets || {}));
+  const cipher = await cryptoImpl.subtle.encrypt({ name: BACKUP_SECRET_ALGORITHM, iv }, key, payload);
+
+  return {
+    version: BACKUP_SECRET_VERSION,
+    algorithm: BACKUP_SECRET_ALGORITHM,
+    kdf: BACKUP_SECRET_KDF,
+    iterations: BACKUP_SECRET_ITERATIONS,
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(cipher)),
+  };
+}
+
+export async function decryptBackupSecrets(encrypted, password) {
+  if (!encrypted?.data || !encrypted?.salt || !encrypted?.iv) {
+    return {};
+  }
+  if (!password) {
+    throw new Error("Senha necessária para restaurar as chaves do backup.");
+  }
+
+  try {
+    const key = await deriveBackupKey(password, base64ToBytes(encrypted.salt));
+    const plain = await getCrypto().subtle.decrypt(
+      { name: BACKUP_SECRET_ALGORITHM, iv: base64ToBytes(encrypted.iv) },
+      key,
+      base64ToBytes(encrypted.data),
+    );
+    return JSON.parse(new TextDecoder().decode(plain));
+  } catch {
+    throw new Error("Senha incorreta ou chaves do backup corrompidas.");
+  }
+}
 
 function safeParseJson(value, fallback = null) {
   try {
@@ -112,6 +234,28 @@ function normalizeChats(rawChats, validAgentIds) {
     }));
 }
 
+function splitSettingsSecrets(settings = {}) {
+  const publicSettings = { ...(settings || {}) };
+  const secrets = {};
+
+  SECRET_SETTING_KEYS.forEach((key) => {
+    if (publicSettings[key]) {
+      secrets[key] = publicSettings[key];
+      publicSettings[key] = "";
+    }
+  });
+
+  if (publicSettings.supabaseConfig?.key) {
+    secrets.supabaseConfig = { ...publicSettings.supabaseConfig };
+    publicSettings.supabaseConfig = {
+      ...publicSettings.supabaseConfig,
+      key: "",
+    };
+  }
+
+  return { publicSettings, secrets };
+}
+
 export function reconcileAppData({
   agents,
   chats,
@@ -182,15 +326,27 @@ export function reconcileAppData({
 }
 
 export function buildBackupPayload(storage) {
+  const settings = readStorageJson(storage, STORAGE_KEYS.settings, null);
+  const sanitizedSettings = settings ? splitSettingsSecrets(settings).publicSettings : null;
+
   return {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     femicgpt_chats: storage.getItem(STORAGE_KEYS.chats),
+    femicgpt_secure_chats: storage.getItem(STORAGE_KEYS.secureChats),
     femicgpt_agents: storage.getItem(STORAGE_KEYS.agents),
     femicgpt_brands: storage.getItem(STORAGE_KEYS.brands),
-    femicgpt_settings: storage.getItem(STORAGE_KEYS.settings),
+    femicgpt_settings: sanitizedSettings ? JSON.stringify(sanitizedSettings) : storage.getItem(STORAGE_KEYS.settings),
     femicgpt_view: storage.getItem(STORAGE_KEYS.view),
     exportedAt: new Date().toISOString(),
   };
+}
+
+export async function buildBackupPayloadWithSecrets(storage, password) {
+  const payload = buildBackupPayload(storage);
+  const settings = readStorageJson(storage, STORAGE_KEYS.settings, {});
+  const { secrets } = splitSettingsSecrets(settings);
+  payload.encryptedSecrets = await encryptBackupSecrets(secrets, password);
+  return payload;
 }
 
 function parseJsonField(rawValue) {
@@ -213,23 +369,31 @@ export function parseBackupPayload(text) {
     agents: parseJsonField(backup.femicgpt_agents),
     brands: parseJsonField(backup.femicgpt_brands),
     chats: parseJsonField(backup.femicgpt_chats),
+    secureChats: parseJsonField(backup.femicgpt_secure_chats),
     settings: parseJsonField(backup.femicgpt_settings),
     view: parseJsonField(backup.femicgpt_view),
+    encryptedSecrets: backup.encryptedSecrets || null,
   };
 }
 
-export function applyParsedBackup(storage, parsedBackup) {
+export function applyParsedBackup(storage, parsedBackup, restoredSecrets = null) {
   if (parsedBackup?.agents) {
     writeStorageJson(storage, STORAGE_KEYS.agents, parsedBackup.agents);
   }
   if (parsedBackup?.chats) {
     writeStorageJson(storage, STORAGE_KEYS.chats, parsedBackup.chats);
   }
+  if (parsedBackup?.secureChats) {
+    writeStorageJson(storage, STORAGE_KEYS.secureChats, parsedBackup.secureChats);
+  }
   if (parsedBackup?.brands) {
     writeStorageJson(storage, STORAGE_KEYS.brands, parsedBackup.brands);
   }
   if (parsedBackup?.settings) {
-    writeStorageJson(storage, STORAGE_KEYS.settings, parsedBackup.settings);
+    writeStorageJson(storage, STORAGE_KEYS.settings, {
+      ...parsedBackup.settings,
+      ...(restoredSecrets || {}),
+    });
   }
   if (parsedBackup?.view) {
     writeStorageJson(storage, STORAGE_KEYS.view, parsedBackup.view);

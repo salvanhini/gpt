@@ -9,6 +9,7 @@ import {
   updateChatTitle,
   updateMessageCategory,
 } from "../js/chat.js";
+import { SECURE_AGENT_ID } from "../js/agents.js";
 
 function createMemoryStorage() {
   const store = new Map();
@@ -24,6 +25,9 @@ function createMemoryStorage() {
     },
     clear() {
       store.clear();
+    },
+    dump() {
+      return Object.fromEntries(store.entries());
     },
   };
 }
@@ -93,6 +97,26 @@ test("addMessage generates automatic title only while chat remains in auto mode"
     [storedChat] = loadChats();
     assert.equal(storedChat.title, "Planejamento semanal");
     assert.equal(storedChat.titleMode, "manual");
+  } finally {
+    globalThis.localStorage = previousStorage;
+  }
+});
+
+test("saveChats separates secure local conversations from normal conversations", () => {
+  const previousStorage = globalThis.localStorage;
+  const memoryStorage = createMemoryStorage();
+  globalThis.localStorage = memoryStorage;
+
+  try {
+    const normalChat = createChat("agent-general");
+    const secureChat = createChat(SECURE_AGENT_ID);
+
+    saveChats([normalChat, secureChat]);
+
+    const dump = memoryStorage.dump();
+    assert.equal(JSON.parse(dump["femicgpt:chats"]).length, 1);
+    assert.equal(JSON.parse(dump["femicgpt:secure_chats"]).length, 1);
+    assert.deepEqual(loadChats().map((chat) => chat.id).sort(), [normalChat.id, secureChat.id].sort());
   } finally {
     globalThis.localStorage = previousStorage;
   }

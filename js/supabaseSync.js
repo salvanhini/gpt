@@ -107,6 +107,45 @@ function mapMessageForInsert(message, sessionId) {
   };
 }
 
+export async function getSupabaseUser() {
+  const client = getClient();
+  if (!client?.auth?.getUser) return null;
+  try {
+    const { data, error } = await client.auth.getUser();
+    if (error) return null;
+    return data?.user || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function signInSupabaseWithOtp(email) {
+  const client = getClient();
+  if (!client?.auth?.signInWithOtp) {
+    throw new Error("Configure o Supabase antes de fazer login.");
+  }
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: globalThis.location?.href || undefined,
+    },
+  });
+  if (error) {
+    throw new Error(error.message || "Não foi possível enviar o link de login.");
+  }
+  return true;
+}
+
+export async function signOutSupabase() {
+  const client = getClient();
+  if (!client?.auth?.signOut) return false;
+  const { error } = await client.auth.signOut();
+  if (error) {
+    throw new Error(error.message || "Não foi possível sair do Supabase.");
+  }
+  return true;
+}
+
 export async function syncMessageToSupabase(message, sessionId) {
   const client = getClient();
   if (!client) {
@@ -114,7 +153,14 @@ export async function syncMessageToSupabase(message, sessionId) {
     return false;
   }
   try {
+    const user = await getSupabaseUser();
+    if (!user?.id) {
+      console.warn("[Supabase] Sync blocked: user not authenticated.");
+      return false;
+    }
     const row = mapMessageForInsert(message, sessionId || getSessionId());
+    row.owner_id = user.id;
+    row.user_id = user.id;
     console.log("[Supabase] Inserting row:", { session_id: row.session_id, role: row.role, contentLength: row.content.length });
     const { data, error } = await client.from(TABLE_NAME).insert(row).select();
     if (error) {
@@ -133,6 +179,8 @@ export async function loadMessagesFromSupabase(sessionId) {
   const client = getClient();
   if (!client) return [];
   try {
+    const user = await getSupabaseUser();
+    if (!user?.id) return [];
     const { data, error } = await client
       .from(TABLE_NAME)
       .select("*")

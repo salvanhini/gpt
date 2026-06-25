@@ -87,6 +87,8 @@ import { buildChatMessages } from "./messagePayload.js";
 import {
   applyParsedBackup,
   buildBackupPayload,
+  buildBackupPayloadWithSecrets,
+  decryptBackupSecrets,
   parseBackupPayload,
   readStorageJson,
   reconcileAppData,
@@ -125,7 +127,15 @@ import {
   exportMessageAsDOCX,
 } from "./exportManager.js";
 import { initTaskSystem, getPendingTasks, getTasksByType, addTask, completeTask, deleteTask, parseTaskCommand, checkOverdueTasks } from "./taskSystem.js";
-import { isSupabaseConfigured, restoreFromSupabaseIfEmpty, initSupabase, bootstrapSupabase } from "./supabaseSync.js";
+import {
+  getSupabaseUser,
+  isSupabaseConfigured,
+  restoreFromSupabaseIfEmpty,
+  initSupabase,
+  bootstrapSupabase,
+  signInSupabaseWithOtp,
+  signOutSupabase,
+} from "./supabaseSync.js";
 
 const DRAFT_STORAGE_KEY = "femicgpt:draft";
 const IMAGE_PROVIDER_LABELS = { "fal-ai": "fal.ai", pixazo: "Pixazo.ai", wavespeed: "WaveSpeed.ai", pollinations: "Pollinations.ai" };
@@ -208,6 +218,7 @@ const state = {
   imageProviderOptions: IMAGE_PROVIDER_OPTIONS,
   falImageModelOptions: FAL_IMAGE_MODELS,
   instagramFormats: INSTAGRAM_FORMATS,
+  supabaseUser: null,
 };
 
 function loadSettings() {
@@ -1739,6 +1750,36 @@ function handleSaveSettings(formValues) {
   persistAndRender();
 }
 
+async function refreshSupabaseUser() {
+  state.supabaseUser = await getSupabaseUser();
+  render();
+}
+
+async function handleSupabaseLogin(email) {
+  const normalizedEmail = String(email || "").trim();
+  if (!normalizedEmail) {
+    showToast("Digite seu email para receber o link de login.", "info");
+    return;
+  }
+  try {
+    await signInSupabaseWithOtp(normalizedEmail);
+    showToast("Link de login enviado para seu email.", "success");
+  } catch (error) {
+    showToast(error.message || "Erro ao enviar login Supabase.", "error");
+  }
+}
+
+async function handleSupabaseLogout() {
+  try {
+    await signOutSupabase();
+    state.supabaseUser = null;
+    showToast("Você saiu do Supabase.", "success");
+    persistAndRender();
+  } catch (error) {
+    showToast(error.message || "Erro ao sair do Supabase.", "error");
+  }
+}
+
 async function handleSendEmailNow({ toEmail, toName, subject, message, sender }) {
   try {
     await sendEmail({ toEmail, toName, subject, message, sender, settings: state.settings });
@@ -2182,6 +2223,7 @@ function initialize() {
     ensureSeedData();
     syncActivePointers();
     bootstrapSupabase(state.settings.supabaseConfig);
+    refreshSupabaseUser().catch(() => {});
     voiceController.syncSpeechVoice();
     initLightbox();
     try {
@@ -2500,6 +2542,8 @@ function initialize() {
     },
     onSendMessage: handleSendMessage,
     onSaveSettings: handleSaveSettings,
+    onSupabaseLogin: handleSupabaseLogin,
+    onSupabaseLogout: handleSupabaseLogout,
     onSaveChatRename: handleSaveChatRename,
     onSaveAgent: handleSaveAgent,
     onDuplicateAgent: handleDuplicateAgent,
@@ -2545,8 +2589,17 @@ function initialize() {
       }
       persistAndRender();
     },
-    onExportData: () => {
-      const backup = buildBackupPayload(localStorage);
+    onExportData: async () => {
+      let backup = buildBackupPayload(localStorage);
+      const includeKeys = window.confirm("Incluir chaves de API no backup? Elas serão criptografadas com senha.");
+      if (includeKeys) {
+        const password = window.prompt("Digite uma senha para proteger as chaves do backup:");
+        if (!password) {
+          showToast("Backup cancelado: senha obrigatória para incluir chaves.", "info");
+          return;
+        }
+        backup = await buildBackupPayloadWithSecrets(localStorage, password);
+      }
 
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -2566,7 +2619,19 @@ function initialize() {
         const text = await file.text();
         const backup = parseBackupPayload(text);
 
-        applyParsedBackup(localStorage, backup);
+        let restoredSecrets = null;
+        if (backup.encryptedSecrets) {
+          const password = window.prompt("Este backup possui chaves criptografadas. Digite a senha para restaurá-las ou deixe em branco para ignorar:");
+          if (password) {
+            try {
+              restoredSecrets = await decryptBackupSecrets(backup.encryptedSecrets, password);
+            } catch (secretError) {
+              showToast(secretError.message || "Não foi possível restaurar as chaves.", "error");
+            }
+          }
+        }
+
+        applyParsedBackup(localStorage, backup, restoredSecrets);
 
         resetTransientState();
         hydratePersistentState();
@@ -2650,4 +2715,16 @@ function initialize() {
   }
 }
 
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+      console.warn("[FEMIC GPT] Service worker indisponível:", error?.message || error);
+    });
+  });
+}
+
 initialize();
+registerServiceWorker();

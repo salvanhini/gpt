@@ -9,6 +9,7 @@ export const ANVISA_AGENT_ID = "agent-anvisa-regulatory";
 export const MARKETING_DESIGNER_ID = "agent-marketing-designer";
 export const DECORATOR_ID = "agent-decorator";
 export const IMAGE_PROMPTER_ID = "agent-image-prompter";
+export const SECURE_AGENT_ID = "agent-secure-local";
 export const NO_AGENT_ID = "no-agent";
 
 const AGENT_PARAMETER_DEFAULTS = {
@@ -56,6 +57,26 @@ function normalizeAgents(agents = []) {
 
 export function getDefaultAgents() {
   return [
+    {
+      id: SECURE_AGENT_ID,
+      name: "Seguro Local",
+      emoji: "🔒",
+      description: "Área sensível salva apenas neste aparelho, sem sincronização com Supabase.",
+      systemPrompt: `Você é o agente Seguro Local do FEMIC GPT.
+
+## PRIVACIDADE
+- Trate todo conteúdo como sensível.
+- Responda com clareza e discrição.
+- Não incentive o usuário a colar dados pessoais desnecessários.
+- Se houver documentos anexados, use apenas para responder à solicitação atual.
+
+## IMPORTANTE
+Este agente não sincroniza conversas com Supabase. O conteúdo permanece no armazenamento local deste aparelho, embora as mensagens ainda possam ser enviadas ao provedor de IA escolhido quando o usuário clicar em enviar.`,
+      defaultWebSearchMode: "off",
+      isDefault: true,
+      isSecureLocal: true,
+      createdAt: new Date().toISOString(),
+    },
     {
       id: GENERAL_AGENT_ID,
       name: "Assistente Geral",
@@ -648,7 +669,13 @@ function safeParse(value, fallback) {
 export function loadAgents() {
   const stored = safeParse(localStorage.getItem(AGENTS_KEY), null);
   if (Array.isArray(stored) && stored.length > 0) {
-    return normalizeAgents(stored);
+    const agents = normalizeAgents(stored);
+    if (!agents.some((agent) => agent.id === SECURE_AGENT_ID)) {
+      const secureAgent = getDefaultAgents().find((agent) => agent.id === SECURE_AGENT_ID);
+      agents.push(normalizeAgent(secureAgent));
+      saveAgents(agents);
+    }
+    return agents;
   }
 
   const defaults = getDefaultAgents();

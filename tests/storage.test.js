@@ -5,6 +5,8 @@ import {
   applyParsedBackup,
   BACKUP_SCHEMA_VERSION,
   buildBackupPayload,
+  decryptBackupSecrets,
+  encryptBackupSecrets,
   normalizeSettings,
   normalizeSettingsWithFallback,
   parseBackupPayload,
@@ -55,7 +57,7 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
     "femicgpt:chats": JSON.stringify([{ id: "chat-1" }]),
     "femicgpt:agents": JSON.stringify([{ id: "agent-general" }]),
     "femicgpt:brands": JSON.stringify([{ id: "brand-a" }]),
-    "femicgpt:settings": JSON.stringify({ textProvider: "openrouter" }),
+    "femicgpt:settings": JSON.stringify({ textProvider: "openrouter", openRouterKey: "sk-secret" }),
     "femicgpt:view": JSON.stringify({ activeAgentId: "agent-general" }),
   });
 
@@ -65,8 +67,34 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
   assert.equal(payload.femicgpt_chats, storage.getItem("femicgpt:chats"));
   assert.equal(payload.femicgpt_agents, storage.getItem("femicgpt:agents"));
   assert.equal(payload.femicgpt_brands, storage.getItem("femicgpt:brands"));
-  assert.equal(payload.femicgpt_settings, storage.getItem("femicgpt:settings"));
+  assert.equal(JSON.stringify(payload).includes("sk-secret"), false);
+  assert.equal(JSON.parse(payload.femicgpt_settings).openRouterKey, "");
   assert.equal(payload.femicgpt_view, storage.getItem("femicgpt:view"));
+});
+
+test("backup secrets are encrypted and restored only with the matching password", async () => {
+  const secrets = {
+    openRouterKey: "sk-or-secret",
+    groqKey: "gsk-secret",
+    supabaseConfig: {
+      url: "https://example.supabase.co",
+      key: "anon-secret",
+    },
+  };
+
+  const encrypted = await encryptBackupSecrets(secrets, "senha-forte");
+
+  assert.equal(encrypted.version, 1);
+  assert.notEqual(JSON.stringify(encrypted), JSON.stringify(secrets));
+  assert.equal(JSON.stringify(encrypted).includes("sk-or-secret"), false);
+
+  const decrypted = await decryptBackupSecrets(encrypted, "senha-forte");
+  assert.deepEqual(decrypted, secrets);
+
+  await assert.rejects(
+    () => decryptBackupSecrets(encrypted, "senha-errada"),
+    /senha/i,
+  );
 });
 
 test("parseBackupPayload accepts legacy backups and drops invalid sections", () => {
@@ -192,7 +220,7 @@ test("normalizeSettings accepts groq provider and repairs invalid groq model", (
   assert.equal(normalized.groqModel, "openai/gpt-oss-20b");
 });
 
-test("normalizeSettingsWithFallback reports repairs for invalid saved models", () => {
+test("normalizeSettingsWithFallback reports repairs for invalid saved provider and models", () => {
   const defaults = {
     textProvider: "openrouter",
     textModel: "qwen/qwen3.7-plus",
@@ -213,14 +241,13 @@ test("normalizeSettingsWithFallback reports repairs for invalid saved models", (
     [{ value: "openai/gpt-oss-20b" }],
   );
 
-  assert.equal(normalized.settings.textProvider, "deepseek");
+  assert.equal(normalized.settings.textProvider, "openrouter");
   assert.equal(normalized.settings.textModel, "qwen/qwen3.7-plus");
-  assert.equal(normalized.settings.deepSeekModel, "deepseek-v4-flash");
   assert.equal(normalized.settings.groqModel, "openai/gpt-oss-20b");
-  assert.equal(normalized.fallbacks.length, 3);
+  assert.equal(normalized.fallbacks.length, 2);
   assert.deepEqual(
     normalized.fallbacks.map((item) => item.provider),
-    ["openrouter", "deepseek", "groq"],
+    ["openrouter", "groq"],
   );
 });
 

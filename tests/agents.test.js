@@ -11,6 +11,7 @@ import {
   loadAgents,
   restoreDefaultAgents,
   saveAgents,
+  SECURE_AGENT_ID,
 } from "../js/agents.js";
 import { INSTAGRAM_AGENT_ID } from "../js/instagramCreator.js";
 
@@ -57,6 +58,15 @@ test("getDefaultAgents includes the dedicated Brasil consultant", () => {
   const agents = getDefaultAgents();
 
   assert.equal(agents.some((agent) => agent.id === BRASIL_AGENT_ID), true);
+});
+
+test("getDefaultAgents includes the secure local agent", () => {
+  const agents = getDefaultAgents();
+  const secureAgent = agents.find((agent) => agent.id === SECURE_AGENT_ID);
+
+  assert.equal(Boolean(secureAgent), true);
+  assert.equal(secureAgent.isSecureLocal, true);
+  assert.match(secureAgent.name, /seguro local/i);
 });
 
 test("loadAgents normalizes legacy agents with safe parameter defaults", () => {
