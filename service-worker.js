@@ -1,10 +1,10 @@
-const CACHE_NAME = "femic-gpt-v8-2";
+const CACHE_NAME = "femic-gpt-v8-3";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/style.css?v=8.1",
-  "./js/app.js?v=8.1",
+  "./css/style.css?v=8.3",
+  "./js/app.js?v=8.3",
   "./js/agents.js",
   "./js/api.js",
   "./js/archiveStorage.js",
@@ -56,6 +56,26 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  const isAppAsset = url.origin === self.location.origin && (
+    event.request.mode === "navigate" ||
+    url.pathname.endsWith(".html") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css")
+  );
+
+  if (isAppAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
