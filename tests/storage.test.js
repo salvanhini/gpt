@@ -12,7 +12,7 @@ import {
   parseBackupPayload,
   reconcileAppData,
 } from "../js/storage.js";
-import { NO_AGENT_ID } from "../js/agents.js";
+import { GENERAL_AGENT_ID, NO_AGENT_ID } from "../js/agents.js";
 
 function createMemoryStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -57,7 +57,7 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
     "femicgpt:chats": JSON.stringify([{ id: "chat-1" }]),
     "femicgpt:agents": JSON.stringify([{ id: "agent-general" }]),
     "femicgpt:brands": JSON.stringify([{ id: "brand-a" }]),
-    "femicgpt:settings": JSON.stringify({ textProvider: "openrouter", openRouterKey: "sk-secret" }),
+    "femicgpt:settings": JSON.stringify({ textProvider: "openrouter", openRouterKey: "sk-secret", internalGroqKey: "gsk-internal-secret" }),
     "femicgpt:view": JSON.stringify({ activeAgentId: "agent-general" }),
   });
 
@@ -68,7 +68,9 @@ test("buildBackupPayload adds schema version while preserving current keys", () 
   assert.equal(payload.femicgpt_agents, storage.getItem("femicgpt:agents"));
   assert.equal(payload.femicgpt_brands, storage.getItem("femicgpt:brands"));
   assert.equal(JSON.stringify(payload).includes("sk-secret"), false);
+  assert.equal(JSON.stringify(payload).includes("gsk-internal-secret"), false);
   assert.equal(JSON.parse(payload.femicgpt_settings).openRouterKey, "");
+  assert.equal(JSON.parse(payload.femicgpt_settings).internalGroqKey, "");
   assert.equal(payload.femicgpt_view, storage.getItem("femicgpt:view"));
 });
 
@@ -76,6 +78,7 @@ test("backup secrets are encrypted and restored only with the matching password"
   const secrets = {
     openRouterKey: "sk-or-secret",
     groqKey: "gsk-secret",
+    internalGroqKey: "gsk-internal-secret",
     supabaseConfig: {
       url: "https://example.supabase.co",
       key: "anon-secret",
@@ -253,7 +256,7 @@ test("normalizeSettingsWithFallback reports repairs for invalid saved provider a
 
 test("reconcileAppData preserves web search mode in view state", () => {
   const reconciled = reconcileAppData({
-    agents: [{ id: "agent-a", name: "A" }],
+    agents: [{ id: GENERAL_AGENT_ID, name: "Assistente Geral" }],
     chats: [createChat("agent-a", "a1")],
     view: {
       activeAgentId: "agent-a",
@@ -269,7 +272,7 @@ test("reconcileAppData preserves web search mode in view state", () => {
 
 test("reconcileAppData preserves model guidance collapsed state in view", () => {
   const reconciled = reconcileAppData({
-    agents: [{ id: "agent-a", name: "A" }],
+    agents: [{ id: GENERAL_AGENT_ID, name: "Assistente Geral" }],
     chats: [createChat("agent-a", "a1")],
     view: {
       activeAgentId: "agent-a",
@@ -283,9 +286,9 @@ test("reconcileAppData preserves model guidance collapsed state in view", () => 
   assert.equal(reconciled.view.modelGuidanceCollapsed, true);
 });
 
-test("reconcileAppData preserves NO_AGENT_ID as active agent and keeps its chats", () => {
+test("reconcileAppData migrates NO_AGENT_ID chats to the general agent", () => {
   const reconciled = reconcileAppData({
-    agents: [{ id: "agent-a", name: "A" }],
+    agents: [{ id: GENERAL_AGENT_ID, name: "Assistente Geral" }],
     chats: [createChat(NO_AGENT_ID, "no-agent-1")],
     view: {
       activeAgentId: NO_AGENT_ID,
@@ -295,8 +298,8 @@ test("reconcileAppData preserves NO_AGENT_ID as active agent and keeps its chats
     createChat: (agentId) => createChat(agentId, "fallback"),
   });
 
-  assert.equal(reconciled.activeAgentId, NO_AGENT_ID);
+  assert.equal(reconciled.activeAgentId, GENERAL_AGENT_ID);
   assert.equal(reconciled.activeChatId, "chat-no-agent-1");
   assert.equal(reconciled.chats.length, 1);
-  assert.equal(reconciled.chats[0].agentId, NO_AGENT_ID);
+  assert.equal(reconciled.chats[0].agentId, GENERAL_AGENT_ID);
 });

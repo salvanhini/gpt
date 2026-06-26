@@ -45,6 +45,7 @@ import {
   fetchOpenRouterModels,
   generateImage,
   getDefaultSettings,
+  getInternalGroqSettings,
   getTextProviderDisplayName,
   GEMINI_MODELS,
   GROQ_MODELS,
@@ -109,7 +110,7 @@ import {
 import { bindUIHandlers, renderApp, showToast, initLightbox, mountPendingCharts } from "./ui.js";
 import { createVoiceController } from "./voiceController.js";
 import { incrementUsage } from "./usageTracker.js";
-import { trackCost, getDailyCost, getMonthlyCost } from "./costTracker.js";
+import { trackCost, getDailyCost, getMonthlyCost, getDailyCostDetails, getMonthlyCostDetails } from "./costTracker.js";
 import { addMemoryFact, getMemoryFacts, removeMemoryFact, buildMemoryContext, autoExtractAndStore, getLongTermSummary, generateLongTermSummary, shouldGenerateSummary } from "./memory.js";
 import {
   loadContacts,
@@ -148,7 +149,7 @@ import {
 } from "./supabaseSync.js";
 
 const DRAFT_STORAGE_KEY = "femicgpt:draft";
-const IMAGE_PROVIDER_LABELS = { "fal-ai": "fal.ai", pixazo: "Pixazo.ai", wavespeed: "WaveSpeed.ai", pollinations: "Pollinations.ai" };
+const IMAGE_PROVIDER_LABELS = { "fal-ai": "fal.ai", pixazo: "Pixazo.ai", pollinations: "Pollinations.ai" };
 let draftSaveTimer = null;
 let bootSettingsFallbacks = [];
 
@@ -580,6 +581,8 @@ function render() {
     state.recommendedModelActive = isRecommendedModelActive(state.recommendedModel);
     state.dailyCost = getDailyCost();
     state.monthlyCost = getMonthlyCost();
+    state.dailyCostDetails = getDailyCostDetails();
+    state.monthlyCostDetails = getMonthlyCostDetails();
     state.memoryFacts = getMemoryFacts();
     renderApp(state);
     if (typeof mountPendingCharts === "function") mountPendingCharts();
@@ -833,6 +836,19 @@ function canUseWebSearch() {
   return provider !== "gemini";
 }
 
+function getWebSearchSettings(settings = getActiveSettings()) {
+  if (settings.textProvider !== "gemini") return settings;
+  if (settings.internalGroqKey || settings.groqKey) return getInternalGroqSettings(settings);
+  if (settings.openRouterKey) {
+    return {
+      ...settings,
+      textProvider: "openrouter",
+      textModel: settings.textModel || getDefaultSettings().textModel,
+    };
+  }
+  return null;
+}
+
 function getRecommendedModelForContext() {
   const attachments = getActiveChatAttachments();
   const activeSettings = getActiveSettings();
@@ -1083,10 +1099,11 @@ async function handleSendMessage(rawMessage) {
           },
         });
       } else if (state.webSearchMode) {
-        if (!canUseWebSearch()) {
+        const webSettings = getWebSearchSettings();
+        if (!webSettings) {
           addMessage(activeChat.id, {
             role: "assistant",
-            content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para usar a internet aqui no chat.",
+            content: "Para usar Busca Web com Gemini ativo, configure a Groq interna, a Groq principal ou a OpenRouter nas configuracoes.",
             meta: {
               kind: "text",
               provider: "local",
@@ -1096,7 +1113,7 @@ async function handleSendMessage(rawMessage) {
             },
           });
         } else {
-          addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message));
+          addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, webSettings));
         }
       } else {
         addMessage(activeChat.id, {
@@ -1357,10 +1374,18 @@ async function handleSendMessage(rawMessage) {
         });
       }
     } else {
-      if (state.webSearchMode && !prioritizeActiveDocuments && !canUseWebSearch()) {
+      // Smart mode: classifica e roteia sem mutar o estado global
+      let activeSettings = getSettingsForVisualDocuments(getActiveSettings());
+      let smartWebSearch = false;
+      let actualProvider = activeSettings.textProvider;
+      let actualModel = activeSettings.textModel || activeSettings.groqModel || "";
+      if (actualProvider === "gemini") actualModel = activeSettings.geminiModel || "";
+
+      let webSearchSettings = getWebSearchSettings(activeSettings);
+      if (state.webSearchMode && !prioritizeActiveDocuments && !webSearchSettings) {
         addMessage(activeChat.id, {
           role: "assistant",
-          content: "A Busca Web em tempo real desta versao funciona com Groq ou OpenRouter. Selecione um desses provedores no seletor de modelo para continuar.",
+          content: "Para usar Busca Web com Gemini ativo, configure a Groq interna, a Groq principal ou a OpenRouter nas configuracoes.",
           meta: {
             kind: "text",
             provider: "local",
@@ -1371,13 +1396,6 @@ async function handleSendMessage(rawMessage) {
         });
         return;
       }
-
-      // Smart mode: classifica e roteia sem mutar o estado global
-      let activeSettings = getSettingsForVisualDocuments(getActiveSettings());
-      let smartWebSearch = false;
-      let actualProvider = activeSettings.textProvider;
-      let actualModel = activeSettings.textModel || activeSettings.groqModel || "";
-      if (actualProvider === "gemini") actualModel = activeSettings.geminiModel || "";
 
       if (hasAttachmentVisualPages() && !["gemini", "openrouter"].includes(activeSettings.textProvider)) {
         addMessage(activeChat.id, {
@@ -1408,6 +1426,7 @@ async function handleSendMessage(rawMessage) {
             }
             actualProvider = activeSettings.textProvider;
             actualModel = activeSettings.groqModel || activeSettings.textModel || "";
+            webSearchSettings = getWebSearchSettings(activeSettings);
           }
         } else {
           smartWebSearch = true;
@@ -1417,7 +1436,7 @@ async function handleSendMessage(rawMessage) {
       const shouldSearch = smartWebSearch;
 
       if (shouldSearch) {
-        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, activeSettings));
+        addWebSearchMessage(activeChat.id, await resolveWebSearchForMessage(message, webSearchSettings || activeSettings));
       } else {
         const msgId = crypto.randomUUID();
         addMessage(activeChat.id, {
@@ -1984,6 +2003,7 @@ function handleSaveSettings(formValues) {
     ...state.settings,
     openRouterKey: formValues.openRouterKey?.trim() || state.settings.openRouterKey || "",
     groqKey: formValues.groqKey?.trim() || state.settings.groqKey || "",
+    internalGroqKey: formValues.internalGroqKey?.trim() || state.settings.internalGroqKey || "",
     geminiKey: formValues.geminiKey?.trim() || state.settings.geminiKey || "",
     e2bKey: formValues.e2bKey?.trim() || state.settings.e2bKey || "",
     tavilyKey: formValues.tavilyKey?.trim() || state.settings.tavilyKey || "",
@@ -1996,7 +2016,7 @@ function handleSaveSettings(formValues) {
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
     falImageModel: formValues.falImageModel || state.settings.falImageModel || getDefaultSettings().falImageModel,
-    imageSize: formValues.imageSize || state.settings.imageSize || "landscape_4_3",
+    imageSize: state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,
     groqEnabled: formValues.groqEnabled === "on" || formValues.groqEnabled === true,
@@ -2004,12 +2024,11 @@ function handleSaveSettings(formValues) {
     textProvider: formValues.textProvider?.trim() || state.settings.textProvider || getDefaultSettings().textProvider,
     textModel: formValues.textModel?.trim() || state.settings.textModel || getDefaultSettings().textModel,
     groqModel: formValues.groqModel?.trim() || state.settings.groqModel || getDefaultSettings().groqModel,
+    internalGroqModel: formValues.internalGroqModel?.trim() || state.settings.internalGroqModel || getDefaultSettings().internalGroqModel,
     geminiModel: formValues.geminiModel?.trim() || state.settings.geminiModel || getDefaultSettings().geminiModel,
     openRouterSelectedModels: formValues.openRouterSelectedModels !== undefined
       ? formValues.openRouterSelectedModels
       : state.settings.openRouterSelectedModels || [],
-    wavespeedImageModel: formValues.wavespeedImageModel || state.settings.wavespeedImageModel || "system",
-    wavespeedKey: formValues.wavespeedKey?.trim() || state.settings.wavespeedKey || "",
     openAITranscribeModel: formValues.openAITranscribeModel?.trim() || getDefaultSettings().openAITranscribeModel,
     whisperModel: formValues.whisperModel || getDefaultSettings().whisperModel,
     usageLimits: {

@@ -36,7 +36,8 @@ function getMonthKey() {
 }
 
 function calculateCost(model, promptTokens, completionTokens) {
-  const prices = MODEL_PRICES[model] || { input: 0, output: 0 };
+  const prices = MODEL_PRICES[model];
+  if (!prices) return 0;
   const inputCost = (promptTokens / 1_000_000) * prices.input;
   const outputCost = (completionTokens / 1_000_000) * prices.output;
   return inputCost + outputCost;
@@ -44,23 +45,25 @@ function calculateCost(model, promptTokens, completionTokens) {
 
 export function trackCost(model, promptTokens, completionTokens) {
   const cost = calculateCost(model, promptTokens, completionTokens);
-  if (cost === 0) return 0;
-
   const costs = readCosts();
   const today = getTodayKey();
   const month = getMonthKey();
 
   if (!costs[today]) {
-    costs[today] = { total: 0, byModel: {} };
+    costs[today] = { total: 0, byModel: {}, noPriceModels: {} };
   }
+  if (!costs[today].noPriceModels) costs[today].noPriceModels = {};
   costs[today].total += cost;
   costs[today].byModel[model] = (costs[today].byModel[model] || 0) + cost;
+  if (!MODEL_PRICES[model]) costs[today].noPriceModels[model] = true;
 
   if (!costs[month]) {
-    costs[month] = { total: 0, byModel: {} };
+    costs[month] = { total: 0, byModel: {}, noPriceModels: {} };
   }
+  if (!costs[month].noPriceModels) costs[month].noPriceModels = {};
   costs[month].total += cost;
   costs[month].byModel[model] = (costs[month].byModel[model] || 0) + cost;
+  if (!MODEL_PRICES[model]) costs[month].noPriceModels[model] = true;
 
   writeCosts(costs);
   return cost;
@@ -76,6 +79,20 @@ export function getMonthlyCost() {
   const costs = readCosts();
   const month = getMonthKey();
   return costs[month]?.total || 0;
+}
+
+export function getDailyCostDetails() {
+  const costs = readCosts();
+  return costs[getTodayKey()] || { total: 0, byModel: {}, noPriceModels: {} };
+}
+
+export function getMonthlyCostDetails() {
+  const costs = readCosts();
+  return costs[getMonthKey()] || { total: 0, byModel: {}, noPriceModels: {} };
+}
+
+export function hasModelPrice(model) {
+  return Boolean(MODEL_PRICES[model]);
 }
 
 export function getConversationCost(messages) {
