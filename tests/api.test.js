@@ -84,8 +84,8 @@ test("getModelSelectionDetails returns guidance badges for the active provider/m
 test("getDefaultSettings includes a global system prompt field", () => {
   const settings = getDefaultSettings();
 
-  assert.match(settings.globalSystemPrompt, /Modos de resposta/i);
   assert.match(settings.globalSystemPrompt, /Documentos ativos/i);
+  assert.doesNotMatch(settings.globalSystemPrompt, /Modos de resposta/i);
 });
 
 test("getDefaultSettings includes internal Groq settings", () => {

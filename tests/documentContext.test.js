@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   buildDocumentBrief,
   buildDocumentSynthesis,
-  getResponseDepthInstruction,
   normalizeResponseMode,
 } from "../js/documentContext.js";
 
@@ -13,18 +12,6 @@ test("normalizeResponseMode preserves known modes and defaults to structured", (
   assert.equal(normalizeResponseMode("apostila"), "apostila");
   assert.equal(normalizeResponseMode("executivo"), "executivo");
   assert.equal(normalizeResponseMode("desconhecido"), "estruturado");
-});
-
-test("getResponseDepthInstruction describes long-form aula mode", () => {
-  const instruction = getResponseDepthInstruction("aula");
-
-  assert.match(instruction, /aula completa/i);
-  assert.match(instruction, /capitulos/i);
-  assert.match(instruction, /exemplos/i);
-});
-
-test("getResponseDepthInstruction keeps structured mode silent to preserve default behavior", () => {
-  assert.equal(getResponseDepthInstruction("estruturado"), "");
 });
 
 test("buildDocumentBrief keeps document metadata and page index compact", () => {

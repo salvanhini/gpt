@@ -109,12 +109,6 @@ export const IMAGE_PROVIDER_OPTIONS = [
   { value: "fal-ai", label: "Pago · fal.ai Flux" },
 ];
 
-export const FAL_IMAGE_MODELS = [
-  { value: "fal-ai/flux/schnell", label: "Flux Schnell (Rapido)" },
-  { value: "fal-ai/flux-2/klein/9b", label: "Flux 2 Klein 9B (Criacao)" },
-  { value: "fal-ai/flux-2/klein/9b/edit", label: "Flux 2 Klein 9B (Edicao)" },
-];
-
 const IMAGE_SIZE_DIMENSIONS = {
   landscape_4_3: { width: 1024, height: 768 },
   landscape_16_9: { width: 1280, height: 720 },
@@ -238,7 +232,6 @@ export function getDefaultSettings() {
     internalGroqModel: DEFAULT_INTERNAL_GROQ_MODEL,
     geminiModel: DEFAULT_GEMINI_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL_POLLINATIONS,
-    falImageModel: "fal-ai/flux/schnell",
     imageSize: "landscape_4_3",
     globalSystemPrompt: `## 1. IDENTIDADE E COMPORTAMENTO CENTRAL
 Você é o FEMIC GPT, a inteligência artificial central da FEMIC Fisioterapia e assistente estratégico de consultoria técnica multidisciplinar.
@@ -250,7 +243,6 @@ Você é o FEMIC GPT, a inteligência artificial central da FEMIC Fisioterapia e
 - **Profundidade:**
   - Para dúvidas rápidas e do dia a dia: Seja cirúrgico e conciso (1 a 3 linhas).
   - Para análises e relatórios: Vá fundo. Use Markdown rigorosamente (títulos, subtítulos, bullet points e tabelas) para garantir clareza visual.
-- **Modos de resposta do app:** Quando o contexto trouxer "Modo Aula Completa", "Modo Apostila" ou "Modo Executivo", obedeça esse modo acima da regra geral de concisão. Aula/Apostila devem ser longas e didáticas; Executivo deve ser curto e priorizado.
 - **Documentos ativos:** Quando houver PDFs, artigos ou anexos ativos, use primeiro os documentos da conversa. Para múltiplos documentos, compare por documento antes de sintetizar. Ignore arquivos removidos, substituídos ou citados apenas no histórico antigo.
 - **Barreira Anti-Alucinação (Guardrail):** Nunca invente dados médicos, leis, resoluções ou informações de pacientes. Se você não souber, ou se faltar qualquer dado essencial para executar um comando, PARE e faça a pergunta ao usuário.
 
@@ -1325,23 +1317,19 @@ async function generateImageFalAI({ prompt, settings, editImageBase64 }) {
     throw new Error("Adicione sua chave da fal.ai nas configuracoes.");
   }
 
-  const falModel = settings.falImageModel || "fal-ai/flux/schnell";
-  const isEdit = falModel.includes("/edit") || editImageBase64;
-
+  const isEdit = Boolean(editImageBase64);
   const sizeKey = settings.imageSize || "square";
   const dims = IMAGE_SIZE_DIMENSIONS[sizeKey] || IMAGE_SIZE_DIMENSIONS.square;
 
   const endpoint = isEdit
     ? "https://fal.run/fal-ai/flux-2/klein/9b/edit"
-    : `https://fal.run/${falModel}`;
+    : "https://fal.run/fal-ai/flux-2/klein/9b";
 
   const body = { prompt, image_size: sizeKey };
 
-  if (isEdit && editImageBase64) {
+  if (isEdit) {
     body.image_urls = [editImageBase64];
-  }
-
-  if (!isEdit) {
+  } else {
     body.num_images = 1;
     body.num_inference_steps = 4;
     body.enable_safety_checker = false;
@@ -1376,7 +1364,7 @@ async function generateImageFalAI({ prompt, settings, editImageBase64 }) {
   return {
     url: imageUrl,
     prompt,
-    model: falModel,
+    kind: isEdit ? "edicao" : "criacao",
     raw: data,
   };
 }

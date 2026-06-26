@@ -2,7 +2,6 @@ export function buildChatMessages({
   globalSystemPrompt = "",
   agentSystemPrompt = "",
   responseStyle = "",
-  responseDepthInstruction = "",
   history = [],
   attachmentContext = "",
   referenceContext = "",
@@ -21,7 +20,6 @@ export function buildChatMessages({
   const agentInstructions = [
     agentSystemPrompt.trim(),
     responseStyle.trim() ? `Estilo de resposta:\n${responseStyle.trim()}` : "",
-    responseDepthInstruction.trim() ? `Profundidade da resposta:\n${responseDepthInstruction.trim()}` : "",
   ].filter(Boolean).join("\n\n");
 
   if (agentInstructions) {

@@ -229,19 +229,6 @@ function renderQuickModelOptions(state) {
   return [...openRouter, ...groq, ...gemini].join("");
 }
 
-function renderResponseModeOptions(state) {
-  const activeMode = state.chats?.find((chat) => chat.id === state.activeChatId)?.responseMode || "estruturado";
-  const modes = state.responseModes || [
-    { value: "estruturado", label: "Estruturado" },
-    { value: "aula", label: "Aula completa" },
-    { value: "apostila", label: "Apostila" },
-    { value: "executivo", label: "Executivo" },
-  ];
-  return modes.map((mode) => `
-    <option value="${escapeHtml(mode.value)}" ${activeMode === mode.value ? "selected" : ""}>${escapeHtml(mode.label)}</option>
-  `).join("");
-}
-
 function renderModelGuidance(state) {
   const details = getActiveModelDetails(state);
   const isCollapsed = Boolean(state.modelGuidanceCollapsed);
@@ -1512,17 +1499,10 @@ function renderSettingsModal(state) {
                   </label>
                 </div>
                 <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Modelo fal.ai</span>
-                  <select class="modal-input" name="falImageModel">
-                    ${(state.falImageModelOptions || []).map((opt) => `
-                      <option value="${escapeHtml(opt.value)}" ${(settings.falImageModel || "fal-ai/flux/schnell") === opt.value ? "selected" : ""}>${escapeHtml(opt.label)}</option>
-                    `).join("")}
-                  </select>
-                </label>
-                <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (fal.ai)</span>
                   <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (para modelos pagos Flux)" />
                 </label>
+                <div class="mt-1 text-[11px] leading-5 text-slate-500">Modelo: Flux 2 Klein 9B (criacao). Com imagem anexada, usa Flux 2 Klein 9B Edit (edicao).</div>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Pixazo.ai)</span>
                   <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (opcional)" />
@@ -2075,8 +2055,7 @@ function renderMemoryModal(state) {
 - Priorizar respostas em portugues do Brasil, claras, profissionais e bem estruturadas.
 - Quando houver PDFs, artigos ou anexos ativos, analisar primeiro os documentos da conversa e evitar usar arquivos removidos ou historico antigo como base principal.
 - Para multiplos documentos, comparar por documento, destacar pontos em comum, divergencias, limitacoes e recomendacoes praticas.
-- Quando o modo Aula completa ou Apostila estiver ativo, desenvolver respostas longas, didaticas, com secoes, exemplos, tabelas quando uteis e conclusao.
-- Quando o modo Executivo estiver ativo, responder de forma curta, objetiva e priorizada.
+- O usuario pode pedir o formato diretamente na mensagem (ex: "responda como aula completa", "faca um resumo executivo", "transforme em apostila", "seja direto").
 - Evitar inventar dados, fontes, normas, artigos ou informacoes clinicas. Se faltar contexto, dizer claramente o que falta.
 - Para busca web, usar fontes confiaveis e citar links quando relevante.`;
 
@@ -2539,12 +2518,6 @@ export function renderApp(state) {
                           ${renderQuickModelOptions(state)}
                         </select>
                       </label>`}
-                      ${instagramMode ? "" : `<label class="quick-model-wrap inline-flex items-center rounded-full border border-slate-200/80 bg-white/85 px-2 py-1 shadow-sm">
-                        <span class="quick-model-label text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">Resposta</span>
-                        <select class="quick-model-select-inline" data-action="response-mode-change" title="Escolha a profundidade da resposta">
-                          ${renderResponseModeOptions(state)}
-                        </select>
-                      </label>`}
                       ${state.imageMode && !instagramMode ? renderImageSizeSelector(state) : ""}
                       ${instagramMode ? "" : `<label class="control-btn inline-flex cursor-pointer items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm">
                         <input id="file-input" type="file" class="hidden" multiple accept=".pdf,.xlsx,.xls,.csv,.xml,.txt,.docx,.jpg,.jpeg,.png" data-action="attach-files" />
@@ -2821,11 +2794,6 @@ export function bindUIHandlers(handlers) {
     const input = event.target;
     if (input instanceof HTMLSelectElement && input.dataset.action === "quick-model-change") {
       handlers.onQuickModelChange(input.value);
-      return;
-    }
-
-    if (input instanceof HTMLSelectElement && input.dataset.action === "response-mode-change") {
-      handlers.onResponseModeChange?.(input.value);
       return;
     }
 

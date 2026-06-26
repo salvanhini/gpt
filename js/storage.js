@@ -1,5 +1,4 @@
 import { GENERAL_AGENT_ID, NO_AGENT_ID } from "./agents.js";
-import { normalizeResponseMode } from "./documentContext.js";
 
 export const STORAGE_KEYS = {
   chats: "femicgpt:chats",
@@ -235,7 +234,6 @@ function normalizeChats(rawChats, validAgentIds) {
       ...chat,
       agentId: chat.agentId === NO_AGENT_ID ? GENERAL_AGENT_ID : chat.agentId,
       titleMode: chat.titleMode === "manual" ? "manual" : "auto",
-      responseMode: normalizeResponseMode(chat.responseMode),
       documentBriefs: Array.isArray(chat.documentBriefs) ? chat.documentBriefs : [],
       documentSynthesis: typeof chat.documentSynthesis === "string" ? chat.documentSynthesis : "",
     }));

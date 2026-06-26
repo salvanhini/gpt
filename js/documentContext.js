@@ -11,35 +11,6 @@ export function normalizeResponseMode(value) {
   return RESPONSE_MODE_VALUES.has(value) ? value : "estruturado";
 }
 
-export function getResponseDepthInstruction(mode = "estruturado") {
-  const normalized = normalizeResponseMode(mode);
-  if (normalized === "aula") {
-    return [
-      "Modo Aula Completa:",
-      "Esta resposta DEVE ser substancialmente mais longa e didatica que o modo estruturado.",
-      "Produza uma aula completa, com introducao, capitulos/secoes, desenvolvimento progressivo, exemplos praticos, analogias quando ajudarem, tabelas quando forem uteis e conclusao final.",
-      "Explique o raciocinio e os conceitos de forma ensinavel, sem virar apenas lista de topicos.",
-      "Nao reduza a resposta a um resumo curto, a menos que o usuario peca explicitamente.",
-    ].join("\n");
-  }
-  if (normalized === "apostila") {
-    return [
-      "Modo Apostila:",
-      "Esta resposta DEVE parecer material de estudo, mais extensa que uma aula comum.",
-      "Organize em modulos/secoes, com objetivos de aprendizagem, conceitos, desenvolvimento, exemplos, aplicacoes praticas, quadro-resumo, perguntas de revisao e conclusao.",
-      "Mantenha linguagem didatica e estrutura consistente para estudo.",
-    ].join("\n");
-  }
-  if (normalized === "executivo") {
-    return [
-      "Modo Executivo:",
-      "Responda de forma curta, objetiva e priorizada. Corte explicacoes longas.",
-      "Use no maximo os pontos essenciais, com tabela apenas quando ela economizar espaco ou clarear decisoes.",
-    ].join("\n");
-  }
-  return "";
-}
-
 function cleanPreview(text = "", max = 180) {
   return String(text).replace(/\s+/g, " ").trim().slice(0, max);
 }

@@ -35,7 +35,6 @@ import {
   loadChats,
   removeChatAttachment,
   saveChats,
-  setChatResponseMode,
   updateChatCategory,
   updateMessageCategory,
   updateChatTitle,
@@ -49,7 +48,6 @@ import {
   getTextProviderDisplayName,
   GEMINI_MODELS,
   GROQ_MODELS,
-  FAL_IMAGE_MODELS,
   hasTextProviderKey,
   IMAGE_PROVIDER_OPTIONS,
   IMAGE_SIZE_OPTIONS,
@@ -70,8 +68,6 @@ import { processFiles, buildCombinedContext } from "./fileProcessor.js";
 import {
   buildDocumentBrief,
   buildDocumentSynthesis,
-  getResponseDepthInstruction,
-  RESPONSE_MODES,
 } from "./documentContext.js";
 import {
   formatCepSummary,
@@ -174,7 +170,6 @@ const state = {
   smartMode: true,
   pubmedResultLimit: 5,
   webSearchMode: false,
-  responseModes: RESPONSE_MODES,
   modelGuidanceCollapsed: false,
   agentSummaryCollapsed: true,
   creativeBriefCollapsed: true,
@@ -228,7 +223,6 @@ const state = {
   openRouterAvailableModels: [],
   imageSizeOptions: IMAGE_SIZE_OPTIONS,
   imageProviderOptions: IMAGE_PROVIDER_OPTIONS,
-  falImageModelOptions: FAL_IMAGE_MODELS,
   instagramFormats: INSTAGRAM_FORMATS,
   supabaseUser: null,
 };
@@ -586,7 +580,6 @@ function render() {
     state.memoryFacts = getMemoryFacts();
     renderApp(state);
     if (typeof mountPendingCharts === "function") mountPendingCharts();
-    window.scrollTo(0, 0);
   } catch (error) {
     console.error("[FEMIC GPT] Erro ao renderizar:", error);
     const app = document.getElementById("app");
@@ -763,7 +756,6 @@ function buildTextPayload(userMessage) {
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
-    responseDepthInstruction: getResponseDepthInstruction(activeChat?.responseMode),
     history,
     attachmentContext: attachmentContext.combinedContext || "",
     referenceContext: [documentFocusContext, memoryContext].filter(Boolean).join("\n\n"),
@@ -790,7 +782,6 @@ function buildTextPayloadWithReference(userMessage, referenceContext) {
     globalSystemPrompt: state.settings.globalSystemPrompt || "",
     agentSystemPrompt: activeAgent?.systemPrompt || "",
     responseStyle: activeAgent?.responseStyle || "",
-    responseDepthInstruction: getResponseDepthInstruction(activeChat?.responseMode),
     history,
     attachmentContext: attachmentContext.combinedContext || "",
     referenceContext: [documentFocusContext, referenceContext].filter(Boolean).join("\n\n"),
@@ -1792,18 +1783,6 @@ function handleQuickModelChange(value) {
   persistAndRender();
 }
 
-function handleResponseModeChange(value) {
-  const chat = getActiveChat();
-  if (!chat) return;
-  try {
-    setChatResponseMode(chat.id, value);
-    state.chats = loadChats();
-    persistAndRender();
-  } catch (error) {
-    showToast(error.message || "Nao foi possivel alterar o modo de resposta.", "error");
-  }
-}
-
 function handleApplyRecommendedModel() {
   const recommendation = getRecommendedModelForContext();
   handleQuickModelChange(`${recommendation.provider}::${recommendation.model}`);
@@ -2015,7 +1994,6 @@ function handleSaveSettings(formValues) {
     imageProvider: formValues.imageProvider || state.settings.imageProvider || "pollinations",
     openAIKey: formValues.openAIKey?.trim() || state.settings.openAIKey || "",
     imageModel: formValues.imageModel?.trim() || getDefaultSettings().imageModel,
-    falImageModel: formValues.falImageModel || state.settings.falImageModel || getDefaultSettings().falImageModel,
     imageSize: state.settings.imageSize || "landscape_4_3",
     globalSystemPrompt: formValues.globalSystemPrompt?.toString().trim() || "",
     openRouterEnabled: formValues.openRouterEnabled === "on" || formValues.openRouterEnabled === true,
@@ -2893,7 +2871,6 @@ function initialize() {
     onSaveBrand: handleSaveBrand,
     onDeleteBrand: handleDeleteBrand,
     onQuickModelChange: handleQuickModelChange,
-    onResponseModeChange: handleResponseModeChange,
     onChangeImageSize: handleChangeImageSize,
     onCreativeFieldChange: handleCreativeFieldChange,
     onSelectBrand: handleSelectBrand,
