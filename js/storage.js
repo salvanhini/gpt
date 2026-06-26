@@ -1,4 +1,4 @@
-import { NO_AGENT_ID } from "./agents.js";
+import { GENERAL_AGENT_ID, NO_AGENT_ID } from "./agents.js";
 import { normalizeResponseMode } from "./documentContext.js";
 
 export const STORAGE_KEYS = {
@@ -26,6 +26,7 @@ const BACKUP_SECRET_IV_BYTES = 12;
 const SECRET_SETTING_KEYS = [
   "openRouterKey",
   "groqKey",
+  "internalGroqKey",
   "geminiKey",
   "falKey",
   "pixazoKey",
@@ -223,7 +224,8 @@ function normalizeChats(rawChats, validAgentIds) {
         return false;
       }
 
-      if (!validAgentIds.has(chat.agentId) && chat.agentId !== NO_AGENT_ID) {
+      const normalizedAgentId = chat.agentId === NO_AGENT_ID ? GENERAL_AGENT_ID : chat.agentId;
+      if (!validAgentIds.has(normalizedAgentId)) {
         return false;
       }
 
@@ -231,6 +233,7 @@ function normalizeChats(rawChats, validAgentIds) {
     })
     .map((chat) => ({
       ...chat,
+      agentId: chat.agentId === NO_AGENT_ID ? GENERAL_AGENT_ID : chat.agentId,
       titleMode: chat.titleMode === "manual" ? "manual" : "auto",
       responseMode: normalizeResponseMode(chat.responseMode),
       documentBriefs: Array.isArray(chat.documentBriefs) ? chat.documentBriefs : [],
@@ -271,12 +274,12 @@ export function reconcileAppData({
   const nextAgents = normalizedAgents.length ? normalizedAgents : defaultAgents();
 
   const validAgentIds = new Set(nextAgents.map((agent) => agent.id));
-  validAgentIds.add(NO_AGENT_ID);
   const nextChats = normalizeChats(chats, validAgentIds);
   const nextView = view && typeof view === "object" ? view : {};
 
-  let activeAgentId = validAgentIds.has(nextView.activeAgentId)
-    ? nextView.activeAgentId
+  const requestedAgentId = nextView.activeAgentId === NO_AGENT_ID ? GENERAL_AGENT_ID : nextView.activeAgentId;
+  let activeAgentId = validAgentIds.has(requestedAgentId)
+    ? requestedAgentId
     : nextAgents[0]?.id || null;
 
   let chatsForAgent = nextChats.filter((chat) => chat.agentId === activeAgentId);

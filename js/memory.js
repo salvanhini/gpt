@@ -179,6 +179,7 @@ export function shouldGenerateSummary(totalMessages) {
 
 export async function generateLongTermSummary(messages, existingSummary, settings) {
   const { sendTextMessage } = await import("./api.js");
+  const { getInternalGroqSettings } = await import("./api.js");
 
   const messagesToSummarize = messages.slice(0, -10);
   if (!messagesToSummarize.length) return existingSummary || "";
@@ -209,7 +210,7 @@ ${conversationText}`;
         { role: "system", content: "Voce e um assistente que gera resumos executivos concisos." },
         { role: "user", content: summaryPrompt },
       ],
-      settings,
+      settings: getInternalGroqSettings(settings),
       webSearchMode: false,
     });
 

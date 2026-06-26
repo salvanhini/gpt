@@ -9,6 +9,7 @@ const WEB_SEARCH_CACHE_KEY = "femicgpt:web-search-cache";
 const DEFAULT_TEXT_MODEL = "qwen/qwen3.7-plus";
 const DEFAULT_TEXT_PROVIDER = "groq";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+const DEFAULT_INTERNAL_GROQ_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const DEFAULT_IMAGE_PROVIDER = "pollinations";
 const DEFAULT_IMAGE_MODEL_POLLINATIONS = "flux";
@@ -103,9 +104,9 @@ export const IMAGE_SIZE_OPTIONS = [
 ];
 
 export const IMAGE_PROVIDER_OPTIONS = [
-  { value: "pollinations", label: "Pollinations.ai (Gratis)" },
-  { value: "fal-ai", label: "fal.ai (requer chave)" },
-  { value: "pixazo", label: "Pixazo.ai (Flux Schnell)" },
+  { value: "pollinations", label: "Gratis · Pollinations.ai" },
+  { value: "pixazo", label: "Gratis/com chave · Pixazo.ai" },
+  { value: "fal-ai", label: "Pago · fal.ai Flux" },
 ];
 
 export const FAL_IMAGE_MODELS = [
@@ -226,6 +227,7 @@ export function getDefaultSettings() {
     textProvider: DEFAULT_TEXT_PROVIDER,
     openRouterKey: "",
     groqKey: "",
+    internalGroqKey: "",
     geminiKey: "",
     falKey: "",
     pixazoKey: "",
@@ -233,6 +235,7 @@ export function getDefaultSettings() {
     openAIKey: "",
     textModel: DEFAULT_TEXT_MODEL,
     groqModel: DEFAULT_GROQ_MODEL,
+    internalGroqModel: DEFAULT_INTERNAL_GROQ_MODEL,
     geminiModel: DEFAULT_GEMINI_MODEL,
     imageModel: DEFAULT_IMAGE_MODEL_POLLINATIONS,
     falImageModel: "fal-ai/flux/schnell",
@@ -247,6 +250,8 @@ Você é o FEMIC GPT, a inteligência artificial central da FEMIC Fisioterapia e
 - **Profundidade:**
   - Para dúvidas rápidas e do dia a dia: Seja cirúrgico e conciso (1 a 3 linhas).
   - Para análises e relatórios: Vá fundo. Use Markdown rigorosamente (títulos, subtítulos, bullet points e tabelas) para garantir clareza visual.
+- **Modos de resposta do app:** Quando o contexto trouxer "Modo Aula Completa", "Modo Apostila" ou "Modo Executivo", obedeça esse modo acima da regra geral de concisão. Aula/Apostila devem ser longas e didáticas; Executivo deve ser curto e priorizado.
+- **Documentos ativos:** Quando houver PDFs, artigos ou anexos ativos, use primeiro os documentos da conversa. Para múltiplos documentos, compare por documento antes de sintetizar. Ignore arquivos removidos, substituídos ou citados apenas no histórico antigo.
 - **Barreira Anti-Alucinação (Guardrail):** Nunca invente dados médicos, leis, resoluções ou informações de pacientes. Se você não souber, ou se faltar qualquer dado essencial para executar um comando, PARE e faça a pergunta ao usuário.
 
 ## 2. MEMÓRIA E ROTEAMENTO DE BUSCA (WEB SEARCH)
@@ -474,6 +479,19 @@ export function hasTextProviderKey(settings, provider = settings?.textProvider) 
   return Boolean(settings?.openRouterKey);
 }
 
+export function getInternalGroqSettings(settings = {}) {
+  return {
+    ...settings,
+    textProvider: "groq",
+    groqKey: settings.internalGroqKey || settings.groqKey || "",
+    groqModel: settings.internalGroqModel || settings.groqModel || DEFAULT_INTERNAL_GROQ_MODEL,
+  };
+}
+
+export function hasInternalGroqKey(settings = {}) {
+  return Boolean(settings.internalGroqKey || settings.groqKey);
+}
+
 export function getModelSelectionDetails(settings = {}) {
   settings = settings || {};
   const provider = settings.textProvider || DEFAULT_TEXT_PROVIDER;
@@ -556,7 +574,7 @@ export function buildGroqRequestBody(opts) {
   };
 
   if (webSearchMode) {
-    body.tool_choice = "auto";
+    body.tool_choice = "required";
     body.tools = [{ type: "browser_search" }];
   }
 
@@ -954,7 +972,17 @@ export async function runWebSearchQuery({ messages, settings }) {
   }
 
   if (settings.textProvider === "gemini") {
-    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
+    if (hasInternalGroqKey(settings)) {
+      settings = getInternalGroqSettings(settings);
+    } else if (settings.openRouterKey) {
+      settings = {
+        ...settings,
+        textProvider: "openrouter",
+        textModel: settings.textModel || DEFAULT_TEXT_MODEL,
+      };
+    } else {
+      throw new Error("Para usar Busca Web com Gemini ativo, configure a Groq interna, a Groq principal ou a OpenRouter.");
+    }
   }
 
   // Primeiro: Tavily > Serper > DuckDuckGo (provedores externos)
@@ -1053,7 +1081,7 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
       throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter. Gemini continua apenas no chat normal.");
     }
     resultado = await sendGeminiMessage({ messages, settings });
-  } else {
+  } else if (!settings.textProvider || settings.textProvider === "openrouter") {
     const bodyObj = buildOpenRouterRequestBody({ messages, settings, webSearchMode });
     const endpoint = resolveEndpoint("openrouter", settings, bodyObj);
     const data = await chatFetch(endpoint.url, endpoint.headers, endpoint.body);
@@ -1071,6 +1099,10 @@ export async function sendTextMessage({ messages, settings, webSearchMode = fals
       promptTokens: usage?.prompt_tokens || 0,
       completionTokens: usage?.completion_tokens || 0,
     };
+  } else if (webSearchMode) {
+    throw new Error("A Busca Web desta versao funciona com Groq ou OpenRouter.");
+  } else {
+    throw new Error("Provedor de texto invalido. Selecione Groq, OpenRouter ou Gemini.");
   }
 
   if (chaveCache) salvarCache(chaveCache, resultado.content);
@@ -1238,11 +1270,6 @@ function salvarCache(chave, conteudo) {
 }
 
 export async function generateImage({ prompt, settings, editImageBase64 }) {
-  if (settings.wavespeedImageModel && settings.wavespeedImageModel !== "system") {
-    const { generateImageWavespeed } = await import("./wavespeedApi.js");
-    return generateImageWavespeed({ prompt, settings, imageSize: settings.imageSize });
-  }
-
   const provider = settings.imageProvider || DEFAULT_IMAGE_PROVIDER;
 
   if (provider === "fal-ai") {

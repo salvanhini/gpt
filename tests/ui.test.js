@@ -150,12 +150,12 @@ test("renderApp includes help entry, compact web toggle and collapsible model gu
     });
 
     assert.match(app.innerHTML, /has-messages/);
-    assert.match(app.innerHTML, /agent-summary-panel/);
+    assert.match(app.innerHTML, /data-action="response-mode-change"/);
+    assert.match(app.innerHTML, /data-action="copy-message"/);
+    assert.doesNotMatch(app.innerHTML, /Conversa sem agente/);
     assert.doesNotMatch(app.innerHTML, /active-chat-header/);
     assert.match(app.innerHTML, /Ajuda/);
     assert.match(app.innerHTML, /Busca web/);
-    assert.match(app.innerHTML, /ocultar detalhes/i);
-    assert.match(app.innerHTML, /model-guidance/);
     assert.match(app.innerHTML, /Qwen 3\.7 Plus/);
   } finally {
     globalThis.document = previousDocument;

@@ -84,7 +84,15 @@ test("getModelSelectionDetails returns guidance badges for the active provider/m
 test("getDefaultSettings includes a global system prompt field", () => {
   const settings = getDefaultSettings();
 
-  assert.equal(settings.globalSystemPrompt, "");
+  assert.match(settings.globalSystemPrompt, /Modos de resposta/i);
+  assert.match(settings.globalSystemPrompt, /Documentos ativos/i);
+});
+
+test("getDefaultSettings includes internal Groq settings", () => {
+  const settings = getDefaultSettings();
+
+  assert.equal(settings.internalGroqKey, "");
+  assert.equal(settings.internalGroqModel, "openai/gpt-oss-120b");
 });
 
 test("buildDuckDuckGoSearchUrl encodes the query and default params", () => {
@@ -299,5 +307,59 @@ test("runWebSearchQuery falls back to DuckDuckGo when premium web search fails",
   } finally {
     global.fetch = originalFetch;
     delete global.window;
+  }
+});
+
+test("runWebSearchQuery uses internal Groq when Gemini is active", async () => {
+  const originalFetch = global.fetch;
+  const urls = [];
+
+  global.fetch = async (url, opts) => {
+    const urlStr = typeof url === "string" ? url : url?.url || "";
+    urls.push(urlStr);
+
+    if (urlStr.includes("duckduckgo")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            Heading: "Busca",
+            AbstractText: "Fonte atual encontrada.",
+            AbstractURL: "https://example.com/fonte",
+            RelatedTopics: [],
+          };
+        },
+      };
+    }
+
+    if (urlStr.includes("api.groq.com")) {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.model, "openai/gpt-oss-120b");
+      return {
+        ok: true,
+        async json() {
+          return { choices: [{ message: { content: "Resposta via Groq interna." } }] };
+        },
+      };
+    }
+
+    return { ok: false, async json() { return {}; } };
+  };
+
+  try {
+    const result = await runWebSearchQuery({
+      messages: [{ role: "user", content: "pesquise algo atual" }],
+      settings: {
+        ...getDefaultSettings(),
+        textProvider: "gemini",
+        geminiKey: "AIza-test",
+        internalGroqKey: "gsk-internal",
+      },
+    });
+
+    assert.match(result.content, /Resposta via Groq interna/);
+    assert.ok(urls.some((url) => url.includes("api.groq.com")));
+  } finally {
+    global.fetch = originalFetch;
   }
 });

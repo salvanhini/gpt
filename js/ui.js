@@ -7,6 +7,21 @@ function formatCostValue(cost) {
   return `$${cost.toFixed(2)}`;
 }
 
+function renderCostByModel(details = {}) {
+  const entries = Object.entries(details.byModel || {});
+  if (!entries.length) return `<div class="mt-2 text-[11px] text-slate-400">Sem uso registrado por modelo ainda.</div>`;
+  return `
+    <div class="mt-2 space-y-1">
+      ${entries.map(([model, cost]) => `
+        <div class="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-2 py-1 text-[11px] text-slate-600">
+          <span class="min-w-0 truncate">${escapeHtml(model || "modelo desconhecido")}</span>
+          <span class="shrink-0 font-semibold text-slate-800">${details.noPriceModels?.[model] ? "sem preço cadastrado" : escapeHtml(formatCostValue(cost || 0))}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
 function escapeHtml(value = "") {
   return (value ?? "")
     .replace(/&/g, "&amp;")
@@ -164,7 +179,6 @@ function getImageProviderLabel(provider) {
     pollinations: "Pollinations.ai",
     "fal-ai": "fal.ai (Flux Schnell)",
     pixazo: "Pixazo.ai",
-    wavespeed: "Wavespeed.ai (Flux 2 Klein)",
   };
   return map[provider] || provider || "Desconhecido";
 }
@@ -620,10 +634,7 @@ function renderInstagramCreativePanel(state) {
 }
 
 function renderAssistantActions(message, state) {
-  if (message.role !== "assistant") {
-    return "";
-  }
-
+  const isAssistant = message.role === "assistant";
   const isSpeaking = state.speakingMessageId === message.id;
   const canSpeak = state.speechSynthesisSupported !== false;
   return `
@@ -636,6 +647,7 @@ function renderAssistantActions(message, state) {
     >
       📋
     </button>
+    ${isAssistant ? `
     <button
       type="button"
       class="control-btn inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-[10px] text-slate-500 shadow-sm ${canSpeak ? "" : "opacity-60"}"
@@ -660,6 +672,7 @@ function renderAssistantActions(message, state) {
         <button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50" data-action="export-message-docx" data-message-id="${message.id}">📘 DOCX</button>
       </div>
     </div>
+    ` : ""}
   `;
 }
 
@@ -1431,6 +1444,22 @@ function renderSettingsModal(state) {
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API</span>
                   <input class="modal-input" name="groqKey" type="password" value="${escapeHtml(settings.groqKey || "")}" placeholder="gsk_..." ${settings.groqEnabled === false ? "disabled" : ""} />
                 </label>
+                <div class="mt-3 rounded-lg border border-cyan-100 bg-cyan-50/70 p-2.5">
+                  <div class="text-xs font-semibold text-cyan-900">Groq secundaria / interna</div>
+                  <p class="mt-1 text-[11px] leading-5 text-cyan-800">Usada para Busca Web com Gemini, memoria de longo prazo e resumos internos. Se ficar vazia, usa a chave Groq principal.</p>
+                  <label class="mt-2 block">
+                    <span class="mb-1 block text-xs font-medium text-cyan-900">Chave interna</span>
+                    <input class="modal-input" name="internalGroqKey" type="password" value="${escapeHtml(settings.internalGroqKey || "")}" placeholder="gsk_... (opcional)" ${settings.groqEnabled === false ? "disabled" : ""} />
+                  </label>
+                  <label class="mt-2 block">
+                    <span class="mb-1 block text-xs font-medium text-cyan-900">Modelo interno</span>
+                    <select class="modal-input" name="internalGroqModel" ${settings.groqEnabled === false ? "disabled" : ""}>
+                      ${(state.groqModelOptions || []).map((model) => `
+                        <option value="${escapeHtml(model.value)}" ${(settings.internalGroqModel || settings.groqModel || "openai/gpt-oss-120b") === model.value ? "selected" : ""}>${escapeHtml(model.label)}</option>
+                      `).join("")}
+                    </select>
+                  </label>
+                </div>
               </section>
 
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
@@ -1461,7 +1490,12 @@ function renderSettingsModal(state) {
               <section class="rounded-xl border border-slate-200 bg-white/75 p-3">
                 <div class="mb-2">
                   <div class="text-sm font-semibold text-slate-900">Imagem</div>
-                  <div class="text-xs text-slate-500">Provedor para geracao de imagens.</div>
+                  <div class="text-xs text-slate-500">Provedores organizados por custo e finalidade. O tamanho/formato fica no agente de imagem.</div>
+                </div>
+                <div class="mb-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
+                  <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-2"><strong>Gratis:</strong><br>Pollinations.ai</div>
+                  <div class="rounded-lg border border-sky-100 bg-sky-50 p-2"><strong>Gratis/com chave:</strong><br>Pixazo.ai</div>
+                  <div class="rounded-lg border border-amber-100 bg-amber-50 p-2"><strong>Pago:</strong><br>fal.ai Flux</div>
                 </div>
                 <div class="grid gap-2 lg:grid-cols-2">
                   <label class="block">
@@ -1473,14 +1507,10 @@ function renderSettingsModal(state) {
                     </select>
                   </label>
                   <label class="block">
-                    <span class="mb-2 block text-sm font-medium text-slate-700">Modelo</span>
+                    <span class="mb-2 block text-sm font-medium text-slate-700">Modelo Pollinations</span>
                     <input class="modal-input" name="imageModel" type="text" value="${escapeHtml(settings.imageModel || "")}" placeholder="flux" />
                   </label>
                 </div>
-                <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (fal.ai)</span>
-                  <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (so para fal.ai)" />
-                </label>
                 <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Modelo fal.ai</span>
                   <select class="modal-input" name="falImageModel">
@@ -1490,39 +1520,14 @@ function renderSettingsModal(state) {
                   </select>
                 </label>
                 <label class="block mt-2">
+                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (fal.ai)</span>
+                  <input class="modal-input" name="falKey" type="password" value="${escapeHtml(settings.falKey || "")}" placeholder="sua-chave-da-fal (para modelos pagos Flux)" />
+                </label>
+                <label class="block mt-2">
                   <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Pixazo.ai)</span>
-                  <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (so para Pixazo.ai)" />
+                  <input class="modal-input" name="pixazoKey" type="password" value="${escapeHtml(settings.pixazoKey || "")}" placeholder="sua-chave-pixazo (opcional)" />
                 </label>
-                <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Modelo de Imagem (Wavespeed)</span>
-                  <select class="modal-input" name="wavespeedImageModel">
-                    <option value="system" ${settings.wavespeedImageModel === "system" || !settings.wavespeedImageModel ? "selected" : ""}>Padrao do Sistema</option>
-                    <option value="wavespeed-ai/flux-2-klein-9b-text-to-image" ${settings.wavespeedImageModel === "wavespeed-ai/flux-2-klein-9b-text-to-image" ? "selected" : ""}>Flux 2 Klein (Wavespeed.ai)</option>
-                  </select>
-                </label>
-                <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Chave da API (Wavespeed.ai)</span>
-                  <input class="modal-input" name="wavespeedKey" type="password" value="${escapeHtml(settings.wavespeedKey || "")}" placeholder="ws_..." />
-                </label>
-                <div class="mt-1 text-[11px] text-slate-400">Pollinations.ai e gratuito e nao precisa de chave. fal.ai e Pixazo.ai requerem chave de API.</div>
-                <label class="block mt-2">
-                  <span class="mb-2 block text-sm font-medium text-slate-700">Tamanho padrao</span>
-                  <div class="flex flex-wrap gap-1.5">
-                    ${state.imageSizeOptions.map((opt) => {
-                      const preview = ASPECT_RATIO_PREVIEWS[opt.value];
-                      const isActive = settings.imageSize === opt.value;
-                      return `
-                        <label class="aspect-option cursor-pointer rounded-lg border p-2 text-center transition-all duration-150 ${isActive ? "border-femic-cyan bg-cyan-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}">
-                          <input type="radio" name="imageSize" value="${escapeHtml(opt.value)}" ${isActive ? "checked" : ""} class="hidden" />
-                          <div class="aspect-svg-wrap mx-auto mb-1 inline-flex items-center justify-center text-slate-600" style="width:28px;height:22px;">
-                            ${preview?.svg || ""}
-                          </div>
-                          <div class="text-[10px] font-medium leading-tight text-slate-700">${escapeHtml(opt.label)}</div>
-                        </label>
-                      `;
-                    }).join("")}
-                  </div>
-                </label>
+                <div class="mt-2 text-[11px] leading-5 text-slate-500">Flux 2 Klein de criacao/edicao fica concentrado em fal.ai para simplificar a configuracao.</div>
               </section>
             </div>
           </div>
@@ -1721,10 +1726,12 @@ function renderSettingsModal(state) {
               <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
                 <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Hoje</div>
                 <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCostValue(state.dailyCost || 0))}</div>
+                ${renderCostByModel(state.dailyCostDetails)}
               </div>
               <div class="rounded-lg border border-emerald-200/60 bg-emerald-50/60 p-2.5">
                 <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-600">Custo Mensal</div>
                 <div class="mt-1 text-lg font-semibold text-slate-900">${escapeHtml(formatCostValue(state.monthlyCost || 0))}</div>
+                ${renderCostByModel(state.monthlyCostDetails)}
               </div>
             </div>
             <details class="mt-2">
@@ -2064,6 +2071,14 @@ function renderMemoryModal(state) {
   }
 
   const facts = state.memoryFacts || [];
+  const recommendedMemoryText = `Preferencias do usuario no FEMIC GPT:
+- Priorizar respostas em portugues do Brasil, claras, profissionais e bem estruturadas.
+- Quando houver PDFs, artigos ou anexos ativos, analisar primeiro os documentos da conversa e evitar usar arquivos removidos ou historico antigo como base principal.
+- Para multiplos documentos, comparar por documento, destacar pontos em comum, divergencias, limitacoes e recomendacoes praticas.
+- Quando o modo Aula completa ou Apostila estiver ativo, desenvolver respostas longas, didaticas, com secoes, exemplos, tabelas quando uteis e conclusao.
+- Quando o modo Executivo estiver ativo, responder de forma curta, objetiva e priorizada.
+- Evitar inventar dados, fontes, normas, artigos ou informacoes clinicas. Se faltar contexto, dizer claramente o que falta.
+- Para busca web, usar fontes confiaveis e citar links quando relevante.`;
 
   return `
     <div class="modal-backdrop flex items-center justify-center p-4" data-action="close-modal" data-modal="memory">
@@ -2076,6 +2091,11 @@ function renderMemoryModal(state) {
           <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-white/80" data-action="close-modal" data-modal="memory">✕</button>
         </div>
         <div class="space-y-3">
+          <details class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
+            <summary class="cursor-pointer text-xs font-semibold text-emerald-800">Texto recomendado para adicionar na memoria</summary>
+            <textarea class="modal-textarea mt-2 min-h-[150px] text-xs" readonly>${escapeHtml(recommendedMemoryText)}</textarea>
+            <p class="mt-1 text-[11px] text-emerald-700">Copie o texto, cole no campo acima e clique em Adicionar. Isso ajuda o sistema a manter suas preferencias entre conversas.</p>
+          </details>
           <div class="flex gap-2">
             <input type="text" class="modal-input flex-1" name="memoryNewFact" placeholder="Adicionar fato manualmente (ex: Sou engenheiro, moro em SP)" />
             <button type="button" class="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-600" data-action="add-memory-fact">＋ Adicionar</button>
@@ -2448,16 +2468,6 @@ export function renderApp(state) {
               <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-white shadow-sm" style="background:rgba(255,255,255,0.12); opacity:0.96;" data-action="open-agent-modal" title="Novo agente">＋</button>
               </div>
               <div class="sidebar-scroll sidebar-agents-scroll agent-icon-grid scroll-soft pr-1">
-                <button
-                  type="button"
-                  class="agent-icon-card ${state.activeAgentId === "no-agent" ? "active" : ""}"
-                  data-action="select-agent"
-                  data-agent-id="no-agent"
-                  title="Conversa sem agente (chat normal)"
-                  aria-label="Nenhum agente"
-                >
-                  <span class="agent-icon-glyph" style="font-size:18px;">💬</span>
-                </button>
                 ${state.agents.map((agent) => renderAgentCard(agent, state)).join("")}
               </div>
             </section>`

@@ -210,7 +210,7 @@ export async function restoreFromSupabaseIfEmpty() {
     if (!messages.length) return null;
     const chat = {
       id: crypto.randomUUID(),
-      agentId: "no-agent",
+      agentId: "agent-general",
       title: "Conversa restaurada da nuvem",
       titleMode: "auto",
       createdAt: messages[0]?.createdAt || new Date().toISOString(),
