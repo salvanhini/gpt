@@ -1,12 +1,7 @@
 // Cost tracking per model (USD per 1M tokens)
 const MODEL_PRICES = {
-  // OpenRouter models
   "qwen/qwen3.7-plus": { input: 0.4, output: 1.2 },
   "deepseek/deepseek-v4-pro": { input: 0.27, output: 1.1 },
-
-  // Groq models (free tier - $0)
-  "openai/gpt-oss-20b": { input: 0, output: 0 },
-  "openai/gpt-oss-120b": { input: 0, output: 0 },
 };
 
 const COST_STORAGE_KEY = "femicgpt:costs";
